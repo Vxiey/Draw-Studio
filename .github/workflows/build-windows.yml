@@ -1,0 +1,68 @@
+name: Build and publish Draw Studio Windows release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          architecture: 'x64'
+          cache: 'pip'
+
+      - name: Install source dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests and self-test
+        shell: pwsh
+        run: |
+          python -m unittest discover -v
+          python DrawBot.py --self-test
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build verified Windows release
+        shell: pwsh
+        run: python build_release.py --installer --skip-tests
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: DrawStudio-${{ github.ref_name }}-Windows-x64
+          path: |
+            release/DrawStudio-*-Windows-x64.zip
+            release/DrawStudio-*-Windows-x64-Setup.exe
+            release/DrawStudio-*-SHA256.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release for tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$env:GITHUB_REF_NAME" `
+            release/DrawStudio-*-Windows-x64.zip `
+            release/DrawStudio-*-Windows-x64-Setup.exe `
+            release/DrawStudio-*-SHA256.txt `
+            --title "Draw Studio $env:GITHUB_REF_NAME" `
+            --notes-file RELEASE-NOTES-v1.0.58-beta.md
