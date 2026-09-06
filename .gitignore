@@ -1,0 +1,34 @@
+# Python / virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+.build-venv/
+
+# Build outputs
+build/
+dist/
+release/
+*.spec
+
+# Draw Studio runtime/user state
+logs/
+safety-reports/
+diagnostics/
+reports/
+settings*.json
+calibration*.json
+release-state.json
+session-recovery*.json
+session-recovery*.png
+render-resume*.json
+*.dmp
+
+# Local captures / exports
+*.gif
+*.tmp
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
