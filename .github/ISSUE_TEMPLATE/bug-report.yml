@@ -1,0 +1,61 @@
+name: Bug report
+description: Report a reproducible Draw Studio problem. Diagnostics are attached manually; the app never uploads them automatically.
+title: "[Bug] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Do not include private source images, passwords, tokens, or unrelated personal files.
+  - type: input
+    id: version
+    attributes:
+      label: Draw Studio version
+      placeholder: v1.0.58-beta
+    validations:
+      required: true
+  - type: dropdown
+    id: target
+    attributes:
+      label: Target application
+      options:
+        - Microsoft Paint
+        - Skribbl.io / browser drawing app
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the actual behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start Draw Studio
+        2. Select ...
+        3. Run ...
+        4. Problem occurs
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety / runtime report
+      description: Paste relevant counters or error text from Tools → Runtime safety report.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics ZIP
+      description: If needed, create it manually with Tools → Create diagnostics and drag the ZIP here. Review it before uploading.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I reviewed any attached diagnostics and removed anything I do not want to publish.
+          required: true
