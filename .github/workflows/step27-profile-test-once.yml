@@ -1,0 +1,22 @@
+name: Step 27 profile portability test once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/step27-profile-test-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test-step27:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run Step 27 tests
+        run: |
+          python -m unittest -v test_profile_portability_step27.py
+          python -m py_compile ProfilePortability.py
