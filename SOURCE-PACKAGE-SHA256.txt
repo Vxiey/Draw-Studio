@@ -1,1 +1,1 @@
-989bf626149b851b366f3e03679b69b698ca2d8e5386fab80eb1bfbcfd401436  Draw-Studio-1.0.124-beta-Step26-Security-Hotfix.zip
+7ae69f1748b8c0aa48519b8519538837834b092f42cb5f74f823d5c622227a61  Draw-Studio-1.0.125-beta-Step27-Profile-Portability.zip

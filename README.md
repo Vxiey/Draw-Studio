@@ -29,6 +29,7 @@ It is built for people who want better-looking drawings without drawing everythi
 - Detect and protect the selected canvas area
 - Use CPU and GPU acceleration where supported
 - Save separate settings for different drawing profiles
+- Export/import profiles as portable `.drawprofile` / JSON files
 - Stop instantly if something goes wrong
 
 ## What is Draw Studio built with?
@@ -113,7 +114,7 @@ If you later move, resize, zoom or significantly change the target app, Draw Stu
 
 Download the latest ZIP from this repository:
 
-`Draw-Studio-1.0.124-beta-Step26-Security-Hotfix.zip`
+`Draw-Studio-1.0.125-beta-Step27-Profile-Portability.zip`
 
 Extract the **entire ZIP** to a normal folder before starting the program.
 
@@ -251,12 +252,23 @@ These extra color names are **not added to the drawing palette automatically**. 
 
 ## Current beta
 
-**v1.0.124-beta — Step 26: Detail Fidelity, Pixel-Accurate Planning, Named Color Intelligence & Security Hotfix**
+**v1.0.125-beta — Step 27: Export / Import Profiles**
 
 Current verified source package:
 
-- `Draw-Studio-1.0.124-beta-Step26-Security-Hotfix.zip`
-- SHA-256: `989bf626149b851b366f3e03679b69b698ca2d8e5386fab80eb1bfbcfd401436`
+- `Draw-Studio-1.0.125-beta-Step27-Profile-Portability.zip`
+- SHA-256: `7ae69f1748b8c0aa48519b8519538837834b092f42cb5f74f823d5c622227a61`
+
+### Step 27 highlights
+
+- Export the selected profile as `.drawprofile` or JSON
+- Import target, palette/tool calibration, canvas metadata, renderer settings and CPU/GPU/RAM limits
+- Schema-versioned format with migration and strict pre-import validation
+- Existing-name conflicts support **Replace**, **Import as copy**, or Cancel
+- Import-as-copy gets its own isolated `custom-...` storage key
+- Reset only the selected profile to defaults
+- Hardware benchmark/timing feedback and all native-input authorization are deliberately excluded
+- Imported calibration must pass the normal target/safety verification again before drawing
 
 ### Security hotfix
 
@@ -394,6 +406,9 @@ Image URLs are the main normal feature that may make an HTTP/HTTPS request when 
 - Gartic Phone support through **Artist Tools for Gartic Phone** in Chrome
 - Profile Engine v2
 - Separate settings per profile
+- Portable `.drawprofile` / JSON export and import
+- Replace / Import as copy conflict handling
+- Reset one profile to Draw Studio defaults without changing other profiles
 - Canvas Guard and safe drawing boundaries
 - Automatic canvas detection and transform/rebase support
 - Safe Fill Mask
