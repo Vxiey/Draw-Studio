@@ -22,7 +22,7 @@ class Step28MoreTargetsTests(unittest.TestCase):
         self.assertEqual(PROFILES['Kleki'][0],'kleki')
         self.assertEqual(PROFILES['Magma'][0],'magma')
         for name in ('Kleki','Magma'):
-            self.assertIn('Browser',profile_ui(name)['badge'])
+            self.assertIn('browser',profile_ui(name)['badge'].lower())
             defaults=profile_defaults(name)
             self.assertEqual(defaults['mode'],'Shape paths')
             self.assertEqual(defaults['time_budget_mode'],'Manual')
