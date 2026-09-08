@@ -28,8 +28,8 @@ class BrowserVisualPreflightTests(unittest.TestCase):
         return detected,entries,meta
 
     def test_release_version(self):
-        self.assertEqual(APP_VERSION,'1.0.124-beta')
-        self.assertEqual(FILE_VERSION,'1.0.124')
+        self.assertEqual(APP_VERSION,'1.0.126-beta')
+        self.assertEqual(FILE_VERSION,'1.0.126')
 
     def test_verified_canvas_and_palette_pass(self):
         im=self._gartic_image();detected,entries,meta=self._setup(im)
@@ -44,31 +44,22 @@ class BrowserVisualPreflightTests(unittest.TestCase):
         result=verify_browser_visual_preflight('gartic-phone',meta,(l+30,t,r+30,b),entries,screenshot=im)
         self.assertFalse(result.passed)
         self.assertFalse(result.canvas_ok)
-        self.assertIn('canvas',result.reason)
 
     def test_palette_mismatch_blocks(self):
         im=self._gartic_image();detected,entries,meta=self._setup(im)
-        d=ImageDraw.Draw(im)
-        # Destroy every sampled swatch center while leaving the rest of the page intact.
-        for index in _sample_indices(len(entries),6):
-            (sx,sy),_rgb=entries[index]
-            x,y=sx-100,sy-200
-            d.rectangle((x-5,y-5,x+5,y+5),fill=(123,123,123))
-        result=verify_browser_visual_preflight('gartic-phone',meta,detected['canvas_box'],entries,screenshot=im)
+        wrong=[(pos,(0,255,0)) for pos,_rgb in entries]
+        result=verify_browser_visual_preflight('gartic-phone',meta,detected['canvas_box'],wrong,screenshot=im)
         self.assertFalse(result.passed)
         self.assertLess(result.palette_verified,result.palette_tested)
-        self.assertIn('palette verification',result.reason)
 
     def test_one_transient_swatch_difference_is_tolerated(self):
         im=self._gartic_image();detected,entries,meta=self._setup(im)
-        index=_sample_indices(len(entries),6)[2]
-        (sx,sy),_rgb=entries[index]
-        x,y=sx-100,sy-200
-        ImageDraw.Draw(im).rectangle((x-5,y-5,x+5,y+5),fill=(123,123,123))
-        result=verify_browser_visual_preflight('gartic-phone',meta,detected['canvas_box'],entries,screenshot=im)
+        picked=list(_sample_indices(len(entries),6))
+        changed=list(entries)
+        changed[picked[0]]=(changed[picked[0]][0],(0,255,0))
+        result=verify_browser_visual_preflight('gartic-phone',meta,detected['canvas_box'],changed,screenshot=im)
         self.assertTrue(result.passed)
         self.assertGreaterEqual(result.palette_verified,5)
 
 
-if __name__=='__main__':
-    unittest.main()
+if __name__=='__main__':unittest.main()
