@@ -38,6 +38,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Source package hygiene gate
+        shell: pwsh
+        run: python ReleasePackage.py --check
+
       - name: Step 30 source release gate
         shell: pwsh
         run: python ReleaseCandidateHardening.py --source-gate --soak-cycles 5000
