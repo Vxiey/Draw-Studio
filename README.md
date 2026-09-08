@@ -113,7 +113,7 @@ If you later move, resize, zoom or significantly change the target app, Draw Stu
 
 Download the latest ZIP from this repository:
 
-`Draw-Studio-1.0.124-beta-Step26-Color-Engine-Named-Color-Intelligence.zip`
+`Draw-Studio-1.0.124-beta-Step26-Security-Hotfix.zip`
 
 Extract the **entire ZIP** to a normal folder before starting the program.
 
@@ -251,12 +251,19 @@ These extra color names are **not added to the drawing palette automatically**. 
 
 ## Current beta
 
-**v1.0.124-beta — Step 26: Detail Fidelity, Pixel-Accurate Planning & Named Color Intelligence**
+**v1.0.124-beta — Step 26: Detail Fidelity, Pixel-Accurate Planning, Named Color Intelligence & Security Hotfix**
 
 Current verified source package:
 
-- `Draw-Studio-1.0.124-beta-Step26-Color-Engine-Named-Color-Intelligence.zip`
-- SHA-256: `34dc39349b544e202166648df972ba2a07519262b425609fe5cd578566d98f49`
+- `Draw-Studio-1.0.124-beta-Step26-Security-Hotfix.zip`
+- SHA-256: `989bf626149b851b366f3e03679b69b698ca2d8e5386fab80eb1bfbcfd401436`
+
+### Security hotfix
+
+- Hardened image-search URL parsing against deceptive Bing/Google hostnames
+- Domain checks now use the parsed hostname and real DNS label boundaries
+- Added regression tests for hostname spoofing and path/query lookalikes
+- GitHub CodeQL alert #2 is confirmed **fixed**
 
 ### Step 26 highlights
 

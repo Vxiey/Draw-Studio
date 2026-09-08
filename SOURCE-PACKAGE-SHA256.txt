@@ -1,1 +1,1 @@
-34dc39349b544e202166648df972ba2a07519262b425609fe5cd578566d98f49  Draw-Studio-1.0.124-beta-Step26-Color-Engine-Named-Color-Intelligence.zip
+989bf626149b851b366f3e03679b69b698ca2d8e5386fab80eb1bfbcfd401436  Draw-Studio-1.0.124-beta-Step26-Security-Hotfix.zip
