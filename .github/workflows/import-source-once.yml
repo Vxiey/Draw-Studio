@@ -1,4 +1,4 @@
-name: Import Draw Studio source once
+name: Clean Draw Studio source import branch
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  import-source:
+  cleanup:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -19,126 +19,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Extract clean Draw Studio source
+      - name: Remove temporary source-upload branch
         shell: bash
         run: |
-          python3 - <<'PY'
-          from pathlib import Path, PurePosixPath
-          import zipfile
-          import shutil
-          import re
-
-          repo = Path.cwd()
-          package = repo / 'Draw-Studio-1.0.124-beta-Step26-Color-Engine-Named-Color-Intelligence.zip'
-          if not package.exists():
-              raise SystemExit(f'Missing source package: {package.name}')
-
-          extract_root = Path('/tmp/drawstudio-source-import')
-          if extract_root.exists():
-              shutil.rmtree(extract_root)
-          extract_root.mkdir(parents=True)
-
-          with zipfile.ZipFile(package) as zf:
-              zf.extractall(extract_root)
-
-          source = extract_root / 'Draw-Studio'
-          if not (source / 'DrawBot.py').exists():
-              raise SystemExit('DrawBot.py was not found in the source package')
-
-          skip_exact = {
-              'README.md',
-              'README-LEGACY-v1.0.124.md',
-              'SHA256SUMS.txt',
-              'BUILD-STATUS.txt',
-          }
-          keep_markdown = {
-              'COLOR-ENGINE-NAMED-COLOR-INTELLIGENCE.md',
-              'README-INDEX.md',
-              'RELEASE-CHECKLIST.md',
-              'ROADMAP-STEP22-PLUS.md',
-              'VERSION-HISTORY.md',
-              'IMAGE-FORMATS.md',
-              'UPSCALING.md',
-              'MOTIVFOKUS.md',
-          }
-
-          copied = 0
-          python_files = 0
-          test_files = 0
-
-          for src in source.rglob('*'):
-              if not src.is_file():
-                  continue
-              rel = src.relative_to(source).as_posix()
-              name = PurePosixPath(rel).name
-
-              # Keep repository-owned workflows intact. The normal Actions token
-              # can publish source files but cannot modify workflow files.
-              if rel.startswith('.github/workflows/'):
-                  continue
-              if rel in skip_exact or rel.startswith('docs/history/'):
-                  continue
-
-              if name.lower().endswith('.md'):
-                  keep = (
-                      name in keep_markdown
-                      or re.match(r'STEP-(?:1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26)-', name)
-                      or name.startswith('RELEASE-NOTES-Step1')
-                      or name.startswith('RELEASE-NOTES-Step2')
-                  )
-                  if not keep:
-                      continue
-
-              parts = set(PurePosixPath(rel).parts)
-              if parts & {'.venv', '.build-venv', '__pycache__', 'build', 'dist', 'release', 'logs', 'safety-reports', 'diagnostics', 'reports'}:
-                  continue
-              if name.endswith(('.pyc', '.pyo', '.dmp', '.tmp')):
-                  continue
-
-              dst = repo / rel
-              dst.parent.mkdir(parents=True, exist_ok=True)
-              shutil.copy2(src, dst)
-              copied += 1
-              if name.endswith('.py'):
-                  python_files += 1
-                  if name.startswith('test_'):
-                      test_files += 1
-
-          print(f'Imported {copied} clean source files')
-          print(f'Python files: {python_files} (tests: {test_files})')
-          if python_files < 300:
-              raise SystemExit('Safety check failed: expected the full Python source/test tree')
-          PY
-
-      - name: Verify source tree
-        shell: bash
-        run: |
-          test -f DrawBot.py
-          test -f StudioUI.py
-          test -f Colors.py
-          test -f NamedColorIntelligence.py
-          test -f PixelAccuratePlanner.py
-          test -f requirements.txt
-          test -f Start.bat
-          python3 - <<'PY'
-          from pathlib import Path
-          py = list(Path('.').glob('*.py'))
-          tests = list(Path('.').glob('test_*.py'))
-          print(f'Root Python files: {len(py)}')
-          print(f'Root test files: {len(tests)}')
-          assert len(py) >= 300
-          assert len(tests) >= 150
-          PY
-
-      - name: Commit clean source tree
-        shell: bash
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          if git diff --cached --quiet; then
-            echo 'Source tree is already up to date.'
-            exit 0
-          fi
-          git commit -m 'Publish Draw Studio source code'
-          git push origin HEAD:main
+          git push origin --delete source-upload-temp || true
