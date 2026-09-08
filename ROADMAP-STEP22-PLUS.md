@@ -1,6 +1,6 @@
 # Roadmap — Step 27+
 
-Step 22 is now implemented. Steps 23–26 are now implemented as well.
+Step 22 is now implemented. Steps 23–27 are now implemented as well.
 
 ## Completed — Step 22 — Universal Hardware Auto Benchmark
 
@@ -54,9 +54,9 @@ Detail Fidelity & Pixel-Accurate Planning:
 - lossless-only run/component merging in Pixel Accurate mode
 - destructive simplification, reduced palettes and smart merge kept disabled for Pixel Accurate plans
 
-## Step 27 — Export / Import Profiles
+## Completed — Step 27 — Export / Import Profiles
 
-Export/import one profile at a time, including portable settings and calibration metadata, while refusing to import machine-specific hardware/timing state onto the wrong computer.
+Export/import one profile at a time as `.drawprofile`/JSON with schema migration, pre-import validation, renderer/resource settings, canvas/calibration metadata, Replace/Import-as-copy conflict handling, strict profile isolation and reset-to-defaults. Machine-specific hardware/timing state and all native-input authorization remain excluded.
 
 ## Step 28 — More Drawing Targets
 

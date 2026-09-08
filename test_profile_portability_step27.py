@@ -132,6 +132,25 @@ class Step27ProfilePortabilityTests(unittest.TestCase):
         self.assertIn('timing', joined)
         self.assertIn('target window', joined)
 
+    def test_builtin_name_cannot_claim_another_target_key(self):
+        package = build_package('Microsoft Paint', self.basic_settings(), {'palette': self.palette()})
+        package['profile']['key'] = 'gartic-phone'
+        package['calibration']['palette']['profile'] = 'gartic-phone'
+        with self.assertRaises(ProfilePortabilityError):
+            validate_package(package)
+
+    def test_invalid_tool_calibration_is_rejected(self):
+        with self.assertRaises(ProfilePortabilityError):
+            build_package('Microsoft Paint', self.basic_settings(), {
+                'palette': self.palette(), 'tools': {'version': 99, 'tools': {}}
+            })
+
+    def test_invalid_exact_color_calibration_is_rejected(self):
+        with self.assertRaises(ProfilePortabilityError):
+            build_package('Microsoft Paint', self.basic_settings(), {
+                'palette': self.palette(), 'exact_colors': {'version': 99, 'profile': 'microsoft-paint'}
+            })
+
     def test_invalid_canvas_is_rejected(self):
         data = self.basic_settings()
         data['corners'] = [[1.5, 2], [100, 200]]

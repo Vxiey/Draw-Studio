@@ -62,7 +62,7 @@ FORBIDDEN_SETTING_NAMES = frozenset({
 
 MACHINE_STATE_EXCLUDED = (
     "hardware benchmark / adapter signature",
-    "draw-time calibration",
+    "draw timing calibration",
     "auto-tuner feedback",
     "correction history",
     "layout fingerprint cache",
@@ -273,6 +273,9 @@ def validate_package(data: dict) -> dict:
     if not isinstance(key, str):
         raise ProfilePortabilityError("Profile target key is missing.")
     _validate_source_key(key)
+    existing = PROFILES.get(name.strip())
+    if existing is not None and not str(existing[0]).startswith("custom-") and key != str(existing[0]):
+        raise ProfilePortabilityError("Built-in profile name does not match its Draw Studio target key.")
 
     canvas = deepcopy(data.get("canvas") or {})
     _validate_canvas(canvas)
@@ -297,6 +300,26 @@ def validate_package(data: dict) -> dict:
             validate_calibration(palette, profile_key=key)
         except (ValueError, TypeError) as error:
             raise ProfilePortabilityError(f"Palette calibration failed validation: {error}") from error
+
+    tools = calibration.get("tools")
+    if tools is not None:
+        try:
+            if key == "microsoft-paint":
+                from PaintTools import validate_tool_calibration
+                validate_tool_calibration(tools)
+            else:
+                from AppTools import validate_calibration as validate_app_tools
+                validate_app_tools(tools, key)
+        except (ValueError, TypeError) as error:
+            raise ProfilePortabilityError(f"Tool calibration failed validation: {error}") from error
+
+    exact_colors = calibration.get("exact_colors")
+    if exact_colors is not None:
+        try:
+            from ExactColorTools import validate as validate_exact_colors
+            validate_exact_colors(exact_colors, key)
+        except (ValueError, TypeError) as error:
+            raise ProfilePortabilityError(f"Exact-color calibration failed validation: {error}") from error
 
     safety = data.get("safety") or {}
     if not isinstance(safety, dict):

@@ -10,6 +10,7 @@ from tkinter import ttk
 import customtkinter as ctk
 from GameProfiles import PROFILES, profile_ui, profile_defaults
 from ProfileEngine import PROFILE_ENGINE_MODES, policy_summary
+from ProfilePortability import export_profile_dialog, import_profile_dialog, reset_profile_dialog
 from EdgeBehavior import EDGE_BEHAVIOR_MODES
 from Version import APP_VERSION
 from UIState import compute_workspace_state, classify_error
@@ -276,6 +277,17 @@ def build_ui(a, quality, speed):
     a.profile_selector.bind('<<ComboboxSelected>>', lambda _event: a.change_profile())
     a.controls.append((a.profile_selector, 'readonly'))
     btn(step1, '➕  Custom app profile', a.add_profile, height=32).pack(fill='x', pady=(7, 5))
+    profile_io = frame(step1)
+    profile_io.pack(fill='x', pady=(0, 5))
+    export_btn = btn(profile_io, '⇧  Export', lambda: export_profile_dialog(a), height=31, width=125)
+    export_btn.pack(side='left', fill='x', expand=True, padx=(0, 4))
+    import_btn = btn(profile_io, '⇩  Import', lambda: import_profile_dialog(a), height=31, width=125)
+    import_btn.pack(side='left', fill='x', expand=True, padx=(4, 0))
+    reset_profile_btn = btn(step1, '↺  Reset profile to defaults', lambda: reset_profile_dialog(a), height=31)
+    reset_profile_btn.pack(fill='x', pady=(0, 5))
+    tooltip(export_btn, 'Step 27: export only this profile to a portable .drawprofile/JSON file. Hardware/timing state and input authorization are excluded.')
+    tooltip(import_btn, 'Step 27: validate and import a .drawprofile. Existing names can be replaced or imported as an isolated copy.')
+    tooltip(reset_profile_btn, 'Delete only this profile’s saved settings/calibration/cache files and restore Draw Studio defaults. Other profiles are untouched.')
     label(step1, var=a.profile_hint, muted=True, wraplength=270, size=9).pack(anchor='w')
     profile_guide = frame(step1, PANEL_ALT, border_width=1, border_color=LINE, radius=10)
     profile_guide.pack(fill='x', pady=(7, 2))
