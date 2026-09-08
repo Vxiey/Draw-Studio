@@ -252,12 +252,25 @@ These extra color names are **not added to the drawing palette automatically**. 
 
 ## Current beta
 
-**v1.0.126-beta — Step 27.5: One-click Setup + Automatic Canvas/Palette Verification**
+**v1.0.127-beta — Step 28: More Drawing Targets**
 
 Current verified source package:
 
-- `Draw-Studio-1.0.126-beta-Step27.5-One-Click-Setup-Verification.zip`
+- `Draw-Studio-1.0.127-beta-Step28-More-Drawing-Targets.zip`
 - SHA-256 is published in `SOURCE-PACKAGE-SHA256.txt`
+
+### Step 28 highlights
+
+- New dedicated **Kleki** browser-painting profile
+- New dedicated **Magma** collaborative-browser profile
+- Central `TargetCapabilities` registry for desktop/browser/manual/automatic target semantics
+- Verified Browser Auto Setup remains limited to Gartic Phone, Skribbl.io/Fast, SketchHeads and Sketchful.io
+- Drawize, Gartic.io, Kleki and Magma intentionally use explicit manual tool/palette/canvas calibration until a current detector is verified
+- Automatic browser controls are hidden for manual targets instead of pretending unsupported layouts are safe
+- Every target retains isolated settings, palette, tools, layout fingerprint, verified-color cache and timing storage
+- No target profile contains native handles, input authorization or hard-coded screen coordinates
+- Step 29 and Step 30 keep their roadmap numbers
+- Windows Step 28 regression selection: **59/59 passed**
 
 ### Step 27.5 highlights
 
