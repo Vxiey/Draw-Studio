@@ -1,17 +1,27 @@
-# Draw Studio
+# Draw Studio – Auto Draw for Gartic Phone, Skribbl.io & Microsoft Paint
+
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows11&logoColor=white)
+![Gartic Phone](https://img.shields.io/badge/Gartic%20Phone-Supported-7C3AED)
+![Skribbl.io](https://img.shields.io/badge/Skribbl.io-Supported-2563EB)
+![Microsoft Paint](https://img.shields.io/badge/Microsoft%20Paint-Supported-0EA5E9)
+![Desktop App](https://img.shields.io/badge/Desktop%20App-CustomTkinter-22C55E)
 
 **Do you suck at drawing but still want to impress your friends?**
 
-Draw Studio can take an image and automatically recreate it for you in **Microsoft Paint** and supported browser drawing apps. Pick an image, select where it should be drawn, and let Draw Studio handle the lines, colors and details.
+**Draw Studio** is a Windows **auto-draw / drawing automation app** that turns images into drawings in **Gartic Phone, Skribbl.io, Microsoft Paint and supported browser drawing apps**. Choose an image, select the canvas, and Draw Studio recreates it with optimized mouse paths, automatic color matching, fills, previews and pixel-accurate detail.
 
-It is made for people who want better-looking drawings without having to draw everything by hand.
+It is built for people who want better-looking drawings without drawing everything by hand, while still keeping full control over speed, accuracy and the target canvas.
 
-> **No AI image generation is used.** Draw Studio analyzes the image and recreates it using normal mouse drawing, colors, strokes and supported drawing tools.
+> **Gartic Phone:** Google Chrome with the **Artist Tools for Gartic Phone** extension installed and enabled is required for the supported Gartic Phone workflow.
+>
+> **No AI image generation is used.** Draw Studio analyzes the source image and recreates it through normal mouse drawing, colors, strokes, fills and supported drawing tools.
 
 ## What can Draw Studio do?
 
 - Turn an image into an automatic drawing
-- Draw in Microsoft Paint and supported browser drawing apps
+- Auto-draw in **Gartic Phone, Skribbl.io and Microsoft Paint**
+- Draw in supported browser drawing apps
 - Match colors automatically
 - Preserve small details with Pixel Accurate planning
 - Use outlines, strokes, fills and optimized drawing paths
