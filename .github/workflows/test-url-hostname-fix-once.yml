@@ -1,0 +1,24 @@
+name: Test URL hostname security fix once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/test-url-hostname-fix-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run URL hostname security tests
+        run: python -m unittest -v test_canvas_drop_payload_security.py
+      - name: Compile CanvasDropPayload
+        run: python -m py_compile CanvasDropPayload.py
