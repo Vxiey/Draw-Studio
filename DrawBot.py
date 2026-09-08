@@ -74,6 +74,7 @@ from DynamicColors import (EXACT_COLOR_LIMITS, validate_exact_color_limit, resol
 from AdaptiveColorCount import recommend_adaptive_color_count
 from TimeAwareColorBudget import apply_time_aware_color_budget
 from ExactColorTools import (custom_rgb_available, eyedropper_available, spectrum_available, numeric_rgb_available,
+                             resolve_image_custom_color_workflow,
                              resolved_controls as resolve_exact_color_controls)
 
 from GameProfiles import PROFILES, profile_defaults, profile_ui
@@ -1145,6 +1146,19 @@ def make_plan(original, area, options, cancelled=lambda: False):
     color_fidelity=options.get('color_fidelity','Faithful')
     color_layers=options.get('color_layers','Off')
     custom_color_workflow=options.get('custom_color_workflow','Calibrated palette')
+    # Paint-only: an older saved profile may still say Calibrated palette even
+    # though Edit colors was calibrated later. Auto presets now discover that
+    # capability from profile-local calibration and use image-driven Adaptive
+    # exact planning. Manual preset deliberately preserves palette-only intent.
+    custom_resolution=resolve_image_custom_color_workflow(
+        options.get('profile_name'), options.get('profile_key'), custom_color_workflow,
+        render_preset=options.get('render_preset','Auto'))
+    custom_color_workflow=custom_resolution['workflow']
+    if custom_resolution.get('available'):
+        plan_options['exact_color_available']=True
+    if custom_resolution.get('auto_promoted'):
+        plan_options['custom_color_workflow']=custom_color_workflow
+        plan_options['custom_color_auto_meta']=dict(custom_resolution)
     dynamic_exact=(custom_color_workflow in ('Exact custom + palette fallback','Adaptive exact (recommended)'))
     if dynamic_exact:
         # Exact-color planning is bounded: cluster the image into a useful number
@@ -1186,7 +1200,7 @@ def make_plan(original, area, options, cancelled=lambda: False):
         plan_options['adaptive_color_count_meta']=dict(adaptive_color_count_meta)
         groups,plan_colors,selectors,color_render_meta=build_dynamic_color_strokes(
             image,tuple(c.RGB for c in allColors),max_colors=limit,skip_white=planner_skip_white,
-            lines=options['lines'],exact_available=bool(options.get('exact_color_available')),
+            lines=options['lines'],exact_available=bool(plan_options.get('exact_color_available')),
             color_fidelity=str(options.get('color_fidelity','Faithful')),profile_name=str(options.get('profile_name') or ''),
             protected_mask=adaptive_mask,cancelled=cancelled)
         if groups is None:raise InterruptedError()
@@ -1278,7 +1292,7 @@ def make_plan(original, area, options, cancelled=lambda: False):
                               'reason':'Region Fill disabled for mixed dynamic/custom RGB selector plans outside Extra Fast 2.0.'})
                 plan_options['region_fill_meta']=rmeta
         grouping_mode=options.get('color_grouping','Smart')
-        if bool(options.get('exact_color_available')) and grouping_mode=='Reduced palette':
+        if bool(plan_options.get('exact_color_available')) and grouping_mode=='Reduced palette':
             # Exact custom RGB means exact: do not silently merge two selected
             # custom colors just because the speed profile requested reduction.
             grouping_mode='Smart'
@@ -7866,6 +7880,17 @@ class DrawBotApp:
                 options['canvas_guard_brush_px']=max(int(options.get('brush_px',3) or 3),12)
                 options['browser_brush_plan']={'target_position':None,'safe_guard_px':options['canvas_guard_brush_px'],'method':str(brush_error)}
                 log_event(f'Automatic browser brush detection fell back safely: {brush_error!r}.')
+            # Paint-only real preflight: resolve stale palette-only saved
+            # settings against the *actual* profile calibration before planning.
+            # This is what lets Draw Studio open Edit colors automatically when
+            # the current image reaches a useful custom RGB batch.
+            custom_resolution=resolve_image_custom_color_workflow(
+                self.game.get(), profile_key, options.get('custom_color_workflow','Calibrated palette'),
+                render_preset=options.get('render_preset','Auto'))
+            if custom_resolution.get('auto_promoted'):
+                options['custom_color_workflow']=custom_resolution['workflow']
+                options['custom_color_auto_meta']=dict(custom_resolution)
+                log_event('Microsoft Paint custom-color workflow auto-promoted from calibrated palette to Adaptive exact for this image.')
             if options.get('custom_color_workflow') in ('Exact custom + palette fallback','Adaptive exact (recommended)'):
                 try:
                     exact_actions=resolve_exact_color_controls(profile_key,current_client)

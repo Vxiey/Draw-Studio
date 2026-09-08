@@ -112,12 +112,22 @@ def resolve_stroke_delivery(options: dict | None, *, dry_run: bool = False) -> S
                 label='Microsoft Paint Pixel Accurate reliable drag',
                 palette_click_delay=.28, ui_control_delay=.22, profile_key=key)
 
+        # RC2 Paint-only line reliability hotfix. Modern Paint can drop short
+        # or sharp SetCursorPos-held gestures even when Windows reports every
+        # requested endpoint. Browser canvases do not use this branch. Auto now
+        # uses non-coalesced SendInput for Paint's normal line/path renderers as
+        # well as Pixel Accurate. Explicit Compatible remains an escape hatch.
+        drawing_mode=str(options.get('drawing_mode') or options.get('mode') or '').strip().lower()
+        line_sensitive=drawing_mode in {
+            'shape paths','smart paths (recommended)','lines (fastest)','lines',
+        }
         return StrokeDeliveryPolicy(
-            step_px=min(requested, 4.0), min_path_delay=0.0025,
-            press_settle=0.007, release_settle=0.004,
-            drag_backend='cursor', native_drag_reliability=False,
-            label='Microsoft Paint adaptive compatible drag', palette_click_delay=.28,
-            ui_control_delay=.22, profile_key=key)
+            step_px=min(requested, 2.0 if line_sensitive else 2.5),
+            min_path_delay=(0.0032 if line_sensitive else 0.0030),
+            press_settle=0.010, release_settle=0.006,
+            drag_backend='sendinput', native_drag_reliability=True,
+            label=('Microsoft Paint reliable line drag' if line_sensitive else 'Microsoft Paint reliable drag'),
+            palette_click_delay=.28, ui_control_delay=.22, profile_key=key)
 
     # Dry run must remain click-free, but it should still follow the same cursor
     # density as the target browser so its timing/route sample is representative.

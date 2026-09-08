@@ -39,7 +39,9 @@ class PerGameInputEngineV1075Tests(unittest.TestCase):
     def test_paint_policy_is_unchanged_by_browser_engine(self):
         p=resolve_stroke_delivery({'profile_name':'Microsoft Paint','stroke_step_px':8},dry_run=False)
         self.assertEqual(p.profile_key,'microsoft-paint')
-        self.assertEqual(p.step_px,4.0)
+        self.assertLessEqual(p.step_px,2.5)
+        self.assertEqual(p.drag_backend,'sendinput')
+        self.assertTrue(p.native_drag_reliability)
         self.assertEqual(p.palette_click_delay,.28)
 
 

@@ -94,6 +94,34 @@ def custom_rgb_available(profile_key,path=None):
     return spectrum_available(profile_key,path) or numeric_rgb_available(profile_key,path)
 
 
+def resolve_image_custom_color_workflow(profile_name, profile_key, requested_workflow, *, render_preset='Auto', path=None):
+    """Resolve automatic image-driven custom colors without widening target scope.
+
+    Only Microsoft Paint is auto-promoted. A valid calibrated Edit colors
+    spectrum or numeric RGB workflow is required. Manual render preset preserves
+    an explicit ``Calibrated palette`` choice; Auto/Masterpiece/Extra fast may
+    promote it to Adaptive exact so the current image's useful colors are selected
+    automatically. Other targets are returned unchanged.
+    """
+    requested=str(requested_workflow or 'Calibrated palette')
+    key=str(profile_key or '').strip().lower()
+    paint=(str(profile_name or '').strip()=='Microsoft Paint' or key=='microsoft-paint')
+    if not paint:
+        return {'workflow':requested,'available':False,'auto_promoted':False,'profile_key':key,'reason':'not-microsoft-paint'}
+    try:
+        available=bool(custom_rgb_available(key or 'microsoft-paint',path))
+    except Exception:
+        available=False
+    manual=str(render_preset or 'Auto').strip().lower()=='manual'
+    promote=bool(available and not manual and requested=='Calibrated palette')
+    workflow='Adaptive exact (recommended)' if promote else requested
+    return {
+        'workflow':workflow,'available':available,'auto_promoted':promote,
+        'profile_key':key or 'microsoft-paint',
+        'reason':('calibrated-custom-color-auto' if promote else ('custom-color-ready' if available else 'custom-color-unavailable')),
+    }
+
+
 def eyedropper_available(profile_key,path=None):
     try:return 'Eyedropper' in load(profile_key,path)['controls']
     except (OSError,ValueError):return False

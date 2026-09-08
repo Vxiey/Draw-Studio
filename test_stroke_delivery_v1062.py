@@ -11,14 +11,20 @@ class StrokeDeliveryV1063Tests(unittest.TestCase):
         self.assertEqual(APP_VERSION,'1.0.130-rc2')
         self.assertEqual(FILE_VERSION,'1.0.130')
 
-    def test_paint_auto_keeps_compatible_policy_for_non_pixel_draws(self):
+    def test_paint_auto_uses_reliable_delivery_for_non_pixel_draws(self):
         policy=resolve_stroke_delivery({'profile_name':'Microsoft Paint','stroke_step_px':8},dry_run=False)
-        self.assertEqual(policy.step_px,4.0)
-        self.assertGreaterEqual(policy.min_path_delay,0.002)
-        self.assertGreater(policy.press_settle,0)
-        self.assertGreater(policy.release_settle,0)
-        self.assertEqual(policy.drag_backend,'cursor')
-        self.assertFalse(policy.native_drag_reliability)
+        self.assertLessEqual(policy.step_px,2.5)
+        self.assertGreaterEqual(policy.min_path_delay,0.003)
+        self.assertGreaterEqual(policy.press_settle,0.010)
+        self.assertGreaterEqual(policy.release_settle,0.006)
+        self.assertEqual(policy.drag_backend,'sendinput')
+        self.assertTrue(policy.native_drag_reliability)
+
+    def test_paint_shape_paths_get_denser_reliable_line_policy(self):
+        policy=resolve_stroke_delivery({'profile_name':'Microsoft Paint','stroke_step_px':8,'drawing_mode':'Shape paths'},dry_run=False)
+        self.assertEqual(policy.step_px,2.0)
+        self.assertEqual(policy.drag_backend,'sendinput')
+        self.assertIn('line',policy.label.lower())
 
     def test_paint_pixel_accurate_auto_uses_noncoalesced_sendinput_drag(self):
         policy=resolve_stroke_delivery({
