@@ -21,6 +21,75 @@ It is made for people who want better-looking drawings without having to draw ev
 - Save separate settings for different drawing profiles
 - Stop instantly if something goes wrong
 
+## What is Draw Studio built with?
+
+Draw Studio is mainly written in **Python**. It uses normal desktop automation, image processing and mathematical color analysis rather than an AI model.
+
+### Main technology
+
+- **Python 3.10+** — the main application and drawing/rendering engines
+- **Tkinter + CustomTkinter** — the Windows desktop interface
+- **Pillow (PIL)** — loading, resizing, converting and analyzing images
+- **NumPy** — fast pixel, color, mask and image-array processing
+- **OKLab color math** — perceptual color matching and color-difference analysis
+- **keyboard** — global controls such as emergency stop/pause hotkeys
+- **tkinterdnd2** — drag-and-drop image support
+- **requests** — HTTP/HTTPS features that are explicitly requested, such as loading an image URL
+- **qrcode** — QR-based/mobile-preview related features
+
+### Optional GPU acceleration
+
+Draw Studio can run without GPU acceleration and fall back to the CPU when needed.
+
+- **NVIDIA:** CuPy/CUDA acceleration can be installed automatically inside Draw Studio's own Python environment. A compatible NVIDIA graphics driver is required, but a separate system-wide CUDA Toolkit is not required for the normal source setup.
+- **AMD / Intel / NVIDIA:** PyOpenCL can use the OpenCL runtime supplied by the installed graphics driver for supported workloads and hardware benchmarking.
+- If GPU setup fails or is unavailable, Draw Studio keeps a **CPU fallback** instead of requiring a specific GPU.
+
+### Windows packaging and development tools
+
+- **PyInstaller** — creates the packaged Windows application/EXE
+- **Inno Setup** — can create a Windows installer when installed on the build machine
+- **Batch scripts (.bat)** — startup, diagnostics and local build helpers
+- **GitHub Actions (YAML)** — automated Windows builds, testing and release publishing
+
+Draw Studio does **not** depend on AI/ML/OCR models, cloud image processing or a remote rendering server.
+
+## What do I need before first use?
+
+### For the current source ZIP
+
+You need:
+
+- **Windows 10 or Windows 11, 64-bit**
+- **Python 3.10 or newer**
+- Internet access during the first start so required Python packages can be installed
+- Microsoft Paint or a supported browser drawing target
+- The **entire ZIP extracted** to a normal writable folder
+- Draw Studio and the target application running at the **same privilege level** — normally both should be run without administrator rights
+
+When installing Python, make sure Windows can find Python from the command line. Enabling **Add Python to PATH** during Python installation is recommended.
+
+You do **not** need to manually install every Python package. `Start.bat` creates a private `.venv` environment and installs the dependencies from `requirements.txt` automatically.
+
+### For a packaged EXE build
+
+A packaged `DrawStudio.exe` build does not require a separate Python installation. Extract/install the complete build and start the application normally.
+
+### Before your first real drawing
+
+Have these ready:
+
+1. The image you want to draw.
+2. Microsoft Paint or the supported drawing website open.
+3. A blank or ready drawing canvas.
+4. The target window placed at the size/position you intend to use.
+5. The correct Draw Studio profile selected.
+6. Color/tool calibration completed when the profile requires it.
+7. The drawing area selected correctly.
+8. A mouse test, small drawing test and Fast Dry Run completed before the first full drawing.
+
+If you later move, resize, zoom or significantly change the target app, Draw Studio may ask you to verify or redo parts of the calibration.
+
 ## Quick Start
 
 ### 1. Download Draw Studio
@@ -41,7 +110,16 @@ If you are running the source version:
 Start.bat
 ```
 
-The first launch may install required Python packages automatically.
+On the first launch, Draw Studio:
+
+1. checks for Python 3.10+,
+2. creates its local `.venv`,
+3. installs/checks the required packages,
+4. checks optional GPU acceleration,
+5. falls back to CPU if optional GPU acceleration is unavailable,
+6. opens Draw Studio.
+
+The first start therefore requires internet access and can do more setup work than later starts.
 
 For packaged Windows builds, launch `DrawStudio.exe` instead.
 
@@ -220,6 +298,18 @@ This may be the safety system preventing the mouse from drawing outside the sele
 
 Check the Safety Map / Debug Overlay and make sure the drawing area was selected correctly.
 
+### Python is not found
+
+For the source ZIP, install 64-bit Python 3.10 or newer and enable **Add Python to PATH** during installation. Then run `Start.bat` again.
+
+### First start cannot install packages
+
+Make sure the computer has internet access and that Python/pip is not being blocked by security software or a restricted network. `Start.bat` records startup output in `%TEMP%\DrawStudio-start.log`.
+
+### GPU acceleration is unavailable
+
+GPU acceleration is optional. Update the graphics driver first. If the optional GPU backend still cannot initialize, Draw Studio can continue with its CPU fallback.
+
 ### Windows SmartScreen appears
 
 Unsigned beta builds may trigger Windows SmartScreen. This is common for small projects that do not yet use a commercial code-signing certificate.
@@ -299,7 +389,9 @@ Run:
 Start.bat
 ```
 
-`Start.bat` creates `.venv`, installs `requirements.txt`, and opens Draw Studio.
+`Start.bat` creates `.venv`, installs `requirements.txt`, checks optional GPU backends and opens Draw Studio.
+
+Core source dependencies currently include NumPy, Pillow, Requests, keyboard, tkinterdnd2, CustomTkinter and qrcode. Optional GPU backends are installed only when applicable.
 
 ## Build a Windows release locally
 
