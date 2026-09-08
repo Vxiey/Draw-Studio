@@ -9,8 +9,8 @@ from Version import APP_VERSION, FILE_VERSION
 
 class Step11UIProfileTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, '1.0.124-beta')
-        self.assertEqual(FILE_VERSION, '1.0.124')
+        self.assertEqual(APP_VERSION, '1.0.127-beta')
+        self.assertEqual(FILE_VERSION, '1.0.127')
 
     def test_every_standard_profile_has_ui_metadata_and_defaults(self):
         self.assertEqual(set(PROFILES), set(PROFILE_UI))
@@ -23,7 +23,7 @@ class Step11UIProfileTests(unittest.TestCase):
                 self.assertIn(key,defaults,(name,key))
 
     def test_web_profiles_use_shape_defaults(self):
-        for name in ('Skribbl.io','Sketchful.io','Drawize','Gartic.io'):
+        for name in ('Skribbl.io','Sketchful.io','Drawize','Gartic.io','Kleki','Magma'):
             defaults=profile_defaults(name)
             self.assertEqual(defaults['mode'],'Shape paths',name)
             self.assertEqual(defaults['shape_model'],'Better shapes v2',name)
