@@ -1,1 +1,1 @@
-f956e07a9c1e75520314072629eab6d2c92c128f7d235fc8b5c430fed3fa80f6  Draw-Studio-1.0.58-beta-GitHub-Release-Ready.zip
+34dc39349b544e202166648df972ba2a07519262b425609fe5cd578566d98f49  Draw-Studio-1.0.124-beta-Step26-Color-Engine-Named-Color-Intelligence.zip

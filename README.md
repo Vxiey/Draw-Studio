@@ -2,15 +2,47 @@
 
 Draw Studio is a Windows desktop drawing automation tool for Microsoft Paint and supported browser drawing apps. The renderer is deterministic: **no AI/ML/OCR models are used**.
 
+## Current beta
+
+**v1.0.124-beta — Step 26: Detail Fidelity, Pixel-Accurate Planning & Named Color Intelligence**
+
+Current verified source package:
+
+- `Draw-Studio-1.0.124-beta-Step26-Color-Engine-Named-Color-Intelligence.zip`
+- SHA-256: `34dc39349b544e202166648df972ba2a07519262b425609fe5cd578566d98f49`
+
+Step 26 strengthens full-resolution pixel planning and adds a compatibility/intelligence layer to the Color Engine without expanding or contaminating the calibrated game palette.
+
+### Step 26 highlights
+
+- Full-resolution PixelMap planning
+- CPU/GPU-routed pixel and edge analysis
+- Improved importance and micro-detail maps
+- Better protection for isolated pixels and small features
+- Lossless-only simplification safeguards in Pixel Accurate mode
+- CSS4 + Tk/X11 named-color compatibility
+- Named colors such as `DarkSlateBlue`, `dark slate blue` and normalized aliases
+- `#RGB`, `#RGBA`, RGB/RGBA and ARGB parsing support
+- `gray` / `grey` alias normalization
+- Canonical RGB deduplication for duplicate named colors
+- OKLab-based nearest human-readable color naming
+- Color-family metadata and improved color diagnostics
+- Static lookup tables with no Matplotlib runtime dependency
+- Named colors remain metadata/parser inputs and are **not** injected into the drawing quantizer
+
+The Step 24–26 / Color / release regression selection passed **79/79** tests, with an additional **104/104** Advanced Color, Pixel Accurate and DrawBot integration tests passing for this package.
+
 ## Download / install
 
-For normal users, download one of the Windows assets from **GitHub Releases**:
+For source use, download the current ZIP above and extract the whole package before running it.
 
-- `DrawStudio-<version>-Windows-x64-Setup.exe` — recommended installer.
-- `DrawStudio-<version>-Windows-x64.zip` — portable build. Extract the whole ZIP before launching `DrawStudio.exe`.
-- `DrawStudio-<version>-SHA256.txt` — checksums for release files.
+For packaged Windows builds, GitHub Actions can build:
 
-The EXE does not require Python. Draw Studio runs as the current user and normally should not be run as administrator. Unsigned beta builds may trigger Windows SmartScreen until the project is code-signed.
+- `DrawStudio-<version>-Windows-x64-Setup.exe` — recommended installer
+- `DrawStudio-<version>-Windows-x64.zip` — portable build
+- `DrawStudio-<version>-SHA256.txt` — checksums
+
+The packaged EXE does not require Python. Draw Studio runs as the current user and normally should not be run as administrator. Unsigned beta builds may trigger Windows SmartScreen until the project is code-signed.
 
 ## First use
 
@@ -30,8 +62,6 @@ The EXE does not require Python. Draw Studio runs as the current user and normal
 
 CanvasGuard, SafePolygon, brush inset, safe Fill masks, segment clipping, edge verification and FinalMouseGuard are intentionally independent from renderer/profile settings. A profile cannot disable them. Preview uses the same edge/safety policy as execution.
 
-### Runtime Safety UI — v1.0.58
-
 After every Fast Dry run or real drawing, Draw Studio writes a local JSON + TXT report under the app-data `safety-reports` folder. **Tools → Runtime safety report** shows the latest counters for drawn, clipped, skipped, edge-followed and blocked paths and can open the report or report folder.
 
 Reports stay local. Draw Studio **does not include telemetry, a bug-report upload server or automatic crash-report sending**. If support is needed, use **Tools → Create diagnostics** and share the generated ZIP manually.
@@ -48,6 +78,10 @@ Reports stay local. Draw Studio **does not include telemetry, a bug-report uploa
 - Segment-by-segment stroke clipping
 - Hard Clip, Adaptive Clip and Preserve Outline edge behaviors
 - Smart Preview Safety and Safety Debug Overlay
+- Full-resolution PixelMap and Pixel Accurate planning
+- Detail/importance maps with micro-feature protection
+- Named Color Intelligence with CSS4/Tk/X11 compatibility
+- OKLab-based color matching and diagnostics
 - Runtime Safety Reports and Runtime Safety UI
 - CPU/GPU/RAM resource scheduling
 - Local diagnostics without server upload
@@ -91,13 +125,6 @@ Artifacts are written to `release\`.
 ## GitHub Actions / publisher
 
 The repository uses `.github/workflows/build-windows.yml`. A manual workflow run builds downloadable Windows artifacts. Pushing a tag that exactly matches the app version publishes a GitHub Release automatically.
-
-For v1.0.58-beta:
-
-```powershell
-git tag v1.0.58-beta
-git push origin v1.0.58-beta
-```
 
 The workflow verifies the build on `windows-latest`, creates the installer and portable ZIP, uploads Actions artifacts, and attaches the release assets + checksum to the GitHub Release.
 
