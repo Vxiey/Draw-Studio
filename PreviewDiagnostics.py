@@ -226,6 +226,8 @@ def build_preview_diagnostics(options: dict, *, accuracy: dict | None = None,
     detail_zoom = detail_zoom if isinstance(detail_zoom, dict) else {}
     quick_sketch = options.get('quick_sketch_meta') if isinstance(options, dict) else {}
     quick_sketch = quick_sketch if isinstance(quick_sketch, dict) else {}
+    hybrid = options.get('hybrid_renderer_meta') if isinstance(options, dict) else {}
+    hybrid = hybrid if isinstance(hybrid, dict) else {}
     return {
         'calibration':{
             'profile_key':str(options.get('profile_key') or calibration.get('profile_key') or ''),
@@ -280,6 +282,10 @@ def build_preview_diagnostics(options: dict, *, accuracy: dict | None = None,
             'enabled','requested','factor','analysis_zoom','detail_paths_added','detail_pixels_added',
             'candidate_cells','accepted_cells','smallest_detail_brush_px','deadline_aware','path_cap',
             'target_app_zoomed','target_zoom_policy','reason') if detail_zoom.get(k) is not None},
+        'hybrid_renderer':{k:hybrid.get(k) for k in (
+            'enabled','engine','step','version','requested_mode','resolved_mode','base_renderer',
+            'passes','deadline_seconds','analysis','semantic_ai_used','ocr_used','native_input_changed','safety_policy')
+            if hybrid.get(k) is not None},
         'quick_sketch':{k:quick_sketch.get(k) for k in (
             'enabled','engine','style','fill_preference','fill_tool_available','color_cap',
             'active_colors_before','active_colors_after','fill_regions','fill_pixels','fill_coverage_percent',
@@ -408,6 +414,16 @@ def format_preview_diagnostics(meta: dict[str, Any]) -> str:
                 lines.append('Quick Sketch: ' + ' · '.join(bits))
             elif quick_sketch.get('reason'):
                 lines.append('Quick Sketch: fallback · ' + str(quick_sketch.get('reason')))
+        except Exception:
+            pass
+    hybrid=diagnostics.get('hybrid_renderer') or {}
+    if hybrid.get('enabled'):
+        try:
+            mode=str(hybrid.get('resolved_mode') or '?')
+            passes=hybrid.get('passes') if isinstance(hybrid.get('passes'),list) else []
+            line='Hybrid 3.0: '+mode
+            if passes: line+=' · '+' → '.join(str(x) for x in passes[:4])
+            lines.append(line)
         except Exception:
             pass
     if stability:

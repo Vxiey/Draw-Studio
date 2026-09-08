@@ -19,6 +19,7 @@ from ProgressiveRenderer import PROGRESSIVE_RENDERING_MODES
 from PlanningWatchdog import PLANNING_WATCHDOG_MODES
 from ShapePaths import SHAPE_MODEL_MODES
 from QuickSketchFillContour import QUICK_SKETCH_RENDER_STYLE, QUICK_SKETCH_STYLES, QUICK_SKETCH_FILL_PREFERENCES
+from HybridRenderer3 import HYBRID_RENDER_STYLE, HYBRID_MODES
 
 BG = '#0b0f14'
 SIDEBAR = '#101722'
@@ -448,7 +449,8 @@ def build_ui(a, quality, speed):
     quality_card = collapsible(advanced_host, '🎨  Quality', 'Rendering, detail and advanced color.', True)
     setting_row(quality_card, 'Profile policy', a.profile_engine, list(PROFILE_ENGINE_MODES), 'Auto applies the selected app renderer policy. Manual settings keeps your renderer choices unchanged; safety gates are unaffected.')
     setting_row(quality_card, 'Edge behavior', a.edge_behavior, list(EDGE_BEHAVIOR_MODES), 'Hard Clip skips unsafe edge strokes. Adaptive follows the safe inset when possible. Preserve Outline keeps near-edge contours without leaving Canvas Guard.')
-    setting_row(quality_card, 'Rendering style', a.render_style, ['Auto', 'Portrait / shaded', 'Standard / pixel', QUICK_SKETCH_RENDER_STYLE], 'Quick Sketch uses verified closed-region Fill plus simplified visible contours for recognition-first 60–150s drawing. Unsafe regions stay connected scanlines.')
+    setting_row(quality_card, 'Rendering style', a.render_style, ['Auto', 'Portrait / shaded', 'Standard / pixel', QUICK_SKETCH_RENDER_STYLE, HYBRID_RENDER_STYLE], 'Quick Sketch uses verified closed-region Fill plus simplified visible contours for recognition-first 60–150s drawing. Unsafe regions stay connected scanlines.')
+    setting_row(quality_card, 'Hybrid mode', a.hybrid_mode, list(HYBRID_MODES), 'Step 29: Auto Hybrid or a specialised deterministic mode for Pixel Art, Icon / Logo, Line Art, Portrait, Shaded Object or Deadline Silhouette. No AI/OCR; safety and calibration are unchanged.')
     setting_row(quality_card, 'Quick Sketch style', a.quick_sketch_style, list(QUICK_SKETCH_STYLES), 'Simple trims micro texture hardest; Detailed keeps more secondary structure. Used only by Quick Sketch or Auto Tuner when it selects Quick Sketch.')
     setting_row(quality_card, 'Quick Sketch fill', a.quick_sketch_fill_preference, list(QUICK_SKETCH_FILL_PREFERENCES), 'Safe Fill First searches more closed regions but still requires Region Fill safety + Safe Fill Mask. Scanline Preferred uses Fill only for the strongest candidates.')
     setting_row(quality_card, 'Draw quality', a.draw_quality, ['Balanced', 'High likeness', 'Maximum likeness', 'GPU enhanced', 'Pixel Accurate'])

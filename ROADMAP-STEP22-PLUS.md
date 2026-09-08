@@ -66,9 +66,9 @@ A unified read-only setup action now reuses the existing Paint/Browser detectors
 
 Adds a central target-capability registry and dedicated **Kleki** + **Magma** profiles. Verified automatic targets stay explicitly separated from manual browser targets, so Drawize/Gartic.io/Kleki/Magma never inherit unverified auto-detection. Every profile keeps a unique storage key for settings, calibration, layout fingerprints and timing data; manual targets use explicit tool/palette/canvas calibration with no hard-coded coordinates.
 
-## Step 29 — New Draw Modes / Hybrid Renderer 3.0
+## Completed — Step 29 — New Draw Modes / Hybrid Renderer 3.0
 
-Add specialized deterministic modes for pixel art, icons/logos, line art, portraits, shaded objects and deadline-only silhouettes.
+Adds a deterministic Hybrid Renderer 3.0 orchestration layer with Auto Hybrid plus specialised Pixel Art, Icon / Logo, Line Art, Portrait, Shaded Object and Deadline Silhouette modes. It routes into the existing Pixel Accurate, Quick Sketch Fill + Contour, Shape Paths, PortraitPlanner, adaptive detail and deadline engines instead of duplicating native input. Auto Hybrid uses bounded Pillow/NumPy structure statistics only; it does not use AI, ML, OCR or face recognition. CanvasGuard, calibration, target locks, preflight and dry-run remain authoritative.
 
 ## Step 30 — Release Candidate Hardening
 

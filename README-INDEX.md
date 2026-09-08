@@ -37,5 +37,6 @@ Step docs:
 - `STEP-24-ADAPTIVE-DETAIL-ZOOM.md`
 - `RELEASE-NOTES-Step24-Step25-Detail-Zoom-Quick-Sketch.md` — Step 25 Quick Sketch Fill + Contour
 - `STEP-26-DETAIL-FIDELITY-PIXEL-ACCURATE.md`
+- `STEP-29-HYBRID-RENDERER-3.md` — specialised deterministic Hybrid Renderer 3.0 modes
 - `COLOR-ENGINE-NAMED-COLOR-INTELLIGENCE.md` — CSS4/Tk/X11 parsing, aliases and OKLab human-readable diagnostics
 - `ROADMAP-STEP22-PLUS.md`

@@ -46,7 +46,7 @@ RESOURCE_SETTING_NAMES = frozenset({
 # object attributes or future input-authorization flags.
 EXTRA_PORTABLE_SETTING_NAMES = frozenset({
     "settings_schema", "use_region_fill_engine", "fill_aggressiveness",
-    "detail_zoom", "quick_sketch_style", "quick_sketch_fill_preference",
+    "detail_zoom", "quick_sketch_style", "quick_sketch_fill_preference", "hybrid_mode",
     "preview_mode", "auto_clear_canvas", "profile_extras",
 })
 
