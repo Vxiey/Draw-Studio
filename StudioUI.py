@@ -347,7 +347,12 @@ def build_ui(a, quality, speed):
     image_info = label(step2, 'No image information yet.', muted=True, size=9, wraplength=270)
     image_info.pack(anchor='w', pady=(2, 0))
 
-    step3 = step_card(3, 'Prepare target app', 'Browser One-Click can discover canvas/palette automatically; manual calibration is fallback only.', '🧰')
+    step3 = step_card(3, 'Prepare target app', 'One-click Setup detects and independently verifies canvas/palette; manual calibration remains fallback.', '🧰')
+    a.one_click_setup_button=btn(step3,'⚡  One-click Setup + Verify',a.run_one_click_setup_verify,True,height=39)
+    a.one_click_setup_button.pack(fill='x',pady=(0,5))
+    tooltip(a.one_click_setup_button,'Step 27.5: Microsoft Paint and supported browser games. Detect/reuse the target, calibrate canvas/palette, then run a second independent live verification pass. Setup never starts drawing or unlocks mouse input.')
+    a.one_click_setup_label=label(step3,var=a.one_click_setup_text,muted=True,wraplength=270,size=9)
+    a.one_click_setup_label.pack(anchor='w',pady=(0,7))
     a.gartic_setup_button=btn(step3,'Auto setup Gartic — full canvas',a.auto_setup_gartic_full,height=35)
     a.gartic_setup_button.pack(fill='x',pady=(0,6))
     a.paint_auto_button = btn(step3, '✨  Auto setup Paint', a.auto_calibrate_paint_tools, height=35)

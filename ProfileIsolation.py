@@ -18,6 +18,10 @@ def reset_settings(app):
         if callable(getattr(var,'set',None)):var.set(value)
     app.subject_region=None
     app.browser_auto_calibration_success=False
+    app.one_click_setup_verify_pending=None
+    app.one_click_setup_verify_payload=None
+    if hasattr(app,'one_click_setup_after'):app.one_click_setup_after=None
+    if hasattr(app,'one_click_setup_text'):app.one_click_setup_text.set('One-click Setup: select Microsoft Paint or a supported browser game to auto-detect and independently verify canvas + palette.')
     if hasattr(app,'browser_auto_text'):app.browser_auto_text.set('Run Auto setup for this profile.')
     if hasattr(app,'subject_hint'):app.subject_hint.set('Auto: simple background or transparent PNG. Mark busy photos.')
     if hasattr(app,'preview_diagnostics_text'):app.preview_diagnostics_text.set('Preview diagnostics appear after Build preview.')

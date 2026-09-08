@@ -1,4 +1,4 @@
 APP_NAME = 'Draw Studio'
-APP_VERSION = '1.0.125-beta'
-FILE_VERSION = "1.0.125"
+APP_VERSION = '1.0.126-beta'
+FILE_VERSION = "1.0.126"
 BUILD_CHANNEL = 'beta'
