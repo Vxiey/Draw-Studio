@@ -69,20 +69,45 @@ jobs:
       - name: Validate silent installer round-trip
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $setup = Get-ChildItem release/DrawStudio-*-Windows-x64-Setup.exe | Select-Object -First 1
           if (-not $setup) { throw 'Setup.exe was not produced' }
+
           $installDir = Join-Path $env:RUNNER_TEMP 'DrawStudio-RC-install'
           if (Test-Path $installDir) { Remove-Item $installDir -Recurse -Force }
-          & $setup.FullName '/VERYSILENT' '/SUPPRESSMSGBOXES' '/NORESTART' "/DIR=$installDir"
-          if ($LASTEXITCODE -ne 0) { throw "Silent install failed: $LASTEXITCODE" }
+
+          Write-Host "Installing $($setup.Name) to $installDir"
+          $installProcess = Start-Process -FilePath $setup.FullName `
+            -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$installDir") `
+            -Wait -PassThru
+          Write-Host "Installer exit code: $($installProcess.ExitCode)"
+          if ($installProcess.ExitCode -ne 0) {
+            throw "Silent install failed: $($installProcess.ExitCode)"
+          }
+
           $exe = Join-Path $installDir 'DrawStudio.exe'
-          if (-not (Test-Path $exe)) { throw 'Installed DrawStudio.exe is missing' }
-          & $exe '--self-test'
-          if ($LASTEXITCODE -ne 0) { throw "Installed self-test failed: $LASTEXITCODE" }
+          if (-not (Test-Path $exe)) { throw "Installed DrawStudio.exe is missing at $exe" }
+
+          Write-Host 'Running installed DrawStudio.exe --self-test'
+          $selfTestProcess = Start-Process -FilePath $exe `
+            -ArgumentList @('--self-test') `
+            -Wait -PassThru
+          Write-Host "Installed self-test exit code: $($selfTestProcess.ExitCode)"
+          if ($selfTestProcess.ExitCode -ne 0) {
+            throw "Installed self-test failed: $($selfTestProcess.ExitCode)"
+          }
+
           $uninstall = Join-Path $installDir 'unins000.exe'
-          if (-not (Test-Path $uninstall)) { throw 'Uninstaller is missing' }
-          & $uninstall '/VERYSILENT' '/SUPPRESSMSGBOXES' '/NORESTART'
-          if ($LASTEXITCODE -ne 0) { throw "Silent uninstall failed: $LASTEXITCODE" }
+          if (-not (Test-Path $uninstall)) { throw "Uninstaller is missing at $uninstall" }
+
+          Write-Host 'Running silent uninstall'
+          $uninstallProcess = Start-Process -FilePath $uninstall `
+            -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') `
+            -Wait -PassThru
+          Write-Host "Uninstaller exit code: $($uninstallProcess.ExitCode)"
+          if ($uninstallProcess.ExitCode -ne 0) {
+            throw "Silent uninstall failed: $($uninstallProcess.ExitCode)"
+          }
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
