@@ -67,6 +67,12 @@ You need:
 - The **entire ZIP extracted** to a normal writable folder
 - Draw Studio and the target application running at the **same privilege level** — normally both should be run without administrator rights
 
+### Gartic Phone requirement
+
+If you want to use Draw Studio with **Gartic Phone**, you also need the Chrome extension **Artist Tools for Gartic Phone** installed and enabled in Google Chrome. Draw Studio's Gartic Phone profile relies on that extension for the supported Gartic drawing workflow.
+
+Make sure the extension is active before starting Gartic Phone and before calibrating or testing the Gartic profile in Draw Studio.
+
 When installing Python, make sure Windows can find Python from the command line. Enabling **Add Python to PATH** during Python installation is recommended.
 
 You do **not** need to manually install every Python package. `Start.bat` creates a private `.venv` environment and installs the dependencies from `requirements.txt` automatically.
@@ -81,12 +87,13 @@ Have these ready:
 
 1. The image you want to draw.
 2. Microsoft Paint or the supported drawing website open.
-3. A blank or ready drawing canvas.
-4. The target window placed at the size/position you intend to use.
-5. The correct Draw Studio profile selected.
-6. Color/tool calibration completed when the profile requires it.
-7. The drawing area selected correctly.
-8. A mouse test, small drawing test and Fast Dry Run completed before the first full drawing.
+3. **For Gartic Phone: Google Chrome with Artist Tools for Gartic Phone installed and enabled.**
+4. A blank or ready drawing canvas.
+5. The target window placed at the size/position you intend to use.
+6. The correct Draw Studio profile selected.
+7. Color/tool calibration completed when the profile requires it.
+8. The drawing area selected correctly.
+9. A mouse test, small drawing test and Fast Dry Run completed before the first full drawing.
 
 If you later move, resize, zoom or significantly change the target app, Draw Studio may ask you to verify or redo parts of the calibration.
 
@@ -128,6 +135,8 @@ For packaged Windows builds, launch `DrawStudio.exe` instead.
 Microsoft Paint is recommended for your first test.
 
 Open Paint and create a blank canvas.
+
+**Using Gartic Phone?** Open it in Google Chrome and make sure **Artist Tools for Gartic Phone** is installed and enabled before continuing.
 
 ### 4. Choose the correct profile
 
@@ -211,6 +220,7 @@ It can create significantly more drawing work than faster modes.
 - Use faster modes for timed drawing games.
 - Use Pixel Accurate when detail matters more than speed.
 - Avoid moving or resizing the target window after calibration.
+- For Gartic Phone, keep **Artist Tools for Gartic Phone** enabled in Chrome.
 
 ## Color Engine
 
@@ -255,6 +265,14 @@ Current verified source package:
 The Step 24–26 / Color / release regression selection passed **79/79** tests, with an additional **104/104** Advanced Color, Pixel Accurate and DrawBot integration tests passing for this package.
 
 ## Troubleshooting
+
+### Gartic Phone profile is not working
+
+- Use **Google Chrome**.
+- Install and enable **Artist Tools for Gartic Phone**.
+- Reload Gartic Phone after enabling the extension.
+- Make sure the Gartic Phone profile is selected in Draw Studio.
+- Re-run calibration and the drawing-area test after changing the browser layout or zoom.
 
 ### The mouse is drawing in the wrong place
 
@@ -356,6 +374,7 @@ Image URLs are the main normal feature that may make an HTTP/HTTPS request when 
 - Automatic image-to-drawing workflow
 - Microsoft Paint support
 - Supported browser drawing profiles
+- Gartic Phone support through **Artist Tools for Gartic Phone** in Chrome
 - Profile Engine v2
 - Separate settings per profile
 - Canvas Guard and safe drawing boundaries
@@ -382,6 +401,7 @@ Requirements:
 - Windows 10 or Windows 11 x64
 - Python 3.10 or newer
 - Internet access during the first dependency installation
+- For Gartic Phone: **Google Chrome + Artist Tools for Gartic Phone**
 
 Run:
 
