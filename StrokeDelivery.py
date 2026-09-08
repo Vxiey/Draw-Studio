@@ -2,6 +2,11 @@
 
 v1.0.75 splits browser delivery by game. The module controls only native input
 spacing/timing; renderer geometry, CanvasGuard and target safety are unchanged.
+
+RC2 Paint hotfix: Pixel Accurate drawings use non-coalesced SendInput movement
+while the brush is held. Pen-up travel and UI controls remain on the compatible
+cursor path. This prevents modern Paint from dropping dense SetCursorPos drag
+updates while preserving the existing safety/compatibility behaviour elsewhere.
 """
 from __future__ import annotations
 
@@ -52,6 +57,19 @@ def _profile_key(options: dict) -> str:
     return mapping.get(name, name.replace(' ', '-'))
 
 
+def _pixel_accurate_requested(options: dict) -> bool:
+    """Return True only for the exact/full-resolution Paint execution path.
+
+    The planner writes ``pixel_accurate=True`` into the final plan. The string
+    fallback keeps older/recovered plans safe without promoting ordinary Paint
+    drawings to the denser backend unexpectedly.
+    """
+    if bool(options.get('pixel_accurate')):
+        return True
+    quality = str(options.get('draw_quality') or '').strip().lower()
+    return quality in {'pixel accurate', 'pixel-accurate'}
+
+
 def resolve_stroke_delivery(options: dict | None, *, dry_run: bool = False) -> StrokeDeliveryPolicy:
     options = options or {}
     requested = float(options.get('stroke_step_px', 8) or 8)
@@ -77,6 +95,23 @@ def resolve_stroke_delivery(options: dict | None, *, dry_run: bool = False) -> S
                 drag_backend='cursor', native_drag_reliability=False,
                 label='Microsoft Paint compatibility drag', palette_click_delay=.28,
                 ui_control_delay=.22, profile_key=key)
+
+        # Auto remains compatibility-first for ordinary Paint drawings, but the
+        # full-resolution Pixel Accurate engine can issue thousands of dense
+        # held-drag updates. SetCursorPos can coalesce/drop those updates before
+        # Paint consumes them, producing visibly dashed/incomplete strokes even
+        # though the planner geometry is correct. During a held drag only,
+        # WindowsMouse's sendinput backend emits absolute MOVE_NOCOALESCE events.
+        # Pen-up moves still use SetCursorPos, so palette/tool/canvas safety is
+        # unchanged and the reliable path is narrowly scoped to the failure mode.
+        if _pixel_accurate_requested(options):
+            return StrokeDeliveryPolicy(
+                step_px=min(requested, 2.0), min_path_delay=0.0022,
+                press_settle=0.006, release_settle=0.003,
+                drag_backend='sendinput', native_drag_reliability=True,
+                label='Microsoft Paint Pixel Accurate reliable drag',
+                palette_click_delay=.28, ui_control_delay=.22, profile_key=key)
+
         return StrokeDeliveryPolicy(
             step_px=min(requested, 4.0), min_path_delay=0.0025,
             press_settle=0.007, release_settle=0.004,
