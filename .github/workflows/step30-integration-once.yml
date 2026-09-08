@@ -28,18 +28,20 @@ jobs:
         shell: pwsh
         run: python -m pip install -r requirements.txt
 
-      - name: Apply Step 30 integration
+      - name: Apply Step 30 integration and regression fixes
         shell: pwsh
         run: |
           python step30_integrate_once.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python step30_preview_fix_once.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python step30_full_regression_fix_once.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run Step 30 targeted regressions
         shell: pwsh
         run: |
-          python -m unittest -v test_step30_release_candidate_hardening_v10129rc1.py test_hybrid_renderer3_v10128.py test_step28_more_targets_v10127.py test_one_click_setup_verification_v10126.py test_profile_portability_step27.py test_stability_release_candidate_v1081.py test_step18_release_stability_hardening_v10142.py test_update_center_v1059.py
+          python -m unittest -v test_step30_release_candidate_hardening_v10129rc1.py test_hybrid_renderer3_v10128.py test_step28_more_targets_v10127.py test_one_click_setup_verification_v10126.py test_profile_portability_step27.py test_stability_release_candidate_v1081.py test_step18_release_stability_hardening_v10142.py test_update_center_v1059.py test_skribbl_turbo_v1064.py test_gartic_phone_turbo_v1065.py test_step12_auto_tuner_feedback_v10136.py test_step21_release_cleanup_v10144.py test_workspace_v1092.py test_version_history_v1068.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run complete regression discovery
@@ -53,9 +55,11 @@ jobs:
         run: |
           python DrawBot.py --self-test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ReleasePackage.py --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python ReleaseCandidateHardening.py --source-gate --soak-cycles 5000
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m py_compile ReleaseCandidateHardening.py StabilityRC.py ReleaseStabilityHardening.py UpdateCenter.py build_release.py PreviewDiagnostics.py DrawBot.py HybridRenderer3.py Version.py
+          python -m py_compile ReleaseCandidateHardening.py ReleasePackage.py StabilityRC.py ReleaseStabilityHardening.py SkribblFastRenderer.py UpdateCenter.py build_release.py PreviewDiagnostics.py DrawBot.py HybridRenderer3.py Version.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Commit integrated Step 30
@@ -64,6 +68,6 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add Version.py version_info.txt UpdateCenter.py installer/DrawStudio.iss build_release.py PreviewDiagnostics.py .github/workflows/build-windows.yml ROADMAP-STEP22-PLUS.md README-INDEX.md test_*.py
+          git add Version.py version_info.txt UpdateCenter.py installer/DrawStudio.iss build_release.py ReleasePackage.py SkribblFastRenderer.py PreviewDiagnostics.py README.md VERSION-HISTORY.md docs/VERSION-HISTORY.md .github/workflows/build-windows.yml ROADMAP-STEP22-PLUS.md README-INDEX.md test_*.py
           git commit -m 'Complete Step 30 Release Candidate Hardening'
           git push
