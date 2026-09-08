@@ -48,6 +48,7 @@ This file is the quick answer to “what changed?” for each beta/source ZIP. I
 
 | Version | Name | What changed |
 |---|---|---|
+| 1.0.126-beta Step 27.5 | One-click Setup + Automatic Canvas/Palette Verification | Unified Paint/browser setup, second live canvas/palette verification, fail-closed confidence checks and no drawing authorization. |
 | 1.0.124-beta Step 24 | Adaptive Detail Zoom Pass | Re-analyzes bounded source ROIs at 2x/4x, restores palette-safe micro details, adds a Detail zoom preview, and keeps all target-app zoom/calibration coordinates unchanged. |
 | 1.0.124-beta Step 19/20 | Profile Polish + Beginner Setup Wizard | Centralizes release presets for Paint/Gartic/Skribbl, applies game time presets in Auto mode, shows what blocks Start, and adds a full setup wizard with target warnings. |
 | 1.0.124-beta | Paint Color Selection Recovery & Exact Swatch Verification | Fixes Paint palette→exact recovery, adds optional Active Color 1 swatch verification before strokes, and expands Faithful custom-RGB use for poor palette matches. |

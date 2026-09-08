@@ -114,7 +114,7 @@ If you later move, resize, zoom or significantly change the target app, Draw Stu
 
 Download the latest ZIP from this repository:
 
-`Draw-Studio-1.0.125-beta-Step27-Profile-Portability.zip`
+`Draw-Studio-1.0.126-beta-Step27.5-One-Click-Setup-Verification.zip`
 
 Extract the **entire ZIP** to a normal folder before starting the program.
 
@@ -252,12 +252,25 @@ These extra color names are **not added to the drawing palette automatically**. 
 
 ## Current beta
 
-**v1.0.125-beta — Step 27: Export / Import Profiles**
+**v1.0.126-beta — Step 27.5: One-click Setup + Automatic Canvas/Palette Verification**
 
 Current verified source package:
 
-- `Draw-Studio-1.0.125-beta-Step27-Profile-Portability.zip`
-- SHA-256: `7ae69f1748b8c0aa48519b8519538837834b092f42cb5f74f823d5c622227a61`
+- `Draw-Studio-1.0.126-beta-Step27.5-One-Click-Setup-Verification.zip`
+- SHA-256 is published in `SOURCE-PACKAGE-SHA256.txt`
+
+### Step 27.5 highlights
+
+- New **One-click Setup + Verify** action for Microsoft Paint and supported browser drawing games
+- Automatically discovers/reuses the target and runs the existing verified canvas/palette setup engine
+- Runs a second independent live screenshot verification after initial setup
+- Browser verification checks real canvas geometry plus representative saved palette swatches
+- Paint verification requires the verified 20-color palette, Pencil + Fill and stable canvas geometry
+- Setup never starts drawing and never unlocks mouse/keyboard input
+- Failed verification invalidates target/safety readiness and falls back to manual calibration
+- Step 27.5 session state is cleared on every profile switch/reset and is not exported in `.drawprofile`
+- Step 28–30 keep their existing roadmap numbers
+- Windows regression selection: **41/41 passed**
 
 ### Step 27 highlights
 
@@ -269,7 +282,6 @@ Current verified source package:
 - Reset only the selected profile to defaults
 - Hardware benchmark/timing feedback and all native-input authorization are deliberately excluded
 - Imported calibration must pass the normal target/safety verification again before drawing
-
 ### Security hotfix
 
 - Hardened image-search URL parsing against deceptive Bing/Google hostnames

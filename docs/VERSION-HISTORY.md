@@ -1,3 +1,4 @@
+v1.0.126-beta Step 27.5: One-click Setup + Automatic Canvas/Palette Verification adds a unified read-only Paint/browser setup action, independent second-pass live canvas/palette verification, fail-closed confidence gates and profile-isolated session state without changing Step 28–30 numbering.
 v1.0.125-beta Step 27: Export / Import Profiles adds portable .drawprofile/JSON sharing, schema migration, strict validation, Replace/Import-as-copy conflict handling, per-profile reset and explicit exclusion of machine timing/hardware/input-authorization state.
 v1.0.124-beta Step 26 Color Engine patch: Named Color Intelligence adds static CSS4/Tk/X11 name parsing, alias/duplicate normalization, OKLab nearest-name diagnostics and human-readable source→mapped color metadata without expanding the calibrated render palette.
 v1.0.124-beta Step 26: Detail Fidelity & Pixel-Accurate Planning formalizes the full-resolution PixelMap path, strengthens micro-detail/importance protection, records CPU/GPU analysis routing and enforces lossless-only simplification in Pixel Accurate mode.
@@ -51,6 +52,7 @@ This file is the quick answer to “what changed?” for each beta/source ZIP. I
 
 | Version | Name | What changed |
 |---|---|---|
+| 1.0.126-beta Step 27.5 | One-click Setup + Automatic Canvas/Palette Verification | Unified Paint/browser setup, second live canvas/palette verification, fail-closed confidence checks and no drawing authorization. |
 | 1.0.125-beta | Step 27 — Export / Import Profiles | Portable profile sharing with schema migration, pre-import validation, isolated copy/replace handling and reset-to-defaults. |
 | 1.0.124-beta Step 19/20 | Profile Polish + Beginner Setup Wizard | Centralizes release presets for Paint/Gartic/Skribbl, applies game time presets in Auto mode, shows what blocks Start, and adds a full setup wizard with target warnings. |
 | 1.0.124-beta | Paint Color Selection Recovery & Exact Swatch Verification | Fixes Paint palette→exact recovery, adds optional Active Color 1 swatch verification before strokes, and expands Faithful custom-RGB use for poor palette matches. |
