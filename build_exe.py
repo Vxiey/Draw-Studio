@@ -200,12 +200,37 @@ def main():
     if gpu_build:
         command.extend(['--collect-all', 'cupy', '--collect-all', 'cupyx', '--hidden-import', 'cupyx.scipy.ndimage'])
 
-    # Keep the frozen application clean: only files required at runtime or useful to end users.
-    for name in [
+    # Keep the frozen application clean. Runtime-critical data above remains a
+    # hard requirement; historical/help documentation here is optional and may
+    # have been intentionally removed from the current release tree.
+    optional_data = [
         'Collect-Diagnostics.bat', 'Enable-Crash-Dumps.bat', 'Disable-Crash-Dumps.bat',
-        'palette-index-maps.json', 'MOTIVFOKUS.md', 'IMAGE-FORMATS.md', 'UPSCALING.md', 'README.md', 'STEP-9-CALIBRATION-STATE-PROFILE-ISOLATION.md', 'STEP-10-PREVIEW-DIAGNOSTICS-BENCHMARKS.md', 'STEP-11-END-TO-END-AUTO-TUNER.md', 'STEP-12-AUTO-TUNER-FEEDBACK-LOOP.md', 'STEP-16-CORRECTION-HISTORY-BEFORE-AFTER.md', 'STEP-17-GOLDEN-IMAGE-REGRESSION.md', 'STEP-18-RELEASE-STABILITY-HARDENING.md', 'RELEASE-NOTES-Step19-Step20-Profile-Polish-UX-Wizard.md', 'STEP-20-BEGINNER-SETUP-WIZARD.md', 'STEP-19-FINAL-PROFILE-POLISH.md', 'STEP-21-BUILD-PUBLISHER-GITHUB-RELEASE.md', 'RELEASE-NOTES-Step21-Build-Publisher-GitHub-Release.md', 'GITHUB-RELEASE-TEMPLATE.md', 'ROADMAP-STEP22-PLUS.md', 'golden-regression', 'README-INDEX.md', 'VERSION-HISTORY.md', 'RELEASE-NOTES-v1.0.90-beta.md', 'RELEASE-NOTES-v1.0.90-Adaptive-Brush.md', 'RELEASE-NOTES-v1.0.91-beta.md', 'RELEASE-NOTES-v1.0.92-beta.md', 'RELEASE-NOTES-v1.0.93-beta.md', 'RELEASE-NOTES-v1.0.94-beta.md', 'RELEASE-NOTES-v1.0.103-beta.md', 'RELEASE-NOTES-v1.0.124-beta.md', 'RELEASE-NOTES-v1.0.123-beta.md', 'RELEASE-NOTES-v1.0.120-beta.md', 'RELEASE-NOTES-v1.0.119-beta.md', 'RELEASE-NOTES-v1.0.118-beta.md', 'RELEASE-NOTES-v1.0.117-beta.md', 'WORKSPACE-v1.0.92.md', 'RELEASE-NOTES-v1.0.89-beta.md', 'RELEASE-NOTES-v1.0.88-beta.md', 'RELEASE-NOTES-v1.0.87-beta.md', 'RELEASE-NOTES-v1.0.86-beta.md', 'RELEASE-NOTES-v1.0.85-rc1.md', 'RELEASE-NOTES-v1.0.83-rc3.md', 'docs', 'requirements-gpu-nvidia.txt', 'Install-GPU-NVIDIA.bat', 'requirements-gpu-universal.txt', 'Install-GPU-Universal.bat', 'STEP-22-UNIVERSAL-HARDWARE-AUTO-BENCHMARK.md', 'RELEASE-NOTES-Step22-Universal-Hardware-Auto-Benchmark.md', 'STEP-24-ADAPTIVE-DETAIL-ZOOM.md', 'STEP-25-QUICK-SKETCH-FILL-CONTOUR.md', 'STEP-29-HYBRID-RENDERER-3.md', 'RELEASE-NOTES-Step24-Step25-Detail-Zoom-Quick-Sketch.md', 'COLOR-ENGINE-NAMED-COLOR-INTELLIGENCE.md', 'RELEASE-NOTES-Step26-Color-Engine-Named-Color-Intelligence.md'
-    ]:
-        command.extend(['--add-data', f'{name}:.'])
+        'palette-index-maps.json', 'MOTIVFOKUS.md', 'IMAGE-FORMATS.md', 'UPSCALING.md', 'README.md',
+        'STEP-9-CALIBRATION-STATE-PROFILE-ISOLATION.md', 'STEP-10-PREVIEW-DIAGNOSTICS-BENCHMARKS.md',
+        'STEP-11-END-TO-END-AUTO-TUNER.md', 'STEP-12-AUTO-TUNER-FEEDBACK-LOOP.md',
+        'STEP-16-CORRECTION-HISTORY-BEFORE-AFTER.md', 'STEP-17-GOLDEN-IMAGE-REGRESSION.md',
+        'STEP-18-RELEASE-STABILITY-HARDENING.md', 'RELEASE-NOTES-Step19-Step20-Profile-Polish-UX-Wizard.md',
+        'STEP-20-BEGINNER-SETUP-WIZARD.md', 'STEP-19-FINAL-PROFILE-POLISH.md',
+        'STEP-21-BUILD-PUBLISHER-GITHUB-RELEASE.md', 'RELEASE-NOTES-Step21-Build-Publisher-GitHub-Release.md',
+        'GITHUB-RELEASE-TEMPLATE.md', 'ROADMAP-STEP22-PLUS.md', 'golden-regression', 'README-INDEX.md',
+        'VERSION-HISTORY.md', 'RELEASE-NOTES-v1.0.90-beta.md', 'RELEASE-NOTES-v1.0.90-Adaptive-Brush.md',
+        'RELEASE-NOTES-v1.0.91-beta.md', 'RELEASE-NOTES-v1.0.92-beta.md', 'RELEASE-NOTES-v1.0.93-beta.md',
+        'RELEASE-NOTES-v1.0.94-beta.md', 'RELEASE-NOTES-v1.0.103-beta.md', 'RELEASE-NOTES-v1.0.124-beta.md',
+        'RELEASE-NOTES-v1.0.123-beta.md', 'RELEASE-NOTES-v1.0.120-beta.md', 'RELEASE-NOTES-v1.0.119-beta.md',
+        'RELEASE-NOTES-v1.0.118-beta.md', 'RELEASE-NOTES-v1.0.117-beta.md', 'WORKSPACE-v1.0.92.md',
+        'RELEASE-NOTES-v1.0.89-beta.md', 'RELEASE-NOTES-v1.0.88-beta.md', 'RELEASE-NOTES-v1.0.87-beta.md',
+        'RELEASE-NOTES-v1.0.86-beta.md', 'RELEASE-NOTES-v1.0.85-rc1.md', 'RELEASE-NOTES-v1.0.83-rc3.md',
+        'docs', 'requirements-gpu-nvidia.txt', 'Install-GPU-NVIDIA.bat', 'requirements-gpu-universal.txt',
+        'Install-GPU-Universal.bat', 'STEP-22-UNIVERSAL-HARDWARE-AUTO-BENCHMARK.md',
+        'RELEASE-NOTES-Step22-Universal-Hardware-Auto-Benchmark.md', 'STEP-24-ADAPTIVE-DETAIL-ZOOM.md',
+        'STEP-25-QUICK-SKETCH-FILL-CONTOUR.md', 'STEP-29-HYBRID-RENDERER-3.md',
+        'RELEASE-NOTES-Step24-Step25-Detail-Zoom-Quick-Sketch.md', 'COLOR-ENGINE-NAMED-COLOR-INTELLIGENCE.md',
+        'RELEASE-NOTES-Step26-Color-Engine-Named-Color-Intelligence.md'
+    ]
+    for name in optional_data:
+        source = base / name
+        if source.exists():
+            command.extend(['--add-data', str(source) + ';.'])
 
     command.append(str(base / 'DrawBot.py'))
     subprocess.run(command, cwd=base, check=True)
