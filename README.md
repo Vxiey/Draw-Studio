@@ -112,11 +112,16 @@ If you later move, resize, zoom or significantly change the target app, Draw Stu
 
 ### 1. Download Draw Studio
 
-Download the latest ZIP from this repository:
+Download the latest Windows ZIP or installer from the repository's **Releases** page.
 
-`Draw-Studio-1.0.129-rc1-Step30-Release-Candidate-Hardening.zip`
+Current release candidate: **v1.0.129-rc1**
 
-Extract the **entire ZIP** to a normal folder before starting the program.
+Expected Windows artifacts:
+
+- `DrawStudio-1.0.129-rc1-Windows-x64.zip`
+- `DrawStudio-1.0.129-rc1-Windows-x64-Setup.exe`
+
+Extract the **entire ZIP** to a normal folder before starting the program, or use the installer build.
 
 Do not run Draw Studio directly from inside the ZIP file.
 
@@ -241,7 +246,7 @@ It can create significantly more drawing work than faster modes.
 
 Draw Studio includes an advanced color engine designed to translate source-image colors into colors that the target application can actually draw.
 
-Step 26 adds **Named Color Intelligence**, including:
+**v1.0.124-beta** introduced **Named Color Intelligence**, including:
 
 - CSS4 and Tk/X11 color-name compatibility
 - Names such as `DarkSlateBlue` and `dark slate blue`
@@ -256,16 +261,17 @@ These extra color names are **not added to the drawing palette automatically**. 
 
 ## Current release candidate
 
-**v1.0.129-rc1 — Step 30: Release Candidate Hardening**
+**v1.0.129-rc1 — Release Candidate Hardening**
 
-Current RC source package:
+Current Windows release artifact names:
 
-- `Draw-Studio-1.0.129-rc1-Step30-Release-Candidate-Hardening.zip`
-- SHA-256 is published in `SOURCE-PACKAGE-SHA256.txt` after packaging
+- `DrawStudio-1.0.129-rc1-Windows-x64.zip`
+- `DrawStudio-1.0.129-rc1-Windows-x64-Setup.exe`
+- SHA-256 hashes are generated with the release artifacts
 
-### Step 30 highlights
+### v1.0.129-rc1 — Release Candidate Hardening
 
-- Numbered feature roadmap is frozen for RC validation
+- Release feature set frozen for RC validation
 - 5,000-cycle start/stop/disarm lifecycle soak gate
 - Repeated profile-storage isolation soak
 - Update Center fixed to `Vxiey/Draw-Studio` with RC-aware channel filtering
@@ -274,9 +280,9 @@ Current RC source package:
 - Silent installer → installed EXE self-test → silent uninstall in Windows CI
 - Source/release packages reject logs, dumps, bytecode, tests and one-time patch files
 - Full regression discovery is a release gate
-- Hybrid Renderer 3.0 remains the current renderer; no new renderer feature is added by Step 30
+- Hybrid Renderer 3.0 remains the current renderer; this RC focuses on validation and hardening rather than adding another renderer
 
-### Step 29 highlights
+### v1.0.128-beta — Hybrid Renderer 3.0
 
 - New **Hybrid Renderer 3.0** rendering style
 - **Auto Hybrid** uses bounded local Pillow/NumPy structure analysis — no AI, ML or OCR
@@ -289,10 +295,9 @@ Current RC source package:
 - Hybrid policy cannot modify CanvasGuard, target locks, calibration, preflight, dry-run or Start authorization
 - Hybrid mode is saved per profile and supported by `.drawprofile` export/import
 - Preview diagnostics show requested/resolved Hybrid mode, passes and source-analysis metrics
-- Windows Step 29 regression selection: **64/64 passed**
-- Step 30 remains **Release Candidate Hardening**
+- Windows regression selection: **64/64 passed**
 
-### Step 28 highlights
+### v1.0.127-beta — More Drawing Targets
 
 - New dedicated **Kleki** browser-painting profile
 - New dedicated **Magma** collaborative-browser profile
@@ -302,10 +307,9 @@ Current RC source package:
 - Automatic browser controls are hidden for manual targets instead of pretending unsupported layouts are safe
 - Every target retains isolated settings, palette, tools, layout fingerprint, verified-color cache and timing storage
 - No target profile contains native handles, input authorization or hard-coded screen coordinates
-- Step 29 and Step 30 keep their roadmap numbers
-- Windows Step 28 regression selection: **59/59 passed**
+- Windows regression selection: **59/59 passed**
 
-### Step 27.5 highlights
+### v1.0.126-beta — One-click Setup + Verify
 
 - New **One-click Setup + Verify** action for Microsoft Paint and supported browser drawing games
 - Automatically discovers/reuses the target and runs the existing verified canvas/palette setup engine
@@ -314,11 +318,10 @@ Current RC source package:
 - Paint verification requires the verified 20-color palette, Pencil + Fill and stable canvas geometry
 - Setup never starts drawing and never unlocks mouse/keyboard input
 - Failed verification invalidates target/safety readiness and falls back to manual calibration
-- Step 27.5 session state is cleared on every profile switch/reset and is not exported in `.drawprofile`
-- Step 28–30 keep their existing roadmap numbers
+- Session-only verification state is cleared on every profile switch/reset and is not exported in `.drawprofile`
 - Windows regression selection: **41/41 passed**
 
-### Step 27 highlights
+### v1.0.125-beta — Profile Export / Import
 
 - Export the selected profile as `.drawprofile` or JSON
 - Import target, palette/tool calibration, canvas metadata, renderer settings and CPU/GPU/RAM limits
@@ -328,6 +331,7 @@ Current RC source package:
 - Reset only the selected profile to defaults
 - Hardware benchmark/timing feedback and all native-input authorization are deliberately excluded
 - Imported calibration must pass the normal target/safety verification again before drawing
+
 ### Security hotfix
 
 - Hardened image-search URL parsing against deceptive Bing/Google hostnames
@@ -335,7 +339,7 @@ Current RC source package:
 - Added regression tests for hostname spoofing and path/query lookalikes
 - GitHub CodeQL alert #2 is confirmed **fixed**
 
-### Step 26 highlights
+### v1.0.124-beta — Detail Fidelity & Named Color Intelligence
 
 - Full-resolution PixelMap planning
 - CPU/GPU-routed pixel and edge analysis
@@ -349,7 +353,7 @@ Current RC source package:
 - Static lookup tables with no Matplotlib runtime dependency
 - Named colors remain outside the calibrated drawing quantizer
 
-The Step 24–26 / Color / release regression selection passed **79/79** tests, with an additional **104/104** Advanced Color, Pixel Accurate and DrawBot integration tests passing for this package.
+The v1.0.124-beta Color/Pixel Accurate regression selection passed **79/79** tests, with an additional **104/104** Advanced Color, Pixel Accurate and DrawBot integration tests passing for that package.
 
 ## Troubleshooting
 
@@ -540,7 +544,6 @@ python -m unittest discover -v
 python DrawBot.py --self-test
 ```
 
-Release architecture and roadmap references: `ROADMAP-STEP22-PLUS.md` and `STEP-22-UNIVERSAL-HARDWARE-AUTO-BENCHMARK.md`.
- Historical milestone: **Step 22 Universal Hardware Auto Benchmark** introduced the universal hardware benchmark foundation.
+Legacy internal roadmap documents remain in the repository for development history, but public release notes and README documentation use semantic version numbers.
 
 A public beta should still be tested on a clean Windows 10/11 x64 system with the real target applications before broad release.
