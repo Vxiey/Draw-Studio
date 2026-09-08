@@ -37,6 +37,8 @@ jobs:
         run: |
           python rc2_integrate_once.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python rc2_testfix_once.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run RC2 focused regressions
         shell: pwsh
