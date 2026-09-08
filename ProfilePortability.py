@@ -1,0 +1,615 @@
+"""Step 27 — portable profile export/import for Draw Studio.
+
+A .drawprofile is JSON.  It deliberately contains profile-owned renderer/resource
+settings plus calibration metadata, but never runtime input authorization,
+hardware benchmark output, timing feedback, target handles or other machine-only
+state.  Imported calibration is always treated as unverified until the normal
+Draw Studio setup/safety gates pass again.
+"""
+from __future__ import annotations
+
+import json
+import re
+from copy import deepcopy
+from datetime import datetime, timezone
+from pathlib import Path
+
+from GameProfiles import PROFILES, add_custom_profile
+from ProfileIsolation import SETTING_NAMES
+from ProfileStorage import (
+    profile_auto_tuner_feedback_file,
+    profile_correction_history_file,
+    profile_layout_cache_file,
+    profile_palette_file,
+    profile_settings_file,
+    profile_timing_file,
+    profile_verified_color_file,
+    safe_profile_key,
+)
+from RuntimePaths import atomic_write_text, data_dir
+from StabilityRC import migrate_settings
+from Version import APP_VERSION
+
+FORMAT_ID = "draw-studio-profile"
+SCHEMA_VERSION = 1
+MAX_PROFILE_BYTES = 8 * 1024 * 1024
+MAX_JSON_DEPTH = 16
+MAX_JSON_ITEMS = 20000
+
+RESOURCE_SETTING_NAMES = frozenset({
+    "gpu_mode", "gpu_vram", "gpu_performance", "cpu_workers", "cpu_engine",
+    "ram_budget", "ram_custom_mb", "planning_resolution", "resource_scheduler",
+})
+
+# save_settings() has a few newer settings that predate ProfileIsolation's compact
+# list.  Keep an explicit allow-list so a profile file cannot restore arbitrary
+# object attributes or future input-authorization flags.
+EXTRA_PORTABLE_SETTING_NAMES = frozenset({
+    "settings_schema", "use_region_fill_engine", "fill_aggressiveness",
+    "detail_zoom", "quick_sketch_style", "quick_sketch_fill_preference",
+    "preview_mode", "auto_clear_canvas", "profile_extras",
+})
+
+CANVAS_SETTING_NAMES = frozenset({"corners", "canvas_anchor_detection"})
+PORTABLE_SETTING_NAMES = frozenset(SETTING_NAMES) | EXTRA_PORTABLE_SETTING_NAMES | CANVAS_SETTING_NAMES
+
+FORBIDDEN_SETTING_NAMES = frozenset({
+    "draw_immediately", "auto_draw", "drop_action_pending", "manual_drop_in_start",
+    "full_draw_armed", "target_handle", "target_window", "target_client_rect",
+    "target_lock_passed", "target_lock_signature", "target_lock_fingerprint",
+    "small_test_passed", "safety_preflight_passed", "dry_run_passed",
+})
+
+MACHINE_STATE_EXCLUDED = (
+    "hardware benchmark / adapter signature",
+    "draw-time calibration",
+    "auto-tuner feedback",
+    "correction history",
+    "layout fingerprint cache",
+    "verified-color runtime cache",
+    "target window handles / input authorization",
+)
+
+_BUILTIN_KEYS = frozenset(value[0] for value in PROFILES.values() if not value[0].startswith("custom-"))
+_CUSTOM_KEY_RE = re.compile(r"custom-[a-f0-9]{32}\Z")
+
+
+class ProfilePortabilityError(ValueError):
+    pass
+
+
+def _json_guard(value, *, depth=0, counter=None):
+    """Reject non-JSON/extreme payloads before they reach app settings/files."""
+    if counter is None:
+        counter = [0]
+    counter[0] += 1
+    if counter[0] > MAX_JSON_ITEMS or depth > MAX_JSON_DEPTH:
+        raise ProfilePortabilityError("Profile data is too large or deeply nested.")
+    if value is None or type(value) in (bool, int, float, str):
+        if isinstance(value, str) and len(value) > 200000:
+            raise ProfilePortabilityError("Profile contains an oversized text value.")
+        return
+    if isinstance(value, list):
+        for item in value:
+            _json_guard(item, depth=depth + 1, counter=counter)
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str) or len(key) > 200:
+                raise ProfilePortabilityError("Profile contains an invalid JSON key.")
+            _json_guard(item, depth=depth + 1, counter=counter)
+        return
+    raise ProfilePortabilityError("Profile contains a value that is not portable JSON.")
+
+
+def _profile_identity(name: str):
+    if name not in PROFILES:
+        raise ProfilePortabilityError("Unknown Draw Studio profile.")
+    key = str(PROFILES[name][0])
+    return name, key
+
+
+def _read_json(path: Path):
+    try:
+        if not Path(path).is_file():
+            return None
+        raw = Path(path).read_bytes()
+        if len(raw) > MAX_PROFILE_BYTES:
+            raise ProfilePortabilityError(f"{Path(path).name} is too large to export safely.")
+        value = json.loads(raw.decode("utf-8"))
+    except UnicodeDecodeError as error:
+        raise ProfilePortabilityError(f"{Path(path).name} is not UTF-8 JSON.") from error
+    except json.JSONDecodeError as error:
+        raise ProfilePortabilityError(f"{Path(path).name} contains invalid JSON.") from error
+    _json_guard(value)
+    return value
+
+
+def _portable_calibration_paths(profile_key: str, root: Path | None = None):
+    """Only calibration inputs, never learned runtime/hardware caches."""
+    key = safe_profile_key(profile_key)
+    root = Path(root) if root is not None else data_dir()
+    paths = {
+        "palette": root / ("calibration.json" if key == "generic" else f"calibration-{key}.json"),
+        "exact_colors": root / f"exact-colors-{key}.json",
+    }
+    if key == "microsoft-paint":
+        paths["tools"] = root / "paint-tools-microsoft-paint.json"
+    else:
+        paths["tools"] = root / f"app-tools-{key}.json"
+    return paths
+
+
+def portable_path_map(profile_key: str, root: Path | None = None):
+    """Public/testable destination map; keys are profile-isolated."""
+    key = safe_profile_key(profile_key)
+    root = Path(root) if root is not None else data_dir()
+    result = {"settings": root / ("settings.json" if key == "generic" else f"settings-{key}.json")}
+    result.update(_portable_calibration_paths(key, root))
+    return result
+
+
+def sanitize_settings(data: dict, *, strict: bool = True) -> dict:
+    if not isinstance(data, dict):
+        raise ProfilePortabilityError("Profile settings must be a JSON object.")
+    migrated = migrate_settings(data)
+    for forbidden in FORBIDDEN_SETTING_NAMES:
+        migrated.pop(forbidden, None)
+    unknown = sorted(set(migrated) - PORTABLE_SETTING_NAMES)
+    if strict and unknown:
+        raise ProfilePortabilityError("Profile contains unsupported settings: " + ", ".join(unknown[:8]))
+    clean = {key: deepcopy(value) for key, value in migrated.items() if key in PORTABLE_SETTING_NAMES}
+    clean["settings_schema"] = int(migrated.get("settings_schema", 2) or 2)
+    _json_guard(clean)
+    return clean
+
+
+def split_settings(settings: dict):
+    settings = sanitize_settings(settings)
+    canvas = {key: settings.pop(key) for key in tuple(CANVAS_SETTING_NAMES) if key in settings}
+    resources = {key: settings.pop(key) for key in tuple(RESOURCE_SETTING_NAMES) if key in settings}
+    ui = {}
+    if "profile_extras" in settings:
+        ui["profile_extras"] = settings.pop("profile_extras")
+    return settings, resources, ui, canvas
+
+
+def flatten_settings(package_settings: dict, canvas: dict | None = None) -> dict:
+    if not isinstance(package_settings, dict):
+        raise ProfilePortabilityError("Profile settings section is invalid.")
+    clean = {}
+    for section in ("renderer", "resources", "ui"):
+        values = package_settings.get(section, {})
+        if not isinstance(values, dict):
+            raise ProfilePortabilityError(f"Profile {section} settings must be an object.")
+        overlap = set(clean).intersection(values)
+        if overlap:
+            raise ProfilePortabilityError("Profile contains duplicate setting names.")
+        clean.update(values)
+    if canvas:
+        if not isinstance(canvas, dict):
+            raise ProfilePortabilityError("Canvas metadata must be an object.")
+        for key in CANVAS_SETTING_NAMES:
+            if key in canvas:
+                clean[key] = canvas[key]
+    return sanitize_settings(clean)
+
+
+def _validate_canvas(canvas: dict):
+    if not isinstance(canvas, dict):
+        raise ProfilePortabilityError("Canvas metadata must be an object.")
+    unknown = set(canvas) - CANVAS_SETTING_NAMES
+    if unknown:
+        raise ProfilePortabilityError("Canvas metadata contains unsupported fields.")
+    corners = canvas.get("corners")
+    if corners is not None:
+        if not (isinstance(corners, list) and len(corners) == 2):
+            raise ProfilePortabilityError("Canvas corners must contain two points.")
+        for point in corners:
+            if not (isinstance(point, list) and len(point) == 2 and all(type(v) is int for v in point)):
+                raise ProfilePortabilityError("Canvas coordinates are invalid.")
+            if any(abs(v) > 1000000 for v in point):
+                raise ProfilePortabilityError("Canvas coordinates are outside the supported range.")
+    anchors = canvas.get("canvas_anchor_detection")
+    if anchors is not None and not isinstance(anchors, dict):
+        raise ProfilePortabilityError("Canvas anchor metadata is invalid.")
+    _json_guard(canvas)
+
+
+def _validate_source_key(key: str):
+    if key in _BUILTIN_KEYS or _CUSTOM_KEY_RE.fullmatch(key):
+        return key
+    raise ProfilePortabilityError("Profile target key is invalid.")
+
+
+def migrate_package(data: dict) -> dict:
+    """Migrate the initial pre-schema prototype to the Step 27 v1 schema."""
+    if not isinstance(data, dict):
+        raise ProfilePortabilityError("Profile file must contain a JSON object.")
+    version = data.get("schema_version", 0)
+    if type(version) is not int or version < 0:
+        raise ProfilePortabilityError("Profile schema version is invalid.")
+    if version > SCHEMA_VERSION:
+        raise ProfilePortabilityError(
+            f"This profile uses schema {version}; this Draw Studio build supports up to {SCHEMA_VERSION}."
+        )
+    if version == SCHEMA_VERSION:
+        return deepcopy(data)
+
+    # Schema 0 was an internal Step 27 prototype: flat renderer/resource fields.
+    name = data.get("name") or data.get("profile_name") or data.get("target")
+    key = data.get("profile_key") or data.get("target_key") or "generic"
+    renderer = data.get("renderer_settings") or data.get("settings") or {}
+    resources = data.get("resource_limits") or {}
+    calibration = data.get("calibration") or {}
+    if data.get("palette") is not None and isinstance(calibration, dict):
+        calibration = dict(calibration)
+        calibration.setdefault("palette", data.get("palette"))
+    return {
+        "format": FORMAT_ID,
+        "schema_version": 1,
+        "created_by": {"app_version": str(data.get("app_version") or "legacy")},
+        "profile": {"name": name, "key": key},
+        "settings": {"renderer": renderer, "resources": resources, "ui": {}},
+        "canvas": data.get("canvas") or {},
+        "calibration": calibration,
+        "safety": {"requires_reverification": True, "machine_specific_state_included": False},
+    }
+
+
+def validate_package(data: dict) -> dict:
+    data = migrate_package(data)
+    if data.get("format") != FORMAT_ID or data.get("schema_version") != SCHEMA_VERSION:
+        raise ProfilePortabilityError("This is not a supported Draw Studio .drawprofile file.")
+    _json_guard(data)
+
+    profile = data.get("profile")
+    if not isinstance(profile, dict):
+        raise ProfilePortabilityError("Profile identity is missing.")
+    name = profile.get("name")
+    key = profile.get("key")
+    if not isinstance(name, str) or not (1 <= len(name.strip()) <= 50):
+        raise ProfilePortabilityError("Profile name must contain 1–50 characters.")
+    if not isinstance(key, str):
+        raise ProfilePortabilityError("Profile target key is missing.")
+    _validate_source_key(key)
+
+    canvas = deepcopy(data.get("canvas") or {})
+    _validate_canvas(canvas)
+    clean_settings = flatten_settings(data.get("settings") or {}, canvas)
+    renderer, resources, ui, clean_canvas = split_settings(clean_settings)
+
+    calibration = data.get("calibration") or {}
+    if not isinstance(calibration, dict):
+        raise ProfilePortabilityError("Calibration section must be an object.")
+    unknown_calibration = set(calibration) - {"palette", "tools", "exact_colors"}
+    if unknown_calibration:
+        raise ProfilePortabilityError("Calibration contains unsupported sections.")
+    for logical, payload in calibration.items():
+        if payload is not None and not isinstance(payload, (dict, list)):
+            raise ProfilePortabilityError(f"Calibration section {logical} is invalid.")
+        _json_guard(payload)
+
+    palette = calibration.get("palette")
+    if palette is not None:
+        try:
+            from Colors import validate_calibration
+            validate_calibration(palette, profile_key=key)
+        except (ValueError, TypeError) as error:
+            raise ProfilePortabilityError(f"Palette calibration failed validation: {error}") from error
+
+    safety = data.get("safety") or {}
+    if not isinstance(safety, dict):
+        raise ProfilePortabilityError("Safety metadata is invalid.")
+    if safety.get("machine_specific_state_included") is True:
+        raise ProfilePortabilityError("Profile contains machine-specific state and will not be imported.")
+
+    return {
+        "format": FORMAT_ID,
+        "schema_version": SCHEMA_VERSION,
+        "created_at": data.get("created_at"),
+        "created_by": deepcopy(data.get("created_by") or {}),
+        "profile": {"name": name.strip(), "key": key},
+        "settings": {"renderer": renderer, "resources": resources, "ui": ui},
+        "canvas": clean_canvas,
+        "calibration": deepcopy(calibration),
+        "safety": {
+            "requires_reverification": True,
+            "machine_specific_state_included": False,
+            "excluded_state": list(MACHINE_STATE_EXCLUDED),
+        },
+    }
+
+
+def build_package(profile_name: str, settings: dict, calibration: dict | None = None) -> dict:
+    name, key = _profile_identity(profile_name)
+    renderer, resources, ui, canvas = split_settings(settings)
+    package = {
+        "format": FORMAT_ID,
+        "schema_version": SCHEMA_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": {"app": "Draw Studio", "app_version": APP_VERSION},
+        "profile": {"name": name, "key": key},
+        "settings": {"renderer": renderer, "resources": resources, "ui": ui},
+        "canvas": canvas,
+        "calibration": deepcopy(calibration or {}),
+        "safety": {
+            "requires_reverification": True,
+            "machine_specific_state_included": False,
+            "excluded_state": list(MACHINE_STATE_EXCLUDED),
+        },
+    }
+    return validate_package(package)
+
+
+def read_profile_file(path: Path) -> dict:
+    path = Path(path)
+    if not path.is_file():
+        raise ProfilePortabilityError("The selected profile file does not exist.")
+    if path.stat().st_size > MAX_PROFILE_BYTES:
+        raise ProfilePortabilityError("The profile file is larger than 8 MB.")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ProfilePortabilityError("The selected file is not valid UTF-8 JSON.") from error
+    return validate_package(data)
+
+
+def write_profile_file(path: Path, package: dict) -> Path:
+    clean = validate_package(package)
+    path = Path(path)
+    if path.suffix.lower() not in (".drawprofile", ".json"):
+        path = path.with_suffix(".drawprofile")
+    text = json.dumps(clean, ensure_ascii=False, indent=2, sort_keys=True)
+    if len(text.encode("utf-8")) > MAX_PROFILE_BYTES:
+        raise ProfilePortabilityError("Profile is too large to save safely.")
+    atomic_write_text(path, text)
+    return path
+
+
+def _capture_calibration(profile_key: str):
+    result = {}
+    for logical, path in _portable_calibration_paths(profile_key).items():
+        payload = _read_json(path)
+        if payload is not None:
+            result[logical] = payload
+    return result
+
+
+def package_from_app(app) -> dict:
+    if getattr(app, "activity", None):
+        raise ProfilePortabilityError("Wait for the current Draw Studio task to finish before exporting a profile.")
+    profile_name = str(app.game.get())
+    name, key = _profile_identity(profile_name)
+    try:
+        app.save_settings()
+    except Exception as error:
+        raise ProfilePortabilityError(f"Could not save current profile settings: {error}") from error
+    settings_path = Path(getattr(app, "settings_path", profile_settings_file(key)))
+    settings = _read_json(settings_path) or {}
+    return build_package(name, sanitize_settings(settings), _capture_calibration(key))
+
+
+def _rewrite_calibration_owner(payload, destination_key: str):
+    if payload is None:
+        return None
+    clean = deepcopy(payload)
+    if isinstance(clean, dict) and "profile" in clean:
+        clean["profile"] = destination_key
+    return clean
+
+
+def apply_package_to_paths(package: dict, destination_key: str, *, root: Path | None = None):
+    """Write one profile only.  This is the isolation boundary used by imports/tests."""
+    package = validate_package(package)
+    destination_key = safe_profile_key(destination_key)
+    settings = flatten_settings(package["settings"], package.get("canvas"))
+    settings["settings_schema"] = 2
+    paths = portable_path_map(destination_key, root)
+    Path(paths["settings"]).parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(paths["settings"], json.dumps(settings, ensure_ascii=False, indent=2))
+
+    calibration = package.get("calibration") or {}
+    for logical in ("palette", "tools", "exact_colors"):
+        payload = calibration.get(logical)
+        path = paths[logical]
+        if payload is None:
+            Path(path).unlink(missing_ok=True)
+            continue
+        payload = _rewrite_calibration_owner(payload, destination_key)
+        atomic_write_text(path, json.dumps(payload, ensure_ascii=False, indent=2))
+    return paths
+
+
+def unique_copy_name(base_name: str, existing=None) -> str:
+    existing = set(PROFILES if existing is None else existing)
+    stem = f"{base_name} (Imported)"
+    if stem not in existing and len(stem) <= 50:
+        return stem
+    for index in range(2, 1000):
+        suffix = f" (Imported {index})"
+        candidate = base_name[: max(1, 50 - len(suffix))] + suffix
+        if candidate not in existing:
+            return candidate
+    raise ProfilePortabilityError("Could not create a unique imported profile name.")
+
+
+def profile_reset_paths(profile_key: str):
+    """Every file removed by Reset profile; all are scoped to one profile."""
+    key = safe_profile_key(profile_key)
+    paths = list(portable_path_map(key).values())
+    paths.extend((
+        profile_timing_file(key), profile_auto_tuner_feedback_file(key),
+        profile_correction_history_file(key), profile_layout_cache_file(key),
+        profile_verified_color_file(key),
+    ))
+    # Paint had one legacy tool path. Only delete it while resetting Paint.
+    if key == "microsoft-paint":
+        paths.append(data_dir() / "paint-tools.json")
+    # De-duplicate without touching another profile's names.
+    out = []
+    seen = set()
+    for path in paths:
+        path = Path(path)
+        if path not in seen:
+            seen.add(path); out.append(path)
+    return tuple(out)
+
+
+def _reload_profile(app, name: str):
+    """Configuration-only reload; it must not bypass normal safety/setup gates."""
+    app.game.set(name)
+    if hasattr(app, "profile_selector"):
+        try:
+            app.profile_selector.configure(values=list(PROFILES))
+        except Exception:
+            pass
+    apply_now = getattr(app, "_apply_profile_change", None)
+    if callable(apply_now):
+        apply_now(name)
+    else:
+        app.change_profile()
+
+
+def import_package_into_app(app, package: dict, *, action: str = "replace", copy_name: str | None = None):
+    package = validate_package(package)
+    source_name = package["profile"]["name"]
+    if action not in ("replace", "copy"):
+        raise ProfilePortabilityError("Import action must be Replace or Import as copy.")
+
+    try:
+        if hasattr(app, "save_settings"):
+            app.save_settings()
+    except Exception:
+        pass
+
+    if action == "replace":
+        if source_name not in PROFILES:
+            # A shared custom profile does not exist locally yet; create an isolated local key.
+            add_custom_profile(source_name, data_dir() / "profiles.json")
+        destination_name = source_name
+    else:
+        destination_name = (copy_name or unique_copy_name(source_name)).strip()
+        if not destination_name or len(destination_name) > 50 or destination_name in PROFILES:
+            raise ProfilePortabilityError("Import-as-copy needs a unique name of 1–50 characters.")
+        add_custom_profile(destination_name, data_dir() / "profiles.json")
+
+    destination_key = PROFILES[destination_name][0]
+    apply_package_to_paths(package, destination_key)
+
+    # Imported geometry/calibration can be useful metadata, but never counts as
+    # a completed safety test. _apply_profile_change clears locks, target handles,
+    # plan state and small-test state before reading the imported profile files.
+    _reload_profile(app, destination_name)
+    if hasattr(app, "status"):
+        try:
+            app.status.set(
+                f"Imported {destination_name}. Re-verify target, palette/canvas and run the normal safety tests before drawing."
+            )
+        except Exception:
+            pass
+    return destination_name
+
+
+def reset_profile(app):
+    if getattr(app, "activity", None):
+        raise ProfilePortabilityError("Wait for the current Draw Studio task to finish before resetting a profile.")
+    name, key = _profile_identity(str(app.game.get()))
+    # Do not let the profile-change wrapper save the old values after deletion.
+    for path in profile_reset_paths(key):
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as error:
+            raise ProfilePortabilityError(f"Could not reset {path.name}: {error}") from error
+    _reload_profile(app, name)
+    if hasattr(app, "status"):
+        try: app.status.set(f"{name} restored to Draw Studio defaults. Calibration/setup must be verified again.")
+        except Exception: pass
+    return name
+
+
+def export_profile_dialog(app):
+    from tkinter import filedialog, messagebox
+    try:
+        package = package_from_app(app)
+        default = safe_profile_key(package["profile"]["name"]) + ".drawprofile"
+        selected = filedialog.asksaveasfilename(
+            parent=getattr(app, "root", None), title="Export Draw Studio profile",
+            defaultextension=".drawprofile", initialfile=default,
+            filetypes=(("Draw Studio profile", "*.drawprofile"), ("JSON", "*.json")),
+        )
+        if not selected:
+            return None
+        path = write_profile_file(Path(selected), package)
+        messagebox.showinfo("Profile exported", f"Profile saved to:\n{path}", parent=getattr(app, "root", None))
+        return path
+    except (ProfilePortabilityError, OSError) as error:
+        messagebox.showerror("Could not export profile", str(error), parent=getattr(app, "root", None))
+        return None
+
+
+def import_profile_dialog(app):
+    from tkinter import filedialog, messagebox, simpledialog
+    selected = filedialog.askopenfilename(
+        parent=getattr(app, "root", None), title="Import Draw Studio profile",
+        filetypes=(("Draw Studio profile", "*.drawprofile *.json"), ("All files", "*.*")),
+    )
+    if not selected:
+        return None
+    try:
+        package = read_profile_file(Path(selected))
+        name = package["profile"]["name"]
+        action = "replace"
+        copy_name = None
+        if name in PROFILES:
+            answer = messagebox.askyesnocancel(
+                "Profile already exists",
+                f"A profile named '{name}' already exists.\n\nYes = Replace this profile\nNo = Import as copy\nCancel = Do nothing",
+                parent=getattr(app, "root", None),
+            )
+            if answer is None:
+                return None
+            if answer is False:
+                action = "copy"
+                suggestion = unique_copy_name(name)
+                copy_name = simpledialog.askstring(
+                    "Import profile as copy", "Name for the imported copy:",
+                    initialvalue=suggestion, parent=getattr(app, "root", None),
+                )
+                if not copy_name:
+                    return None
+        destination = import_package_into_app(app, package, action=action, copy_name=copy_name)
+        messagebox.showinfo(
+            "Profile imported",
+            f"Imported '{destination}'.\n\nFor safety, imported canvas/palette calibration is not trusted as a completed setup. Verify the target and run the normal tests before drawing.",
+            parent=getattr(app, "root", None),
+        )
+        return destination
+    except (ProfilePortabilityError, OSError) as error:
+        messagebox.showerror("Could not import profile", str(error), parent=getattr(app, "root", None))
+        return None
+
+
+def reset_profile_dialog(app):
+    from tkinter import messagebox
+    try:
+        name, _key = _profile_identity(str(app.game.get()))
+    except ProfilePortabilityError as error:
+        messagebox.showerror("Could not reset profile", str(error), parent=getattr(app, "root", None)); return None
+    if not messagebox.askyesno(
+        "Reset profile to defaults",
+        f"Reset '{name}' to Draw Studio defaults?\n\nThis removes this profile's saved settings and calibration/cache files only. Other profiles are not changed.",
+        parent=getattr(app, "root", None),
+    ):
+        return None
+    try:
+        result = reset_profile(app)
+        messagebox.showinfo(
+            "Profile reset",
+            f"'{result}' was restored to defaults. Re-run calibration/setup before drawing.",
+            parent=getattr(app, "root", None),
+        )
+        return result
+    except ProfilePortabilityError as error:
+        messagebox.showerror("Could not reset profile", str(error), parent=getattr(app, "root", None))
+        return None
