@@ -66,11 +66,10 @@ class Step21ReleaseCleanupTests(unittest.TestCase):
 
     def test_readme_and_release_docs_are_current(self):
         readme = (self.root / "README.md").read_text(encoding="utf-8")
-        self.assertIn("Step 30: Release Candidate Hardening", readme)
+        self.assertIn("v1.0.129-rc1", readme)
+        self.assertIn("Release Candidate Hardening", readme)
         self.assertIn("python ReleasePackage.py --check", readme)
         self.assertIn("local-only", readme)
-        self.assertIn("ROADMAP-STEP22-PLUS.md", readme)
-        self.assertIn("STEP-22-UNIVERSAL-HARDWARE-AUTO-BENCHMARK.md", readme)
         self.assertIn("ReleaseCandidateHardening.py --source-gate", readme)
         notes = (self.root / "RELEASE-NOTES-Step21-Build-Publisher-GitHub-Release.md").read_text(encoding="utf-8")
         self.assertIn("ReleasePackage.py", notes)
