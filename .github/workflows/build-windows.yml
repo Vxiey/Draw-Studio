@@ -9,17 +9,22 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: draw-studio-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-windows:
     runs-on: windows-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.12'
           architecture: 'x64'
           cache: 'pip'
 
@@ -29,11 +34,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tests and self-test
+      - name: Step 30 source release gate
+        shell: pwsh
+        run: python ReleaseCandidateHardening.py --source-gate --soak-cycles 5000
+
+      - name: Run complete regressions and self-test
         shell: pwsh
         run: |
           python -m unittest discover -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python DrawBot.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Install Inno Setup
         shell: pwsh
@@ -43,14 +54,37 @@ jobs:
         shell: pwsh
         run: python build_release.py --installer --skip-tests
 
+      - name: Validate packaged release
+        shell: pwsh
+        run: python ReleaseCandidateHardening.py --release-dir release
+
+      - name: Validate silent installer round-trip
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem release/DrawStudio-*-Windows-x64-Setup.exe | Select-Object -First 1
+          if (-not $setup) { throw 'Setup.exe was not produced' }
+          $installDir = Join-Path $env:RUNNER_TEMP 'DrawStudio-RC-install'
+          if (Test-Path $installDir) { Remove-Item $installDir -Recurse -Force }
+          & $setup.FullName '/VERYSILENT' '/SUPPRESSMSGBOXES' '/NORESTART' "/DIR=$installDir"
+          if ($LASTEXITCODE -ne 0) { throw "Silent install failed: $LASTEXITCODE" }
+          $exe = Join-Path $installDir 'DrawStudio.exe'
+          if (-not (Test-Path $exe)) { throw 'Installed DrawStudio.exe is missing' }
+          & $exe '--self-test'
+          if ($LASTEXITCODE -ne 0) { throw "Installed self-test failed: $LASTEXITCODE" }
+          $uninstall = Join-Path $installDir 'unins000.exe'
+          if (-not (Test-Path $uninstall)) { throw 'Uninstaller is missing' }
+          & $uninstall '/VERYSILENT' '/SUPPRESSMSGBOXES' '/NORESTART'
+          if ($LASTEXITCODE -ne 0) { throw "Silent uninstall failed: $LASTEXITCODE" }
+
       - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: DrawStudio-${{ github.ref_name }}-Windows-x64
           path: |
             release/DrawStudio-*-Windows-x64.zip
             release/DrawStudio-*-Windows-x64-Setup.exe
             release/DrawStudio-*-SHA256.txt
+            release/DrawStudio-*-manifest.json
           if-no-files-found: error
           retention-days: 30
 
@@ -64,5 +98,7 @@ jobs:
             release/DrawStudio-*-Windows-x64.zip `
             release/DrawStudio-*-Windows-x64-Setup.exe `
             release/DrawStudio-*-SHA256.txt `
+            release/DrawStudio-*-manifest.json `
+            --prerelease `
             --title "Draw Studio $env:GITHUB_REF_NAME" `
-            --notes-file RELEASE-NOTES-v1.0.58-beta.md
+            --notes-file RELEASE-NOTES-v1.0.129-rc1-Step30.md
