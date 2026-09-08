@@ -1002,8 +1002,9 @@ def build_ui(a, quality, speed):
     from ProfileIsolation import register_controls
     register_controls(a,[(a.paint_tool_menu,'paint'),(a.paint_tool_label,'paint'),
         (a.paint_auto_button,'paint'),(a.paint_tool_button,'paint'),
-        (one_click,'browser'),(a.browser_one_click_label,'browser'),
-        (a.browser_auto_button,'browser'),(a.browser_auto_label,'browser'),
+        (a.one_click_setup_button,'oneclick'),(a.one_click_setup_label,'oneclick'),
+        (one_click,'browser-auto'),(a.browser_one_click_label,'browser-auto'),
+        (a.browser_auto_button,'browser-auto'),(a.browser_auto_label,'browser-auto'),
         (a.app_tool_button,'nonpaint'),(a.app_tool_label,'nonpaint'),
         (a.gartic_setup_button,'gartic'),(timer_switch,'gartic')])
     a.refresh_ui_state = refresh_ui_state

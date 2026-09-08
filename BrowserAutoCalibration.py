@@ -17,10 +17,9 @@ from typing import Sequence
 from CalibrationAnchors import make_anchor
 from Colors import save_calibration
 from PaletteMaps import PRESETS, detect_color_swatches
+from TargetCapabilities import auto_browser_profile_keys
 
-SUPPORTED_BROWSER_PROFILES = frozenset({
-    'gartic-phone', 'skribbl', 'skribbl-fast', 'sketchheads', 'sketchful'
-})
+SUPPORTED_BROWSER_PROFILES = auto_browser_profile_keys()
 
 
 @dataclass(frozen=True)

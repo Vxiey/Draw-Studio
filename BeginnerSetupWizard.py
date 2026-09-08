@@ -8,6 +8,9 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Any, Iterable, Mapping
 
+from TargetCapabilities import capability_for_key
+from GameProfiles import PROFILES
+
 
 @dataclass(frozen=True)
 class WizardStep:
@@ -36,7 +39,9 @@ def build_setup_wizard(*, profile_name: str = "Other drawing app", image_loaded:
                        preflight_passed: bool = False, dry_run_passed: bool = False,
                        full_draw_unlocked: bool = False, activity: str | None = None) -> tuple[WizardStep, ...]:
     strict = profile_name == "Microsoft Paint"
-    browser = profile_name in ("Gartic Phone", "Skribbl.io", "Skribbl.io Fast", "SketchHeads", "Sketchful.io", "Drawize", "Gartic.io")
+    profile_key=str(PROFILES.get(profile_name,('generic',))[0])
+    capability=capability_for_key(profile_key)
+    browser=capability.kind.startswith('browser-')
     steps = [
         WizardStep("profile", "Choose target profile", "done" if profile_name else "next",
                    "Choose Paint, Gartic Phone, Skribbl.io or another drawing target.",

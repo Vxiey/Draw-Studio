@@ -10,9 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-SUPPORTED_BROWSER_PROFILES = frozenset({
-    'gartic-phone', 'skribbl', 'skribbl-fast', 'sketchheads', 'sketchful'
-})
+from TargetCapabilities import auto_browser_profile_keys
+
+SUPPORTED_BROWSER_PROFILES = auto_browser_profile_keys()
 
 
 class StrokeDeliveryVerificationError(InterruptedError):

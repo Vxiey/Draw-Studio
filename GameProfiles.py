@@ -14,7 +14,9 @@ PROFILES={
  'SketchHeads':('sketchheads','#6f63ff','SketchHeads profile. Auto setup detects the safe canvas, true color row and brush-size controls; input timing is tuned separately from other games.'),
  'Sketchful.io':('sketchful','#b14f22','Sketchful.io profile. Auto Setup verifies the visible palette/canvas and re-scans before drawing after zoom/resize changes.'),
  'Drawize':('drawize','#287646','Drawize profile. Keep the drawing toolbar visible, calibrate the visible controls and select only the canvas.'),
- 'Gartic.io':('gartic-io','#1768a2','Gartic.io profile. Keep the browser layout fixed, capture the palette and select only the drawable canvas.')}
+ 'Gartic.io':('gartic-io','#1768a2','Gartic.io profile. Keep the browser layout fixed, capture the palette and select only the drawable canvas.'),
+ 'Kleki':('kleki','#5b6fa8','Kleki browser painting profile. Calibrate the visible brush/fill/colors and select only the canvas; no automatic layout coordinates are assumed.'),
+ 'Magma':('magma','#b7492f','Magma collaborative drawing profile. Calibrate the current canvas/tools/colors per session layout and keep the browser geometry stable.')}
 
 # UI-only metadata. Emoji are deliberately text glyphs so the package does not
 # need extra icon/image assets and remains portable in the ZIP build.
@@ -55,6 +57,14 @@ PROFILE_UI={
      prepare_subtitle='Keep browser layout stable, capture the palette and select only the drawable canvas.',
      tool_button='🧰  Calibrate Gartic.io tools', palette_button='🎨  Read Gartic.io palette',
      area_button='▣  Select Gartic.io canvas', tip='Progressive Shape paths make the subject readable before small details are added.'),
+ 'Kleki': dict(icon='🖌️', badge='Browser painting app', prepare_title='Prepare Kleki',
+     prepare_subtitle='Use manual tool/color calibration, then select only the drawable canvas. One-click layout detection is intentionally disabled until verified.',
+     tool_button='🧰  Calibrate Kleki tools', palette_button='🎨  Read Kleki colors',
+     area_button='▣  Select Kleki canvas', tip='Dedicated isolated profile. Browser layout, tool anchors, palette and timing data never leak to other targets.'),
+ 'Magma': dict(icon='🌋', badge='Collaborative browser app', prepare_title='Prepare Magma',
+     prepare_subtitle='Open the intended collaborative canvas, calibrate visible tools/colors and select only the drawable canvas.',
+     tool_button='🧰  Calibrate Magma tools', palette_button='🎨  Read Magma colors',
+     area_button='▣  Select Magma canvas', tip='Dedicated isolated profile. Recalibrate when collaborative UI panels, zoom or canvas layout move.'),
 }
 
 # Applied before reading a profile's saved settings. A user's saved settings still
@@ -97,6 +107,14 @@ PROFILE_DEFAULTS={
      quality='Balanced', speed='Fast', stroke_optimizer='Auto', adaptive_detail='Strong simplify', visual_verification='Auto', precision='Normal', draw_quality='Balanced', planning_resolution='Standard', resource_scheduler='Auto',
      background_fill='Off', background_simplification='Strong', color_grouping='Reduced palette',
      color_rendering='Perceptual match', color_fidelity='Faithful', color_layers='Off', custom_color_workflow='Adaptive exact (recommended)', time_budget_mode='Manual', max_stroke_cap='2500'),
+ 'Kleki': dict(mode='Shape paths', shape_model='Better shapes v2', progressive_rendering='On',
+     quality='High detail', speed='Balanced', stroke_optimizer='Smart merge', adaptive_detail='Preserve detail', visual_verification='Auto', precision='High', draw_quality='High likeness', planning_resolution='High', resource_scheduler='Auto',
+     background_fill='Conservative', background_simplification='Conservative', color_grouping='Smart',
+     color_rendering='Perceptual match', color_fidelity='Faithful', color_layers='Off', custom_color_workflow='Adaptive exact (recommended)', time_budget_mode='Manual', max_stroke_cap='10000'),
+ 'Magma': dict(mode='Shape paths', shape_model='Better shapes v2', progressive_rendering='On',
+     quality='High detail', speed='Balanced', stroke_optimizer='Smart merge', adaptive_detail='Preserve detail', visual_verification='Auto', precision='High', draw_quality='High likeness', planning_resolution='High', resource_scheduler='Auto',
+     background_fill='Conservative', background_simplification='Conservative', color_grouping='Smart',
+     color_rendering='Perceptual match', color_fidelity='Faithful', color_layers='Off', custom_color_workflow='Adaptive exact (recommended)', time_budget_mode='Manual', max_stroke_cap='10000'),
 }
 
 

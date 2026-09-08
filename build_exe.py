@@ -159,6 +159,7 @@ def main():
         '--hidden-import', 'BrowserAutoRecalibration',
         '--hidden-import', 'BrowserVisualPreflight',
         '--hidden-import', 'OneClickSetupVerification',
+        '--hidden-import', 'TargetCapabilities',
         '--hidden-import', 'LayoutFingerprintV2',
         '--hidden-import', 'RealSpeedBudget',
         '--hidden-import', 'qrcode',

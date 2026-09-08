@@ -50,15 +50,10 @@ class SetupVerificationResult:
 
 
 def setup_mode(profile_key: str) -> str:
-    key=str(profile_key or '').strip().lower()
-    if key == PAINT_PROFILE:
-        return 'paint'
-    try:
-        from BrowserAutoCalibration import SUPPORTED_BROWSER_PROFILES
-        if key in SUPPORTED_BROWSER_PROFILES:
-            return 'browser'
-    except Exception:
-        pass
+    from TargetCapabilities import capability_for_key
+    mode=capability_for_key(profile_key).setup_mode
+    if mode=='paint-auto':return 'paint'
+    if mode=='browser-auto':return 'browser'
     return 'manual'
 
 

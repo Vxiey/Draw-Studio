@@ -55,9 +55,17 @@ def restore_extra(app,data):
 
 
 def scope_visible(scope,key):
-    from BrowserAutoCalibration import SUPPORTED_BROWSER_PROFILES
-    return {'paint':key=='microsoft-paint','gartic':key=='gartic-phone',
-            'browser':key in SUPPORTED_BROWSER_PROFILES,'nonpaint':key!='microsoft-paint'}[scope]
+    from TargetCapabilities import is_browser_target, supports_one_click_setup, capability_for_key
+    cap=capability_for_key(key)
+    return {
+        'paint':key=='microsoft-paint',
+        'gartic':key=='gartic-phone',
+        'browser':is_browser_target(key),
+        'browser-auto':cap.setup_mode=='browser-auto',
+        'browser-manual':is_browser_target(key) and cap.setup_mode=='manual',
+        'oneclick':supports_one_click_setup(key),
+        'nonpaint':key!='microsoft-paint',
+    }[scope]
 
 
 def register_controls(app,entries):

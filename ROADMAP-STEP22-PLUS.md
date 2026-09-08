@@ -62,9 +62,9 @@ Export/import one profile at a time as `.drawprofile`/JSON with schema migration
 
 A unified read-only setup action now reuses the existing Paint/Browser detectors, discovers or reuses the target, writes only verified calibration state, then performs a second independent live canvas/palette verification pass. Failure blocks setup safely and falls back to manual calibration. It never unlocks or starts drawing.
 
-## Step 28 — More Drawing Targets
+## Completed — Step 28 — More Drawing Targets
 
-Add carefully isolated presets for more drawing apps or browser games. Every target must get separate storage, calibration state, layout fingerprints and timing cache.
+Adds a central target-capability registry and dedicated **Kleki** + **Magma** profiles. Verified automatic targets stay explicitly separated from manual browser targets, so Drawize/Gartic.io/Kleki/Magma never inherit unverified auto-detection. Every profile keeps a unique storage key for settings, calibration, layout fingerprints and timing data; manual targets use explicit tool/palette/canvas calibration with no hard-coded coordinates.
 
 ## Step 29 — New Draw Modes / Hybrid Renderer 3.0
 

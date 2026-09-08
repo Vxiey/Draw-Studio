@@ -29,6 +29,8 @@ PROFILE_CAPABILITIES = {
     "sketchful": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Auto setup can detect the palette; manual tool capture is optional."},
     "drawize": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Tool positions are profile-specific and must be calibrated."},
     "gartic-io": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Tool positions are profile-specific and must be calibrated."},
+    "kleki": {"brush": True, "fill": True, "eraser": True, "clear": False, "note": "Kleki controls are manually calibrated and anchored to this profile; no layout coordinates are assumed."},
+    "magma": {"brush": True, "fill": True, "eraser": True, "clear": False, "note": "Magma controls are manually calibrated per canvas/profile; collaborative UI changes require recalibration."},
 }
 
 
