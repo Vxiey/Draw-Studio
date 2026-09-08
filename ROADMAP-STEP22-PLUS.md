@@ -1,0 +1,71 @@
+# Roadmap — Step 27+
+
+Step 22 is now implemented. Steps 23–26 are now implemented as well.
+
+## Completed — Step 22 — Universal Hardware Auto Benchmark
+
+- NVIDIA / AMD / Intel adapter detection
+- CUDA / OpenCL / CPU microbenchmarking where available
+- per-workload backend preference
+- CPU/RAM/VRAM-safe adaptive hardware profile
+- automatic re-benchmark when the hardware/runtime signature changes
+- full CPU fallback
+
+## Completed — Step 23
+
+- real OKLab / DeltaE routing
+- real palette matching routing
+- real edge and pixel-workload routing
+- quantization distance routing
+- CUDA + OpenCL + NumPy per-workload selection
+- per-workload runtime failure quarantine and CPU fallback
+
+## Completed — Step 24
+
+Adaptive Detail Zoom Pass:
+
+- Auto / Off / 2x / 4x internal source zoom
+- high-frequency ROI detection
+- source-backed micro-detail recovery
+- OKLab palette-safe color selection
+- deadline-aware optional detail paths
+- no Paint/browser page zoom or calibration movement
+
+## Completed — Step 25
+
+Quick Sketch Fill + Contour Renderer:
+
+- recognition-first contour + safe Fill pipeline
+- real OUTLINE_FILL use for large verified closed regions
+- connected scanline fallback for unsafe/unavailable Fill
+- Simple / Balanced / Detailed sketch styles
+- Safe Fill First / Balanced / Scanline Preferred policies
+- short-deadline Auto Tuner selection for bounded shape sources
+- Adaptive Detail Zoom handoff for critical micro-details
+
+## Completed — Step 26
+
+Detail Fidelity & Pixel-Accurate Planning:
+
+- explicit full-resolution PixelMap fidelity contract
+- measured CUDA/OpenCL/CPU palette and edge analysis routing
+- strengthened importance analysis with micro-detail scoring
+- protection for tiny/thin high-value palette features
+- lossless-only run/component merging in Pixel Accurate mode
+- destructive simplification, reduced palettes and smart merge kept disabled for Pixel Accurate plans
+
+## Step 27 — Export / Import Profiles
+
+Export/import one profile at a time, including portable settings and calibration metadata, while refusing to import machine-specific hardware/timing state onto the wrong computer.
+
+## Step 28 — More Drawing Targets
+
+Add carefully isolated presets for more drawing apps or browser games. Every target must get separate storage, calibration state, layout fingerprints and timing cache.
+
+## Step 29 — New Draw Modes / Hybrid Renderer 3.0
+
+Add specialized deterministic modes for pixel art, icons/logos, line art, portraits, shaded objects and deadline-only silhouettes.
+
+## Step 30 — Release Candidate Hardening
+
+Run longer real-world stability passes, validate installer/update flows and freeze the release branch.

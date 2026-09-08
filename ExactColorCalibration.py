@@ -1,0 +1,104 @@
+"""Isolated, ttk-only exact/custom color control calibration."""
+from __future__ import annotations
+import tkinter as tk
+from tkinter import ttk
+from pathlib import Path
+from CalibrationAnchors import make_anchor
+from ExactColorTools import ALL_FIELDS,BASE_FIELDS,RGB_FIELDS,SPECTRUM_FIELDS,load,save
+from Colors import enable_dpi_awareness
+
+LABELS={
+ 'OpenCustomColor':'Open custom color / Edit colors button',
+ 'SpectrumTopLeft':'Color spectrum: top-left corner',
+ 'SpectrumBottomRight':'Color spectrum: bottom-right corner',
+ 'BrightnessTop':'Brightness/value scale: top point (optional)',
+ 'BrightnessBottom':'Brightness/value scale: bottom point (optional)',
+ 'SelectedColorPreview':'Selected-color preview swatch inside Edit colors (optional)',
+ 'ActiveColorPreview':'Active Color 1 / foreground swatch in Paint ribbon (optional)',
+ 'RedField':'Red (R) input field (fallback)', 'GreenField':'Green (G) input field (fallback)','BlueField':'Blue (B) input field (fallback)',
+ 'ConfirmColor':'Confirm / OK button','Eyedropper':'Eyedropper tool (optional)'}
+
+ORDER=('OpenCustomColor','SpectrumTopLeft','SpectrumBottomRight','BrightnessTop','BrightnessBottom','SelectedColorPreview','ActiveColorPreview',
+       'RedField','GreenField','BlueField','ConfirmColor','Eyedropper')
+
+class App:
+    def __init__(self,root,profile_key):
+        from WindowsMouse import WindowsMouse
+        self.root=root;self.profile_key=profile_key;self.mouse=WindowsMouse();self.positions={};self.anchor=None;self.job=None
+        try:
+            data=load(profile_key);self.positions={k:tuple(v) for k,v in data['controls'].items()};self.anchor=data['anchor']
+        except (OSError,ValueError):pass
+        root.title('Draw Studio · Smart custom palette');root.geometry('760x760');root.minsize(650,620)
+        body=ttk.Frame(root,padding=16);body.pack(fill='both',expand=True)
+        ttk.Label(body,text='Smart custom palette / exact color',font=('Segoe UI',17,'bold')).pack(anchor='w')
+        ttk.Label(body,text=(
+            'Recommended for maximum accuracy: capture Open custom color, the Red/Green/Blue fields, Selected-color preview, Confirm, and the spectrum corners as fallback. '
+            "During drawing, Adaptive exact measures RGB from the source image, types that RGB into Paint automatically, checks the selected-color preview when calibrated, and only then confirms it. "
+            'The visual spectrum remains a safe fallback when numeric RGB cannot be verified. Calibration itself never clicks.'),wraplength=700).pack(anchor='w',pady=(6,12))
+        self.status=tk.StringVar(value='Best accuracy: capture Open + R/G/B + Selected preview + Active Color 1 swatch + Confirm. Also capture Spectrum corners for automatic fallback.')
+        self.labels={}
+        for name in ORDER:
+            row=ttk.Frame(body);row.pack(fill='x',pady=4)
+            ttk.Label(row,text=LABELS[name],width=45).pack(side='left')
+            lab=ttk.Label(row,text='Not captured');lab.pack(side='left',padx=8);self.labels[name]=lab
+            ttk.Button(row,text='Capture',command=lambda n=name:self.capture(n,3)).pack(side='right')
+        ttk.Separator(body).pack(fill='x',pady=10)
+        ttk.Label(body,textvariable=self.status,wraplength=700).pack(anchor='w',pady=6)
+        actions=ttk.Frame(body);actions.pack(fill='x',pady=(10,0))
+        ttk.Button(actions,text='Save calibration',command=self.save).pack(side='left')
+        ttk.Button(actions,text='Close',command=root.destroy).pack(side='right')
+        self.refresh()
+    def refresh(self):
+        optional={'Eyedropper','SelectedColorPreview','ActiveColorPreview','BrightnessTop','BrightnessBottom','RedField','GreenField','BlueField'}
+        for n,l in self.labels.items():l.configure(text=('✓ '+str(self.positions[n])) if n in self.positions else ('Optional' if n in optional else 'Not captured'))
+    def capture(self,name,seconds):
+        if self.job is not None:return
+        if getattr(self,'capture_visibility',None) is None:
+            from ScreenTaskWindow import ScreenTaskWindow
+            self.capture_visibility=ScreenTaskWindow(self.root)
+            self.capture_visibility.hide()
+        if seconds:
+            self.status.set(f'Switch to the target app and hover over: {LABELS[name]}. Capturing in {seconds}… Do not click.')
+            self.job=self.root.after(1000,lambda:self._tick(name,seconds-1));return
+        self._now(name)
+    def _tick(self,name,seconds):self.job=None;self.capture(name,seconds) if seconds else self._now(name)
+    def _now(self,name):
+        try:
+            point=tuple(map(int,self.mouse.get_position()))
+            if self.anchor is None:
+                from TargetCapture import capture_target_metadata_isolated
+                x,y=point;meta=capture_target_metadata_isolated((x-5,y-5,10,10));self.anchor=make_anchor(meta['client_rect'])
+            self.positions[name]=point;self.status.set(f'Captured {LABELS[name]} at {point}.')
+        except Exception as e:self.status.set(str(e))
+        finally:
+            visibility=getattr(self,'capture_visibility',None)
+            if visibility is not None:visibility.restore()
+            self.capture_visibility=None
+        self.refresh()
+    def save(self):
+        try:
+            if self.anchor is None:raise ValueError('Capture the Open custom color control first.')
+            missing_base=[n for n in BASE_FIELDS if n not in self.positions]
+            spectrum=all(n in self.positions for n in SPECTRUM_FIELDS)
+            numeric=all(n in self.positions for n in RGB_FIELDS)
+            if missing_base:raise ValueError('Missing required controls: '+', '.join(LABELS[n] for n in missing_base))
+            if not spectrum and not numeric:
+                raise ValueError('Capture both spectrum corners (recommended) or all three R/G/B fields before saving.')
+            if ('BrightnessTop' in self.positions) != ('BrightnessBottom' in self.positions):
+                raise ValueError('Capture both brightness-scale endpoints or neither.')
+            save(self.profile_key,self.positions,anchor=self.anchor)
+            mode='visual spectrum' if spectrum else 'numeric RGB fields'
+            self.status.set(f'Exact color controls saved using {mode}. You can close this window.')
+        except (OSError,ValueError) as e:self.status.set(f'Could not save: {e}')
+
+def main(argv=None):
+    import argparse,traceback
+    p=argparse.ArgumentParser(add_help=False);p.add_argument('--profile',default='generic');p.add_argument('--log',default='');args,_=p.parse_known_args(argv)
+    try:
+        enable_dpi_awareness();root=tk.Tk();App(root,args.profile);root.mainloop();return 0
+    except Exception:
+        if args.log:
+            try:Path(args.log).write_text(traceback.format_exc(),encoding='utf-8')
+            except OSError:pass
+        return 1
+if __name__=='__main__':raise SystemExit(main())

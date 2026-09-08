@@ -1,0 +1,683 @@
+"""Step 22 — universal hardware benchmark and adaptive performance profile.
+
+The benchmark is local-only and vendor-neutral.  It detects NVIDIA, AMD and
+Intel adapters independently from compute libraries, benchmarks CPU/NumPy and
+any usable CUDA/OpenCL devices, then stores a compact per-machine profile.
+
+This module does not move the mouse, capture the screen, access the network or
+store user images.  It benchmarks synthetic numeric arrays only.
+"""
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+import hashlib
+import json
+import math
+import os
+import platform
+import statistics
+import sys
+import tempfile
+import time
+from pathlib import Path
+from typing import Any, Callable
+
+import numpy as np
+
+from GpuHardware import GpuDevice, detect_gpus
+from ResourceAllocation import available_ram_mb, logical_cpu_count
+from RuntimePaths import data_dir
+
+PROFILE_VERSION = 1
+PROFILE_FILE = data_dir() / "hardware-performance-profile-v1.json"
+WORKLOADS = ("oklab", "palette_match", "edge_map", "bulk_matrix")
+GPU_SPEEDUP_MARGIN = 1.12
+SMALL_GPU_SPEEDUP_MARGIN = 1.08
+
+
+@dataclass(frozen=True)
+class BackendScore:
+    backend_id: str
+    backend: str
+    vendor: str
+    device: str
+    workload: str
+    size: int
+    pixels: int
+    elapsed_ms: float
+    throughput_mp_s: float
+    total_memory_mb: int | None = None
+    free_memory_mb: int | None = None
+    integrated: bool | None = None
+    compute_units: int | None = None
+    runtime: str = ""
+    error: str = ""
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _total_ram_mb() -> int | None:
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("sullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+            stat = MEMORYSTATUSEX(); stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+                return max(0, int(stat.ullTotalPhys // (1024 * 1024)))
+        except Exception:
+            return None
+    try:
+        pages = os.sysconf("SC_PHYS_PAGES")
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        return max(0, int((pages * page_size) // (1024 * 1024)))
+    except (AttributeError, OSError, ValueError):
+        return None
+
+
+def cpu_name() -> str:
+    values = [
+        os.environ.get("PROCESSOR_IDENTIFIER", ""),
+        platform.processor(),
+        platform.machine(),
+    ]
+    for value in values:
+        value = str(value or "").strip()
+        if value:
+            return value
+    return "Unknown CPU"
+
+
+def runtime_versions() -> dict[str, str]:
+    result = {"python": platform.python_version(), "numpy": str(np.__version__)}
+    try:
+        import cupy as cp
+        result["cupy"] = str(getattr(cp, "__version__", "unknown"))
+        try:
+            result["cuda_runtime"] = str(int(cp.cuda.runtime.runtimeGetVersion()))
+        except Exception:
+            pass
+    except Exception:
+        result["cupy"] = "unavailable"
+    try:
+        import pyopencl as cl
+        result["pyopencl"] = str(getattr(cl, "VERSION_TEXT", getattr(cl, "__version__", "available")))
+    except Exception:
+        result["pyopencl"] = "unavailable"
+    return result
+
+
+def hardware_snapshot(*, refresh: bool = False) -> dict[str, Any]:
+    gpus = detect_gpus(refresh=refresh)
+    total_ram = _total_ram_mb()
+    payload = {
+        "platform": f"{platform.system()} {platform.release()} {platform.machine()}",
+        "cpu": cpu_name(),
+        "logical_cpus": logical_cpu_count(),
+        "total_ram_mb": total_ram,
+        "available_ram_mb": available_ram_mb(),
+        "gpus": [gpu.as_dict() for gpu in gpus],
+        "runtime_versions": runtime_versions(),
+    }
+    stable = {
+        "platform": payload["platform"],
+        "cpu": payload["cpu"],
+        "logical_cpus": payload["logical_cpus"],
+        # RAM changes should invalidate, but ignore tiny reporting jitter.
+        "total_ram_256mb": None if total_ram is None else int(round(total_ram / 256.0) * 256),
+        "gpus": [
+            {
+                "vendor": gpu.vendor,
+                "name": gpu.name,
+                "memory_total_mb": gpu.memory_total_mb,
+                "driver_version": gpu.driver_version,
+                "bus_id": gpu.bus_id,
+                "pnp_device_id": gpu.pnp_device_id,
+            }
+            for gpu in gpus
+        ],
+        "runtime_versions": payload["runtime_versions"],
+    }
+    encoded = json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    payload["hardware_signature"] = hashlib.sha256(encoded).hexdigest()[:24]
+    return payload
+
+
+def _srgb_to_oklab_np(rgb: np.ndarray) -> np.ndarray:
+    rgb = np.asarray(rgb, dtype=np.float32)
+    linear = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+    r, g, b = linear[..., 0], linear[..., 1], linear[..., 2]
+    l = np.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+    m = np.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+    s = np.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+    return np.stack((
+        0.2104542553*l + 0.7936177850*m - 0.0040720468*s,
+        1.9779984951*l - 2.4285922050*m + 0.4505937099*s,
+        0.0259040371*l + 0.7827717662*m - 0.8086757660*s,
+    ), axis=-1).astype(np.float32, copy=False)
+
+
+def _synthetic_rgb(size: int) -> np.ndarray:
+    size = max(32, int(size))
+    y, x = np.mgrid[0:size, 0:size]
+    r = ((x * 13 + y * 3) % 256).astype(np.float32) / 255.0
+    g = ((x * 5 + y * 17 + (x ^ y)) % 256).astype(np.float32) / 255.0
+    b = ((x * 23 + y * 7 + (x * y) % 31) % 256).astype(np.float32) / 255.0
+    return np.stack((r, g, b), axis=-1)
+
+
+def _time_best(function: Callable[[], Any], repeats: int) -> float:
+    timings: list[float] = []
+    for _ in range(max(1, int(repeats))):
+        started = time.perf_counter()
+        value = function()
+        # Touch a scalar so lazy views are not benchmarked accidentally.
+        if isinstance(value, np.ndarray) and value.size:
+            float(value.reshape(-1)[-1])
+        timings.append(max(time.perf_counter() - started, 1e-9))
+    return min(timings)
+
+
+def benchmark_cpu(*, size: int = 512, repeats: int = 2) -> list[BackendScore]:
+    rgb = _synthetic_rgb(size)
+    flat = rgb.reshape(-1, 3)
+    palette = _synthetic_rgb(4).reshape(-1, 3)[:16]
+    gray = (rgb[..., 0] * 0.2126 + rgb[..., 1] * 0.7152 + rgb[..., 2] * 0.0722).astype(np.float32)
+    pixels = int(size * size)
+
+    def oklab():
+        return _srgb_to_oklab_np(rgb)
+
+    def palette_match():
+        best = np.full((flat.shape[0],), np.inf, dtype=np.float32)
+        indices = np.zeros((flat.shape[0],), dtype=np.int16)
+        for idx, color in enumerate(palette):
+            delta = flat - color
+            dist = np.sum(delta * delta, axis=1)
+            mask = dist < best
+            best[mask] = dist[mask]
+            indices[mask] = idx
+        return indices
+
+    def edge_map():
+        gx = np.empty_like(gray)
+        gy = np.empty_like(gray)
+        gx[:, 1:-1] = gray[:, 2:] - gray[:, :-2]
+        gx[:, 0] = gx[:, 1]; gx[:, -1] = gx[:, -2]
+        gy[1:-1, :] = gray[2:, :] - gray[:-2, :]
+        gy[0, :] = gy[1, :]; gy[-1, :] = gy[-2, :]
+        return np.sqrt(gx * gx + gy * gy, dtype=np.float32)
+
+    def bulk_matrix():
+        x = rgb
+        return ((x * 0.731 + 0.117) * (1.0 - x * 0.213) + np.sqrt(x + 0.001)).astype(np.float32)
+
+    functions = {"oklab": oklab, "palette_match": palette_match, "edge_map": edge_map, "bulk_matrix": bulk_matrix}
+    results: list[BackendScore] = []
+    for workload, function in functions.items():
+        elapsed = _time_best(function, repeats)
+        results.append(BackendScore(
+            "cpu:numpy", "CPU/NumPy", "CPU", cpu_name(), workload, size, pixels,
+            round(elapsed * 1000.0, 3), round((pixels / 1_000_000.0) / elapsed, 3),
+            runtime=f"NumPy {np.__version__}",
+        ))
+    return results
+
+
+def _cupy_props(cp, device_id: int) -> tuple[str, int | None, int | None, int | None]:
+    with cp.cuda.Device(device_id):
+        props = cp.cuda.runtime.getDeviceProperties(device_id)
+        raw_name = props.get("name") if isinstance(props, dict) else getattr(props, "name", b"CUDA GPU")
+        if isinstance(raw_name, bytes):
+            name = raw_name.decode("utf-8", "replace")
+        else:
+            name = str(raw_name or "CUDA GPU")
+        free_b, total_b = cp.cuda.runtime.memGetInfo()
+        sms = props.get("multiProcessorCount", props.get("multi_processor_count", 0)) if isinstance(props, dict) else 0
+        return name, int(total_b // (1024 * 1024)), int(free_b // (1024 * 1024)), int(sms or 0) or None
+
+
+def benchmark_cuda(*, size: int = 512, repeats: int = 2) -> list[BackendScore]:
+    try:
+        import cupy as cp
+        count = int(cp.cuda.runtime.getDeviceCount())
+    except Exception:
+        return []
+    host_rgb = _synthetic_rgb(size)
+    host_palette = _synthetic_rgb(4).reshape(-1, 3)[:16]
+    pixels = int(size * size)
+    all_results: list[BackendScore] = []
+
+    for device_id in range(max(0, count)):
+        try:
+            name, total_mb, free_mb, sms = _cupy_props(cp, device_id)
+            with cp.cuda.Device(device_id):
+                rgb = cp.asarray(host_rgb)
+                flat = rgb.reshape(-1, 3)
+                palette = cp.asarray(host_palette)
+                gray = (rgb[..., 0] * 0.2126 + rgb[..., 1] * 0.7152 + rgb[..., 2] * 0.0722).astype(cp.float32)
+
+                def sync(value):
+                    cp.cuda.Stream.null.synchronize()
+                    if getattr(value, "size", 0):
+                        float(cp.asnumpy(value.reshape(-1)[-1:])[0])
+
+                def oklab():
+                    linear = cp.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+                    r, g, b = linear[..., 0], linear[..., 1], linear[..., 2]
+                    l = cp.cbrt(0.4122214708*r + 0.5363325363*g + 0.0514459929*b)
+                    m = cp.cbrt(0.2119034982*r + 0.6806995451*g + 0.1073969566*b)
+                    s = cp.cbrt(0.0883024619*r + 0.2817188376*g + 0.6299787005*b)
+                    out = cp.stack((0.2104542553*l + 0.7936177850*m - 0.0040720468*s,
+                                    1.9779984951*l - 2.4285922050*m + 0.4505937099*s,
+                                    0.0259040371*l + 0.7827717662*m - 0.8086757660*s), axis=-1)
+                    sync(out); return out
+
+                def palette_match():
+                    best = cp.full((flat.shape[0],), cp.inf, dtype=cp.float32)
+                    indices = cp.zeros((flat.shape[0],), dtype=cp.int16)
+                    for idx in range(int(palette.shape[0])):
+                        delta = flat - palette[idx]
+                        dist = cp.sum(delta * delta, axis=1)
+                        mask = dist < best
+                        best = cp.where(mask, dist, best)
+                        indices = cp.where(mask, idx, indices)
+                    sync(indices); return indices
+
+                def edge_map():
+                    gx = cp.empty_like(gray); gy = cp.empty_like(gray)
+                    gx[:, 1:-1] = gray[:, 2:] - gray[:, :-2]
+                    gx[:, 0] = gx[:, 1]; gx[:, -1] = gx[:, -2]
+                    gy[1:-1, :] = gray[2:, :] - gray[:-2, :]
+                    gy[0, :] = gy[1, :]; gy[-1, :] = gy[-2, :]
+                    out = cp.sqrt(gx * gx + gy * gy)
+                    sync(out); return out
+
+                def bulk_matrix():
+                    out = ((rgb * 0.731 + 0.117) * (1.0 - rgb * 0.213) + cp.sqrt(rgb + 0.001)).astype(cp.float32)
+                    sync(out); return out
+
+                functions = {"oklab": oklab, "palette_match": palette_match, "edge_map": edge_map, "bulk_matrix": bulk_matrix}
+                # Warm the CUDA context outside the timed loops.
+                warm = cp.asarray(np.arange(1024, dtype=np.float32)); warm = warm * 1.001 + 0.5
+                cp.cuda.Stream.null.synchronize()
+                for workload, function in functions.items():
+                    timings = []
+                    for _ in range(max(1, repeats)):
+                        started = time.perf_counter(); function(); timings.append(max(time.perf_counter() - started, 1e-9))
+                    elapsed = min(timings)
+                    all_results.append(BackendScore(
+                        f"cuda:{device_id}", "CUDA/CuPy", "NVIDIA", name, workload, size, pixels,
+                        round(elapsed * 1000.0, 3), round((pixels / 1_000_000.0) / elapsed, 3),
+                        total_mb, free_mb, False, sms, f"CuPy {getattr(cp, '__version__', 'unknown')}",
+                    ))
+                try:
+                    cp.get_default_memory_pool().free_all_blocks()
+                except Exception:
+                    pass
+        except Exception as exc:
+            all_results.append(BackendScore(
+                f"cuda:{device_id}", "CUDA/CuPy", "NVIDIA", f"CUDA device {device_id}", "probe", size, pixels,
+                0.0, 0.0, error=f"{type(exc).__name__}: {exc}",
+            ))
+    return all_results
+
+
+_OPENCL_SOURCE = r"""
+inline float drawstudio_srgb_linear(float c) {
+    return c <= 0.04045f ? c / 12.92f : pow((c + 0.055f) / 1.055f, 2.4f);
+}
+__kernel void drawstudio_oklabish(__global const float4 *src, __global float4 *dst, const int n) {
+    int i=get_global_id(0); if(i>=n) return; float4 x=src[i];
+    float r=drawstudio_srgb_linear(x.x), g=drawstudio_srgb_linear(x.y), b=drawstudio_srgb_linear(x.z);
+    float l=cbrt(0.4122214708f*r + 0.5363325363f*g + 0.0514459929f*b);
+    float m=cbrt(0.2119034982f*r + 0.6806995451f*g + 0.1073969566f*b);
+    float ss=cbrt(0.0883024619f*r + 0.2817188376f*g + 0.6299787005f*b);
+    dst[i]=(float4)(0.2104542553f*l + 0.7936177850f*m - 0.0040720468f*ss,
+                    1.9779984951f*l - 2.4285922050f*m + 0.4505937099f*ss,
+                    0.0259040371f*l + 0.7827717662f*m - 0.8086757660f*ss, 1.0f);
+}
+__kernel void drawstudio_palette(__global const float4 *src, __global const float4 *pal,
+                                 __global ushort *out, const int n, const int count) {
+    int i=get_global_id(0); if(i>=n) return; float4 x=src[i]; float best=3.4e38f; ushort best_i=0;
+    for(int p=0;p<count;p++){float4 d=x-pal[p]; float dist=d.x*d.x+d.y*d.y+d.z*d.z;
+        if(dist<best){best=dist;best_i=(ushort)p;}}
+    out[i]=best_i;
+}
+__kernel void drawstudio_edge(__global const float *src, __global float *dst, const int w, const int h) {
+    int i=get_global_id(0); int n=w*h; if(i>=n) return; int x=i%w; int y=i/w;
+    int xl=max(0,x-1), xr=min(w-1,x+1), yu=max(0,y-1), yd=min(h-1,y+1);
+    float gx=src[y*w+xr]-src[y*w+xl]; float gy=src[yd*w+x]-src[yu*w+x]; dst[i]=sqrt(gx*gx+gy*gy);
+}
+__kernel void drawstudio_bulk(__global const float4 *src, __global float4 *dst, const int n) {
+    int i=get_global_id(0); if(i>=n) return; float4 x=src[i];
+    dst[i]=(x*0.731f+0.117f)*(1.0f-x*0.213f)+sqrt(x+0.001f);
+}
+"""
+
+
+def _opencl_vendor(value: str) -> str:
+    text = str(value or "").lower()
+    if "nvidia" in text:
+        return "NVIDIA"
+    if "advanced micro devices" in text or "amd" in text or "radeon" in text:
+        return "AMD"
+    if "intel" in text:
+        return "Intel"
+    return "Unknown"
+
+
+def benchmark_opencl(*, size: int = 512, repeats: int = 2) -> list[BackendScore]:
+    try:
+        import pyopencl as cl
+    except Exception:
+        return []
+    host_rgb3 = _synthetic_rgb(size).astype(np.float32)
+    host_rgb4 = np.ones((size * size, 4), dtype=np.float32)
+    host_rgb4[:, :3] = host_rgb3.reshape(-1, 3)
+    host_palette4 = np.ones((16, 4), dtype=np.float32)
+    host_palette4[:, :3] = _synthetic_rgb(4).reshape(-1, 3)[:16]
+    host_gray = (host_rgb3[..., 0] * 0.2126 + host_rgb3[..., 1] * 0.7152 + host_rgb3[..., 2] * 0.0722).astype(np.float32).reshape(-1)
+    pixels = int(size * size)
+    results: list[BackendScore] = []
+    try:
+        platforms = list(cl.get_platforms())
+    except Exception:
+        return []
+    for pidx, cl_platform in enumerate(platforms):
+        try:
+            devices = list(cl_platform.get_devices(device_type=cl.device_type.GPU))
+        except Exception:
+            continue
+        for didx, device in enumerate(devices):
+            vendor = _opencl_vendor(f"{getattr(device, 'vendor', '')} {getattr(device, 'name', '')}")
+            name = str(getattr(device, "name", f"OpenCL GPU {didx}")).strip()
+            backend_id = f"opencl:{pidx}:{didx}"
+            total_mb = int(getattr(device, "global_mem_size", 0) or 0) // (1024 * 1024) or None
+            compute_units = int(getattr(device, "max_compute_units", 0) or 0) or None
+            integrated = bool(getattr(device, "host_unified_memory", False))
+            runtime = f"OpenCL {getattr(device, 'version', '')} · {getattr(device, 'driver_version', '')}".strip(" ·")
+            try:
+                ctx = cl.Context(devices=[device])
+                queue = cl.CommandQueue(ctx)
+                program = cl.Program(ctx, _OPENCL_SOURCE).build(options=[])
+                mf = cl.mem_flags
+                src4 = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=host_rgb4)
+                dst4 = cl.Buffer(ctx, mf.WRITE_ONLY, host_rgb4.nbytes)
+                pal = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=host_palette4)
+                idx_out = cl.Buffer(ctx, mf.WRITE_ONLY, pixels * np.dtype(np.uint16).itemsize)
+                gray = cl.Buffer(ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=host_gray)
+                edge_out = cl.Buffer(ctx, mf.WRITE_ONLY, host_gray.nbytes)
+                sink4 = np.empty_like(host_rgb4)
+                sink_idx = np.empty((pixels,), dtype=np.uint16)
+                sink_gray = np.empty_like(host_gray)
+
+                def timed(kernel, output_buffer, sink, *args) -> float:
+                    timings=[]
+                    for _ in range(max(1, int(repeats))):
+                        started=time.perf_counter()
+                        kernel(queue, (pixels,), None, *args)
+                        cl.enqueue_copy(queue, sink, output_buffer)
+                        queue.finish()
+                        timings.append(max(time.perf_counter()-started,1e-9))
+                    return min(timings)
+
+                funcs = {
+                    "oklab": lambda: timed(program.drawstudio_oklabish, dst4, sink4, src4, dst4, np.int32(pixels)),
+                    "palette_match": lambda: timed(program.drawstudio_palette, idx_out, sink_idx, src4, pal, idx_out, np.int32(pixels), np.int32(16)),
+                    "edge_map": lambda: timed(program.drawstudio_edge, edge_out, sink_gray, gray, edge_out, np.int32(size), np.int32(size)),
+                    "bulk_matrix": lambda: timed(program.drawstudio_bulk, dst4, sink4, src4, dst4, np.int32(pixels)),
+                }
+                # Warm context/build/device path.
+                funcs["bulk_matrix"]()
+                for workload in WORKLOADS:
+                    elapsed = funcs[workload]()
+                    results.append(BackendScore(
+                        backend_id, "OpenCL", vendor, name, workload, size, pixels,
+                        round(elapsed*1000.0,3), round((pixels/1_000_000.0)/elapsed,3),
+                        total_mb, None, integrated, compute_units, runtime,
+                    ))
+            except Exception as exc:
+                results.append(BackendScore(
+                    backend_id, "OpenCL", vendor, name, "probe", size, pixels, 0.0, 0.0,
+                    total_mb, None, integrated, compute_units, runtime, f"{type(exc).__name__}: {exc}",
+                ))
+    return results
+
+
+def _scores_by_workload(scores: list[BackendScore]) -> dict[str, list[BackendScore]]:
+    grouped: dict[str, list[BackendScore]] = {workload: [] for workload in WORKLOADS}
+    for score in scores:
+        if score.workload in grouped and not score.error and score.throughput_mp_s > 0:
+            grouped[score.workload].append(score)
+    return grouped
+
+
+def _safe_gpu_budget_mb(score: BackendScore) -> int | None:
+    total = score.total_memory_mb
+    if not total or total < 256:
+        return None
+    total = int(total)
+    if score.integrated:
+        return max(256, min(4096, int(total * 0.20)))
+    reserve = max(768, min(2048, int(total * 0.10)))
+    return max(256, min(int(total * 0.68), total - reserve))
+
+
+def _tile_from_budget(memory_mb: int | None) -> int:
+    if not memory_mb:
+        return 768
+    if memory_mb >= 8192:
+        return 3072
+    if memory_mb >= 4096:
+        return 2048
+    if memory_mb >= 2048:
+        return 1536
+    if memory_mb >= 1024:
+        return 1024
+    return 768
+
+
+def build_preferences(*, small_scores: list[BackendScore], large_scores: list[BackendScore]) -> dict[str, Any]:
+    small = _scores_by_workload(small_scores)
+    large = _scores_by_workload(large_scores)
+    workload_preferences: dict[str, Any] = {}
+    gpu_wins: list[BackendScore] = []
+    for workload in WORKLOADS:
+        cpu_large = next((s for s in large.get(workload, []) if s.backend_id == "cpu:numpy"), None)
+        candidates = [s for s in large.get(workload, []) if s.backend_id != "cpu:numpy"]
+        best_gpu = max(candidates, key=lambda s: s.throughput_mp_s, default=None)
+        cpu_rate = float(cpu_large.throughput_mp_s if cpu_large else 0.0)
+        selected = cpu_large
+        reason = "CPU is fastest or no usable GPU compute backend is available"
+        min_pixels = 0
+        speedup = 1.0
+        if best_gpu and cpu_rate > 0:
+            speedup = best_gpu.throughput_mp_s / cpu_rate
+            if speedup >= GPU_SPEEDUP_MARGIN:
+                selected = best_gpu
+                gpu_wins.append(best_gpu)
+                small_cpu = next((s for s in small.get(workload, []) if s.backend_id == "cpu:numpy"), None)
+                small_gpu = next((s for s in small.get(workload, []) if s.backend_id == best_gpu.backend_id), None)
+                small_speedup = (small_gpu.throughput_mp_s / small_cpu.throughput_mp_s) if small_cpu and small_gpu and small_cpu.throughput_mp_s else 0.0
+                min_pixels = int(small_gpu.pixels if small_speedup >= SMALL_GPU_SPEEDUP_MARGIN else max(120_000, small_gpu.pixels * 4 if small_gpu else 160_000))
+                reason = f"{best_gpu.backend} on {best_gpu.device} is {speedup:.2f}× CPU for large {workload} batches"
+        if selected is None:
+            selected = BackendScore("cpu:numpy", "CPU/NumPy", "CPU", cpu_name(), workload, 0, 0, 0.0, 0.0)
+        workload_preferences[workload] = {
+            "backend_id": selected.backend_id,
+            "backend": selected.backend,
+            "vendor": selected.vendor,
+            "device": selected.device,
+            "large_throughput_mp_s": float(selected.throughput_mp_s),
+            "speedup_vs_cpu": round(speedup if selected.backend_id != "cpu:numpy" else 1.0, 3),
+            "min_pixels": int(min_pixels),
+            "reason": reason,
+        }
+    if gpu_wins:
+        counts: dict[str, int] = {}
+        for score in gpu_wins:
+            counts[score.backend_id] = counts.get(score.backend_id, 0) + 1
+        primary_id = max(counts, key=lambda key: (counts[key], max(s.throughput_mp_s for s in gpu_wins if s.backend_id == key)))
+        primary = max((s for s in gpu_wins if s.backend_id == primary_id), key=lambda s: s.throughput_mp_s)
+        safe_mem = _safe_gpu_budget_mb(primary)
+        primary_backend = {
+            "backend_id": primary.backend_id,
+            "backend": primary.backend,
+            "vendor": primary.vendor,
+            "device": primary.device,
+            "total_memory_mb": primary.total_memory_mb,
+            "safe_memory_budget_mb": safe_mem,
+            "integrated": primary.integrated,
+            "compute_units": primary.compute_units,
+            "tile_size": _tile_from_budget(safe_mem),
+        }
+    else:
+        primary_backend = {
+            "backend_id": "cpu:numpy", "backend": "CPU/NumPy", "vendor": "CPU", "device": cpu_name(),
+            "total_memory_mb": None, "safe_memory_budget_mb": None, "integrated": None,
+            "compute_units": None, "tile_size": 768,
+        }
+    return {"workloads": workload_preferences, "primary_backend": primary_backend}
+
+
+def _detected_backend_notes(snapshot: dict[str, Any], scores: list[BackendScore]) -> list[dict[str, Any]]:
+    score_devices = {(score.vendor, score.device) for score in scores if score.backend_id != "cpu:numpy" and not score.error}
+    notes=[]
+    for raw in snapshot.get("gpus", []):
+        if not isinstance(raw, dict):
+            continue
+        vendor=str(raw.get("vendor") or "Unknown")
+        name=str(raw.get("name") or "GPU")
+        usable=any(vendor == sv and (name.lower() in sn.lower() or sn.lower() in name.lower()) for sv,sn in score_devices)
+        notes.append({
+            "vendor":vendor,"name":name,"memory_total_mb":raw.get("memory_total_mb"),
+            "driver_version":str(raw.get("driver_version") or ""),"compute_benchmarked":bool(usable),
+            "note":"compute backend benchmarked" if usable else "adapter detected; optional CUDA/OpenCL compute runtime not usable in this environment",
+        })
+    return notes
+
+
+def run_universal_hardware_benchmark(*, save: bool = True, path: Path | None = None,
+                                     small_size: int = 128, large_size: int = 512,
+                                     repeats: int = 2, refresh_hardware: bool = True) -> dict[str, Any]:
+    """Run bounded CPU + usable GPU microbenchmarks and save a per-machine profile."""
+    started=time.perf_counter()
+    small_size=max(64,min(256,int(small_size)))
+    large_size=max(256,min(1024,int(large_size)))
+    repeats=max(1,min(5,int(repeats)))
+    snapshot=hardware_snapshot(refresh=refresh_hardware)
+
+    small_scores=benchmark_cpu(size=small_size,repeats=repeats)
+    large_scores=benchmark_cpu(size=large_size,repeats=repeats)
+    # CUDA and OpenCL are independent. On NVIDIA systems both may be available;
+    # the profile keeps the faster backend per workload instead of assuming one.
+    small_scores.extend(benchmark_cuda(size=small_size,repeats=repeats))
+    large_scores.extend(benchmark_cuda(size=large_size,repeats=repeats))
+    small_scores.extend(benchmark_opencl(size=small_size,repeats=repeats))
+    large_scores.extend(benchmark_opencl(size=large_size,repeats=repeats))
+
+    preferences=build_preferences(small_scores=small_scores,large_scores=large_scores)
+    primary=dict(preferences.get("primary_backend") or {})
+    cpu_large=[s for s in large_scores if s.backend_id=="cpu:numpy" and s.workload in WORKLOADS]
+    cpu_composite=statistics.fmean([s.throughput_mp_s for s in cpu_large]) if cpu_large else 0.0
+    result={
+        "version":PROFILE_VERSION,
+        "created_at":int(time.time()),
+        "elapsed_ms":round((time.perf_counter()-started)*1000.0,1),
+        "hardware_signature":snapshot.get("hardware_signature"),
+        "hardware":snapshot,
+        "detected_gpus":_detected_backend_notes(snapshot,small_scores+large_scores),
+        "small_size":small_size,"large_size":large_size,
+        "scores_small":[s.as_dict() for s in small_scores],
+        "scores_large":[s.as_dict() for s in large_scores],
+        "workload_preferences":preferences.get("workloads",{}),
+        "primary_backend":primary,
+        "cpu_composite_mp_s":round(float(cpu_composite),3),
+        "cpu_fallback_available":True,
+        "privacy":{"network":False,"screen_capture":False,"mouse_input":False,"image_storage":False,"synthetic_arrays_only":True},
+    }
+    if save:
+        save_hardware_profile(result,path=path)
+    return result
+
+
+def save_hardware_profile(result: dict[str, Any], *, path: Path | None = None) -> Path:
+    target=Path(path or PROFILE_FILE); target.parent.mkdir(parents=True,exist_ok=True)
+    payload=dict(result)
+    payload["version"]=PROFILE_VERSION
+    with tempfile.NamedTemporaryFile("w",encoding="utf-8",delete=False,dir=target.parent,suffix=".tmp") as handle:
+        tmp=Path(handle.name); json.dump(payload,handle,ensure_ascii=False,indent=2); handle.flush()
+    tmp.replace(target); return target
+
+
+def load_hardware_profile(*, path: Path | None = None, validate_current: bool = True) -> dict[str, Any] | None:
+    target=Path(path or PROFILE_FILE)
+    try:
+        payload=json.loads(target.read_text(encoding="utf-8"))
+    except (OSError,json.JSONDecodeError):
+        return None
+    if not isinstance(payload,dict) or int(payload.get("version",0) or 0)!=PROFILE_VERSION:
+        return None
+    if validate_current:
+        try:
+            current=hardware_snapshot(refresh=False).get("hardware_signature")
+        except Exception:
+            return None
+        if not current or str(payload.get("hardware_signature") or "")!=str(current):
+            return None
+    return payload
+
+
+def profile_needs_benchmark(*, path: Path | None = None) -> tuple[bool,str]:
+    target=Path(path or PROFILE_FILE)
+    try:
+        raw=json.loads(target.read_text(encoding="utf-8"))
+    except (OSError,json.JSONDecodeError):
+        return True,"no saved hardware profile"
+    if not isinstance(raw,dict) or int(raw.get("version",0) or 0)!=PROFILE_VERSION:
+        return True,"hardware profile version changed"
+    current=hardware_snapshot(refresh=True).get("hardware_signature")
+    if str(raw.get("hardware_signature") or "")!=str(current or ""):
+        return True,"CPU/GPU/RAM/driver/compute-runtime signature changed"
+    return False,"saved hardware profile matches this machine"
+
+
+def preferred_backend(workload: str, *, pixels: int, profile: dict[str,Any] | None = None) -> dict[str,Any]:
+    profile=profile or load_hardware_profile() or {}
+    item=dict((profile.get("workload_preferences") or {}).get(str(workload),{}) or {})
+    if not item:
+        return {"backend_id":"cpu:numpy","backend":"CPU/NumPy","vendor":"CPU","device":cpu_name(),"reason":"no benchmark preference"}
+    if item.get("backend_id")!="cpu:numpy" and int(pixels or 0)<int(item.get("min_pixels",0) or 0):
+        return {"backend_id":"cpu:numpy","backend":"CPU/NumPy","vendor":"CPU","device":cpu_name(),"reason":"workload below measured GPU crossover threshold"}
+    return item
+
+
+def format_hardware_summary(result: dict[str, Any]) -> str:
+    hardware=dict(result.get("hardware") or {})
+    gpus=list(result.get("detected_gpus") or [])
+    primary=dict(result.get("primary_backend") or {})
+    gpu_text="No GPU compute backend"
+    if gpus:
+        names=[]
+        for item in gpus:
+            if not isinstance(item,dict): continue
+            marker="✓" if item.get("compute_benchmarked") else "detected"
+            names.append(f"{item.get('vendor','GPU')} {item.get('name','GPU')} ({marker})")
+        gpu_text="; ".join(names[:3])
+    primary_text=f"{primary.get('backend','CPU/NumPy')} · {primary.get('device',cpu_name())}"
+    safe=primary.get("safe_memory_budget_mb")
+    memory=f" · safe GPU memory {int(safe):,} MB" if isinstance(safe,(int,float)) and safe else ""
+    return (
+        f"CPU {hardware.get('logical_cpus',logical_cpu_count())} logical · RAM {hardware.get('total_ram_mb') or '?'} MB · "
+        f"GPUs: {gpu_text} · preferred compute: {primary_text}{memory} · "
+        f"{float(result.get('elapsed_ms',0.0) or 0.0):.0f} ms"
+    )

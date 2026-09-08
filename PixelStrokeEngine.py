@@ -1,0 +1,667 @@
+"""Component-aware lossless stroke planner for Draw Studio v1.0.90-beta.
+
+Block B consumes the full-resolution PixelMap from v1.0.86 and turns it into
+safe execution paths without changing palette assignments.  It labels exact
+4-connected colour regions, chooses horizontal/vertical raster runs locally per
+component, verifies every merged connector against the component mask, schedules
+components on CPU, and emits four quality-first passes.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import math
+from concurrent.futures import ThreadPoolExecutor
+from typing import Sequence
+
+import numpy as np
+
+from ContinuousPaths import order_paths
+from PixelAccuratePlanner import PixelMap, groups_from_pixel_map
+
+Point = tuple[int, int]
+Segment = tuple[int, int, int, int]
+Path = tuple[Point, ...]
+
+PHASES = ("fill", "mid_detail", "fine_detail", "cleanup")
+PHASE_LABELS = {
+    "fill": "large fills",
+    "mid_detail": "mid detail",
+    "fine_detail": "fine detail",
+    "cleanup": "protected cleanup",
+}
+
+
+@dataclass
+class _Run:
+    rid: int
+    y: int
+    x0: int
+    x1: int
+    color: int
+
+
+@dataclass
+class Component:
+    component_id: int
+    color_index: int
+    area: int = 0
+    bbox: tuple[int, int, int, int] = (0, 0, 0, 0)
+    importance_mean: float = 0.0
+    importance_max: float = 0.0
+    edge_mean: float = 0.0
+    contour_mean: float = 0.0
+    shadow_mean: float = 0.0
+    shadow_detail_mean: float = 0.0
+    render_role: str = "base"
+    protected_pixels: int = 0
+    horizontal_runs: list[Segment] = field(default_factory=list)
+    vertical_runs: list[Segment] = field(default_factory=list)
+    orientation: str = "horizontal"
+    phase: str = "mid_detail"
+    paths: list[Path] = field(default_factory=list)
+    safe_merge_fallbacks: int = 0
+
+    @property
+    def width(self) -> int:
+        return int(self.bbox[2] - self.bbox[0] + 1)
+
+    @property
+    def height(self) -> int:
+        return int(self.bbox[3] - self.bbox[1] + 1)
+
+    @property
+    def protected_ratio(self) -> float:
+        return 0.0 if self.area <= 0 else float(self.protected_pixels) / float(self.area)
+
+    def meta(self) -> dict:
+        return {
+            "component_id": self.component_id,
+            "color_index": self.color_index,
+            "area": self.area,
+            "bbox": self.bbox,
+            "importance_mean": round(float(self.importance_mean), 5),
+            "importance_max": round(float(self.importance_max), 5),
+            "edge_mean": round(float(self.edge_mean), 5),
+            "contour_mean": round(float(self.contour_mean), 5),
+            "shadow_mean": round(float(self.shadow_mean), 5),
+            "shadow_detail_mean": round(float(self.shadow_detail_mean), 5),
+            "render_role": self.render_role,
+            "protected_pixels": self.protected_pixels,
+            "protected_ratio": round(self.protected_ratio, 5),
+            "horizontal_runs": len(self.horizontal_runs),
+            "vertical_runs": len(self.vertical_runs),
+            "orientation": self.orientation,
+            "phase": self.phase,
+            "paths": len(self.paths),
+            "safe_merge_fallbacks": self.safe_merge_fallbacks,
+        }
+
+
+class _UnionFind:
+    def __init__(self) -> None:
+        self.parent: list[int] = []
+        self.rank: list[int] = []
+
+    def add(self) -> int:
+        i = len(self.parent)
+        self.parent.append(i); self.rank.append(0)
+        return i
+
+    def find(self, x: int) -> int:
+        parent = self.parent
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(self, a: int, b: int) -> None:
+        ra, rb = self.find(a), self.find(b)
+        if ra == rb:
+            return
+        if self.rank[ra] < self.rank[rb]:
+            ra, rb = rb, ra
+        self.parent[rb] = ra
+        if self.rank[ra] == self.rank[rb]:
+            self.rank[ra] += 1
+
+
+def _row_runs(pixel_map: PixelMap, cancelled=lambda: False) -> tuple[list[_Run], list[list[int]], _UnionFind]:
+    idx = pixel_map.palette_index
+    mask = pixel_map.drawable_mask
+    h, w = idx.shape
+    uf = _UnionFind()
+    runs: list[_Run] = []
+    rows: list[list[int]] = []
+    previous_by_color: dict[int, list[int]] = {}
+
+    for y in range(h):
+        if cancelled():
+            raise InterruptedError()
+        row_ids: list[int] = []
+        current_by_color: dict[int, list[int]] = {}
+        x = 0
+        while x < w:
+            if not bool(mask[y, x]):
+                x += 1
+                continue
+            color = int(idx[y, x]); x0 = x; x += 1
+            while x < w and bool(mask[y, x]) and int(idx[y, x]) == color:
+                x += 1
+            x1 = x - 1
+            rid = uf.add()
+            runs.append(_Run(rid, y, x0, x1, color))
+            row_ids.append(rid)
+            current_by_color.setdefault(color, []).append(rid)
+
+        # Exact 4-connectivity: same colour runs on neighbouring rows are joined
+        # only when their x intervals overlap.  This never bridges a blank pixel.
+        for color, current in current_by_color.items():
+            previous = previous_by_color.get(color, ())
+            i = j = 0
+            while i < len(previous) and j < len(current):
+                a = runs[previous[i]]; b = runs[current[j]]
+                if a.x1 < b.x0:
+                    i += 1
+                elif b.x1 < a.x0:
+                    j += 1
+                else:
+                    uf.union(a.rid, b.rid)
+                    if a.x1 <= b.x1:
+                        i += 1
+                    if b.x1 <= a.x1:
+                        j += 1
+        previous_by_color = current_by_color
+        rows.append(row_ids)
+    return runs, rows, uf
+
+
+def _vertical_run_chunk(component_map: np.ndarray, x0: int, x1: int, cancelled=lambda: False) -> list[tuple[int, Segment]]:
+    h,_w=component_map.shape;out=[]
+    for x in range(int(x0),int(x1)):
+        if cancelled():raise InterruptedError()
+        y=0
+        while y<h:
+            cid=int(component_map[y,x])
+            if cid<0:y+=1;continue
+            y0=y;y+=1
+            while y<h and int(component_map[y,x])==cid:y+=1
+            out.append((cid,(x,y0,x,y-1)))
+    return out
+
+
+def connected_components(pixel_map: PixelMap, *, cpu_workers: int = 1, cancelled=lambda: False) -> tuple[list[Component], np.ndarray, dict]:
+    """Label lossless same-palette 4-connected regions using run union-find."""
+    runs, rows, uf = _row_runs(pixel_map, cancelled)
+    h, w = pixel_map.height, pixel_map.width
+    component_map = np.full((h, w), -1, dtype=np.int32)
+    root_to_component: dict[int, int] = {}
+    components: list[Component] = []
+    stats: dict[int, dict] = {}
+
+    for run_index,run in enumerate(runs):
+        if run_index%128==0 and cancelled():raise InterruptedError()
+        root = uf.find(run.rid)
+        cid = root_to_component.get(root)
+        if cid is None:
+            cid = len(components)
+            root_to_component[root] = cid
+            components.append(Component(cid, run.color, bbox=(run.x0, run.y, run.x1, run.y)))
+            stats[cid] = {"importance_sum": 0.0, "edge_sum": 0.0, "contour_sum": 0.0,
+                          "shadow_sum": 0.0, "shadow_detail_sum": 0.0}
+        comp = components[cid]
+        length = run.x1 - run.x0 + 1
+        comp.area += length
+        x0, y0, x1, y1 = comp.bbox
+        comp.bbox = (min(x0, run.x0), min(y0, run.y), max(x1, run.x1), max(y1, run.y))
+        segment = (run.x0, run.y, run.x1, run.y)
+        comp.horizontal_runs.append(segment)
+        sl = slice(run.x0, run.x1 + 1)
+        importance_values = pixel_map.importance_map[run.y, sl]
+        edge_values = pixel_map.edge_map[run.y, sl]
+        contour_values = (pixel_map.contour_map[run.y, sl] if pixel_map.contour_map is not None else edge_values)
+        shadow_values = (pixel_map.shadow_map[run.y, sl] if pixel_map.shadow_map is not None else np.zeros_like(edge_values))
+        shadow_detail_values = (pixel_map.shadow_detail_map[run.y, sl] if pixel_map.shadow_detail_map is not None else np.zeros_like(edge_values))
+        stats[cid]["importance_sum"] += float(np.sum(importance_values, dtype=np.float64))
+        stats[cid]["edge_sum"] += float(np.sum(edge_values, dtype=np.float64))
+        stats[cid]["contour_sum"] += float(np.sum(contour_values, dtype=np.float64))
+        stats[cid]["shadow_sum"] += float(np.sum(shadow_values, dtype=np.float64))
+        stats[cid]["shadow_detail_sum"] += float(np.sum(shadow_detail_values, dtype=np.float64))
+        if importance_values.size:
+            comp.importance_max = max(comp.importance_max, float(np.max(importance_values)))
+        comp.protected_pixels += int(np.count_nonzero(pixel_map.protected_mask[run.y, sl]))
+        component_map[run.y, sl] = cid
+
+    for comp in components:
+        if comp.area:
+            comp.importance_mean = stats[comp.component_id]["importance_sum"] / comp.area
+            comp.edge_mean = stats[comp.component_id]["edge_sum"] / comp.area
+            comp.contour_mean = stats[comp.component_id]["contour_sum"] / comp.area
+            comp.shadow_mean = stats[comp.component_id]["shadow_sum"] / comp.area
+            comp.shadow_detail_mean = stats[comp.component_id]["shadow_detail_sum"] / comp.area
+
+    # Build exact vertical runs. Block D parallelizes independent column chunks
+    # while preserving deterministic x-order when merging the results.
+    vertical_lists: list[list[Segment]] = [[] for _ in components]
+    workers=max(1,int(cpu_workers or 1))
+    vertical_backend="cpu-serial-columns"
+    if workers>1 and w>=64:
+        chunk=max(16,math.ceil(w/min(workers,16)))
+        ranges=[(x,min(w,x+chunk)) for x in range(0,w,chunk)]
+        with ThreadPoolExecutor(max_workers=min(workers,len(ranges))) as pool:
+            futures=[pool.submit(_vertical_run_chunk,component_map,a,b,cancelled) for a,b in ranges]
+            chunks=[f.result() for f in futures]
+        if cancelled():raise InterruptedError()
+        for chunk_items in chunks:
+            for cid,segment in chunk_items:vertical_lists[cid].append(segment)
+        vertical_backend="cpu-parallel-column-chunks"
+    else:
+        for cid,segment in _vertical_run_chunk(component_map,0,w,cancelled):vertical_lists[cid].append(segment)
+    for comp in components:comp.vertical_runs=vertical_lists[comp.component_id]
+
+    return components, component_map, {
+        "component_count": len(components),
+        "source_runs": len(runs),
+        "component_label_backend": "cpu-run-union-find",
+        "component_connectivity": 4,
+        "vertical_run_backend": vertical_backend,
+        "vertical_run_workers": workers if vertical_backend.startswith("cpu-parallel") else 1,
+    }
+
+
+def _choose_orientation(comp: Component) -> str:
+    h_cost = len(comp.horizontal_runs)
+    v_cost = len(comp.vertical_runs)
+    # Protected thin structures prefer the long geometric axis when its path
+    # count is within 20% of the cheaper alternative; this avoids fragmenting an
+    # eyebrow/edge just to save one press/release.
+    if comp.protected_pixels and min(comp.width, comp.height) <= 3:
+        preferred = "horizontal" if comp.width >= comp.height else "vertical"
+        preferred_cost = h_cost if preferred == "horizontal" else v_cost
+        cheapest = max(1, min(h_cost, v_cost))
+        if preferred_cost <= math.ceil(cheapest * 1.20):
+            return preferred
+    if v_cost < h_cost:
+        return "vertical"
+    if h_cost < v_cost:
+        return "horizontal"
+    return "horizontal" if comp.width >= comp.height else "vertical"
+
+
+
+
+@dataclass
+class _ActiveRasterPath:
+    points: list[Point]
+    last_y: int
+    x0: int
+    x1: int
+    rows: int = 1
+
+
+def _append_point(points: list[Point], point: Point) -> None:
+    point=(int(point[0]),int(point[1]))
+    if not points or points[-1] != point:
+        points.append(point)
+
+
+def _attach_lossless(state: _ActiveRasterPath, run: Segment) -> None:
+    x0,y,x1,_=run
+    if x1<x0:x0,x1=x1,x0
+    lo,hi=max(state.x0,x0),min(state.x1,x1)
+    if lo>hi or y!=state.last_y+1:
+        raise ValueError('Runs are not safely adjacent.')
+    end_x=state.points[-1][0]
+    connector=min(hi,max(lo,end_x))
+    _append_point(state.points,(connector,state.last_y))
+    _append_point(state.points,(connector,y))
+    # Sweep the complete new run.  Crucially, do not collinear-compress a
+    # backtrack such as 0->2->1: the turning point represents real source pixels.
+    if x0!=x1:
+        if connector==x0:
+            _append_point(state.points,(x1,y))
+        elif connector==x1:
+            _append_point(state.points,(x0,y))
+        elif abs(connector-x0)<=abs(x1-connector):
+            _append_point(state.points,(x0,y));_append_point(state.points,(x1,y))
+        else:
+            _append_point(state.points,(x1,y));_append_point(state.points,(x0,y))
+    state.last_y=y;state.x0=x0;state.x1=x1;state.rows+=1
+
+
+def _merge_horizontal_runs_lossless(runs: Sequence[Segment], *, cancelled=lambda: False,
+                                    max_rows_per_path: int = 96, max_points_per_path: int = 480) -> list[Path]:
+    rows: dict[int,list[Segment]]={}
+    passthrough: list[Path]=[]
+    for stroke in runs:
+        if cancelled():raise InterruptedError()
+        x0,y0,x1,y1=map(int,stroke)
+        if y0!=y1:
+            passthrough.append(((x0,y0),) if (x0,y0)==(x1,y1) else ((x0,y0),(x1,y1)))
+            continue
+        if x1<x0:x0,x1=x1,x0
+        rows.setdefault(y0,[]).append((x0,y0,x1,y0))
+    completed: list[Path]=[]
+    active: list[_ActiveRasterPath]=[]
+    for y in sorted(rows):
+        if cancelled():raise InterruptedError()
+        fresh=[]
+        for st in active:
+            if st.last_y==y-1:fresh.append(st)
+            else:completed.append(tuple(st.points))
+        active=fresh
+        used=set();next_active=[]
+        for run in sorted(rows[y],key=lambda r:(r[0],r[2])):
+            x0,_,x1,_=run
+            candidates=[]
+            for i,st in enumerate(active):
+                if i in used or st.rows>=max_rows_per_path or len(st.points)>=max_points_per_path:continue
+                lo,hi=max(st.x0,x0),min(st.x1,x1)
+                if lo<=hi:
+                    connector=min(hi,max(lo,st.points[-1][0]))
+                    candidates.append((-(hi-lo+1),abs(connector-st.points[-1][0]),i,st))
+            if candidates:
+                _,_,i,st=min(candidates,key=lambda v:(v[0],v[1],v[2]))
+                used.add(i);_attach_lossless(st,run);next_active.append(st)
+            else:
+                pts=[(x0,y)]
+                if x1!=x0:pts.append((x1,y))
+                next_active.append(_ActiveRasterPath(pts,y,x0,x1))
+        for i,st in enumerate(active):
+            if i not in used:completed.append(tuple(st.points))
+        active=next_active
+    completed.extend(tuple(st.points) for st in active)
+    completed.extend(passthrough)
+    return [p for p in completed if p]
+
+def _transpose_segments(segments: Sequence[Segment]) -> list[Segment]:
+    return [(y0, x0, y1, x1) for x0, y0, x1, y1 in segments]
+
+
+def _transpose_paths(paths: Sequence[Path]) -> list[Path]:
+    return [tuple((int(y), int(x)) for x, y in path) for path in paths]
+
+
+def _segment_inside_component(a: Point, b: Point, component_map: np.ndarray, cid: int) -> bool:
+    x0, y0 = map(int, a); x1, y1 = map(int, b)
+    h, w = component_map.shape
+    if not (0 <= x0 < w and 0 <= x1 < w and 0 <= y0 < h and 0 <= y1 < h):
+        return False
+    if x0 != x1 and y0 != y1:
+        return False
+    if x0 == x1:
+        lo, hi = sorted((y0, y1))
+        return bool(np.all(component_map[lo:hi + 1, x0] == cid))
+    lo, hi = sorted((x0, x1))
+    return bool(np.all(component_map[y0, lo:hi + 1] == cid))
+
+
+def _path_inside_component(path: Path, component_map: np.ndarray, cid: int) -> bool:
+    if not path:
+        return False
+    if len(path) == 1:
+        x, y = path[0]
+        return 0 <= y < component_map.shape[0] and 0 <= x < component_map.shape[1] and int(component_map[y, x]) == cid
+    return all(_segment_inside_component(a, b, component_map, cid) for a, b in zip(path, path[1:]))
+
+
+
+
+def _paths_exact_component_coverage(paths: Sequence[Path], component_map: np.ndarray, comp: Component) -> bool:
+    x0, y0, x1, y1 = comp.bbox
+    target = component_map[y0:y1 + 1, x0:x1 + 1] == comp.component_id
+    covered = np.zeros(target.shape, dtype=np.bool_)
+    for path in paths:
+        if not path:
+            continue
+        if len(path) == 1:
+            x, y = path[0]
+            if not (x0 <= x <= x1 and y0 <= y <= y1) or int(component_map[y, x]) != comp.component_id:
+                return False
+            covered[y - y0, x - x0] = True
+            continue
+        for a, b in zip(path, path[1:]):
+            if not _segment_inside_component(a, b, component_map, comp.component_id):
+                return False
+            ax, ay = a; bx, by = b
+            if ax == bx:
+                lo, hi = sorted((ay, by)); covered[lo - y0:hi - y0 + 1, ax - x0] = True
+            else:
+                lo, hi = sorted((ax, bx)); covered[ay - y0, lo - x0:hi - x0 + 1] = True
+    return bool(np.array_equal(covered, target))
+
+def _individual_run_paths(runs: Sequence[Segment]) -> list[Path]:
+    out: list[Path] = []
+    for x0, y0, x1, y1 in runs:
+        out.append(((x0, y0),) if (x0, y0) == (x1, y1) else ((x0, y0), (x1, y1)))
+    return out
+
+
+def build_component_paths(comp: Component, component_map: np.ndarray, *, cancelled=lambda: False) -> tuple[list[Path], dict]:
+    """Build local H/V paths and verify every connector against component pixels."""
+    comp.orientation = _choose_orientation(comp)
+    source_runs = comp.horizontal_runs if comp.orientation == "horizontal" else comp.vertical_runs
+    if comp.orientation == "horizontal":
+        paths = _merge_horizontal_runs_lossless(source_runs, cancelled=cancelled)
+    else:
+        transposed = _transpose_segments(source_runs)
+        transposed_paths = _merge_horizontal_runs_lossless(transposed, cancelled=cancelled)
+        paths = _transpose_paths(transposed_paths)
+
+    unsafe = [path for path in paths if not _path_inside_component(path, component_map, comp.component_id)]
+    exact_coverage = (not unsafe) and _paths_exact_component_coverage(paths, component_map, comp)
+    if not exact_coverage:
+        # Safety and accuracy over compression: if a connector leaves the exact
+        # region *or* a merge/compression accidentally skips a source pixel, fall
+        # back to individual lossless runs for this component only.
+        paths = _individual_run_paths(source_runs)
+        comp.safe_merge_fallbacks += 1
+    paths = order_paths(paths, "Balanced", allow_reverse=True)
+    comp.paths = list(paths)
+    return comp.paths, {
+        "orientation": comp.orientation,
+        "source_runs": len(source_runs),
+        "execution_paths": len(comp.paths),
+        "safe_verified": bool(exact_coverage),
+        "fallback": not bool(exact_coverage),
+    }
+
+
+def classify_render_role(comp: Component) -> str:
+    """Describe why a component is visually important without changing pixels."""
+    if comp.contour_mean >= .50 or comp.edge_mean >= .58:
+        return "contour"
+    if comp.shadow_detail_mean >= .43:
+        return "shadow_detail"
+    if comp.shadow_mean >= .44:
+        return "shadow"
+    if comp.importance_mean >= .50:
+        return "detail"
+    return "base"
+
+
+def classify_component(comp: Component, total_drawable: int) -> str:
+    """Assign one quality-first pass without deleting or duplicating pixels."""
+    total_drawable = max(1, int(total_drawable))
+    protected_ratio = comp.protected_ratio
+    thin = min(comp.width, comp.height) <= 2
+    comp.render_role = classify_render_role(comp)
+
+    # Strong contours and small shadow transitions are intentionally deferred to
+    # the detail/post-processing half of the render so they sit on top visually.
+    if comp.protected_pixels and (comp.area <= 196 or protected_ratio >= .22 or comp.importance_mean >= .56):
+        return "cleanup"
+    if comp.render_role in ("contour", "shadow_detail"):
+        return "fine_detail"
+    if comp.render_role == "shadow":
+        return "mid_detail"
+    if comp.area >= max(64, int(total_drawable * .0025)) and comp.edge_mean < .34 and protected_ratio < .08:
+        return "fill"
+    if thin or comp.area <= max(18, int(total_drawable * .00020)) or comp.edge_mean >= .52 or comp.importance_mean >= .50:
+        return "fine_detail"
+    return "mid_detail"
+
+
+def _priority(comp: Component) -> float:
+    if comp.phase == "fill":
+        return comp.area * 1.0 + comp.importance_mean * 20.0
+    if comp.phase == "mid_detail":
+        return comp.area * .20 + comp.importance_mean * 120.0 + comp.edge_mean * 50.0
+    if comp.phase == "fine_detail":
+        role_bonus = 80.0 if comp.render_role == "contour" else (60.0 if comp.render_role == "shadow_detail" else 0.0)
+        return (comp.importance_mean * 180.0 + comp.edge_mean * 80.0 + comp.contour_mean * 90.0 +
+                comp.shadow_detail_mean * 70.0 + min(comp.area, 80) * .15 + role_bonus)
+    role_bonus = 120.0 if comp.render_role == "contour" else (90.0 if comp.render_role == "shadow_detail" else 0.0)
+    return (comp.importance_max * 220.0 + comp.protected_ratio * 160.0 + comp.edge_mean * 50.0 +
+            comp.contour_mean * 110.0 + comp.shadow_detail_mean * 90.0 + role_bonus)
+
+
+def _component_entry_point(comp: Component) -> Point:
+    if comp.paths and comp.paths[0]:
+        return comp.paths[0][0]
+    return (comp.bbox[0], comp.bbox[1])
+
+
+def schedule_components(components: Sequence[Component], palette_count: int, *, cancelled=lambda: False) -> tuple[list[list[Path]], list[dict], dict]:
+    """CPU bounded component scheduler: phase first, then quality/travel/color cost."""
+    execution_groups: list[list[Path]] = [[] for _ in range(int(palette_count))]
+    sequence: list[dict] = []
+    phase_counts = {phase: 0 for phase in PHASES}
+    component_counts = {phase: 0 for phase in PHASES}
+    cursor: Point | None = None
+    current_color: int | None = None
+    serial = 0
+
+    for phase in PHASES:
+        remaining = sorted((c for c in components if c.phase == phase and c.paths), key=lambda c: (-_priority(c), c.component_id))
+        while remaining:
+            if cancelled():
+                raise InterruptedError()
+            window_n = min(72, len(remaining))
+            best_i = 0; best_cost = float("inf")
+            for i in range(window_n):
+                comp = remaining[i]
+                start = _component_entry_point(comp)
+                travel = 0.0 if cursor is None else math.hypot(start[0] - cursor[0], start[1] - cursor[1])
+                color_penalty = 0.0 if current_color in (None, comp.color_index) else 18.0
+                priority_credit = min(30.0, _priority(comp) * .025)
+                cost = travel + color_penalty - priority_credit + i * 1e-6
+                if cost < best_cost:
+                    best_i, best_cost = i, cost
+            comp = remaining.pop(best_i)
+            component_counts[phase] += 1
+            for path in comp.paths:
+                execution_groups[comp.color_index].append(path)
+                sequence.append({
+                    "color_index": int(comp.color_index),
+                    "path": tuple(path),
+                    "phase": phase,
+                    "phase_label": PHASE_LABELS[phase],
+                    "component_id": int(comp.component_id),
+                    "orientation": comp.orientation,
+                    "importance": round(float(comp.importance_max),6),
+                    "protected": bool(comp.protected_pixels),
+                    "component_area": int(comp.area),
+                    "component_width": int(comp.width),
+                    "component_height": int(comp.height),
+                    "edge_mean": round(float(comp.edge_mean),6),
+                    "contour_mean": round(float(comp.contour_mean),6),
+                    "shadow_mean": round(float(comp.shadow_mean),6),
+                    "shadow_detail_mean": round(float(comp.shadow_detail_mean),6),
+                    "render_role": comp.render_role,
+                    "post_process_priority": bool(comp.phase == "cleanup" and comp.render_role in ("contour", "shadow_detail", "detail")),
+                    "serial": serial,
+                })
+                serial += 1
+                phase_counts[phase] += 1
+                if path:
+                    cursor = path[-1]
+            current_color = comp.color_index
+
+    return execution_groups, sequence, {
+        "scheduler_backend": "cpu-component-bounded-nearest",
+        "scheduler_window": 72,
+        "multi_pass": True,
+        "pass_order": "fill -> mid detail -> fine detail -> cleanup",
+        "phase_path_counts": phase_counts,
+        "phase_component_counts": component_counts,
+        "scheduled_paths": len(sequence),
+    }
+
+
+def build_pixel_stroke_plan(pixel_map: PixelMap, palette_count: int, *, lines: bool = True,
+                            cpu_workers: int = 1, cancelled=lambda: False) -> dict:
+    """Build Block B component paths while preserving every drawable PixelMap pixel."""
+    groups = groups_from_pixel_map(pixel_map, palette_count, lines=lines, cancelled=cancelled)
+    if not lines:
+        # Dot mode is already exactly lossless and has no meaningful local run
+        # orientation. Keep a deterministic four-pass-free fallback.
+        execution_groups = [[((x0, y0),) for x0, y0, _x1, _y1 in group] for group in groups]
+        sequence = [
+            {"color_index": ci, "path": path, "phase": "fine_detail", "phase_label": PHASE_LABELS["fine_detail"], "component_id": -1, "orientation": "dot", "serial": n}
+            for n, (ci, path) in enumerate((ci, p) for ci, ps in enumerate(execution_groups) for p in ps)
+        ]
+        return {"groups": groups, "execution_groups": execution_groups, "execution_sequence": sequence,
+                "metadata": {"engine": "Pixel Stroke Engine Block B", "component_count": 0, "scheduled_paths": len(sequence), "dot_mode": True}}
+
+    components, component_map, component_meta = connected_components(pixel_map, cpu_workers=cpu_workers, cancelled=cancelled)
+    total_drawable = int(np.count_nonzero(pixel_map.drawable_mask))
+    orientation_counts = {"horizontal": 0, "vertical": 0}
+    safe_fallbacks = 0
+    protected_components = 0
+    role_counts = {"base": 0, "shadow": 0, "shadow_detail": 0, "contour": 0, "detail": 0}
+
+    for comp in components:
+        comp.phase=classify_component(comp,total_drawable)
+        role_counts[comp.render_role] = role_counts.get(comp.render_role, 0) + 1
+        if comp.protected_pixels:protected_components+=1
+    workers=max(1,int(cpu_workers or 1));parallel_paths=workers>1 and len(components)>=16
+    if parallel_paths:
+        def _build(comp):
+            return comp.component_id,build_component_paths(comp,component_map,cancelled=cancelled)
+        with ThreadPoolExecutor(max_workers=min(workers,16)) as pool:
+            results=list(pool.map(_build,components))
+        if cancelled():raise InterruptedError()
+        results.sort(key=lambda item:item[0])
+    else:
+        results=[]
+        for comp in components:
+            if cancelled():raise InterruptedError()
+            results.append((comp.component_id,build_component_paths(comp,component_map,cancelled=cancelled)))
+    for comp in components:
+        orientation_counts[comp.orientation]+=1;safe_fallbacks+=comp.safe_merge_fallbacks
+
+    execution_groups, sequence, scheduler_meta = schedule_components(components, palette_count, cancelled=cancelled)
+    phase_counts = scheduler_meta["phase_path_counts"]
+    metadata = {
+        "engine": "Pixel Stroke Engine Block B",
+        "lossless_source": True,
+        "connected_regions": True,
+        "local_orientation": True,
+        "safe_component_merge": True,
+        "protected_component_count": protected_components,
+        "safe_merge_fallbacks": safe_fallbacks,
+        "orientation_counts": orientation_counts,
+        "source_horizontal_runs": sum(len(g) for g in groups),
+        "execution_paths": sum(len(g) for g in execution_groups),
+        "fill_paths": int(phase_counts.get("fill", 0)),
+        "mid_detail_paths": int(phase_counts.get("mid_detail", 0)),
+        "fine_detail_paths": int(phase_counts.get("fine_detail", 0)),
+        "cleanup_paths": int(phase_counts.get("cleanup", 0)),
+        "render_role_counts": role_counts,
+        "contour_components": int(role_counts.get("contour", 0)),
+        "shadow_components": int(role_counts.get("shadow", 0)),
+        "shadow_detail_components": int(role_counts.get("shadow_detail", 0)),
+        "post_processing": "cleanup pass prioritizes protected contours and shadow details",
+        "component_path_backend": "cpu-parallel-components" if parallel_paths else "cpu-serial-components",
+        "component_path_workers": min(workers,16) if parallel_paths else 1,
+        **component_meta,
+        **scheduler_meta,
+    }
+    # Keep a bounded diagnostic sample; full component lists can be huge on photos.
+    metadata["component_sample"] = [c.meta() for c in sorted(components, key=lambda c: (-_priority(c), c.component_id))[:24]]
+    return {
+        "groups": groups,
+        "execution_groups": execution_groups,
+        "execution_sequence": sequence,
+        "metadata": metadata,
+    }

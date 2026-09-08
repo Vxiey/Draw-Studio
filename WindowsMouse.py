@@ -1,0 +1,230 @@
+"""Small, explicit Win32 mouse backend.
+
+Cursor movement defaults to SetCursorPos for compatibility, including during drags.
+An explicit reliable mode can opt into absolute SendInput movement, but Draw Studio
+never forces the more aggressive backend merely because Microsoft Paint is active.
+"""
+import ctypes
+import sys
+import time
+from ctypes import wintypes
+
+LONG = ctypes.c_int32
+DWORD = ctypes.c_uint32
+ULONG_PTR = ctypes.c_size_t
+
+
+class Point(ctypes.Structure):
+    _fields_ = [('x', LONG), ('y', LONG)]
+
+
+class MouseInput(ctypes.Structure):
+    _fields_ = [
+        ('dx', LONG),
+        ('dy', LONG),
+        ('mouseData', DWORD),
+        ('dwFlags', DWORD),
+        ('time', DWORD),
+        ('dwExtraInfo', ULONG_PTR),
+    ]
+
+
+class InputUnion(ctypes.Union):
+    _fields_ = [('mi', MouseInput)]
+
+
+class Input(ctypes.Structure):
+    _anonymous_ = ('data',)
+    _fields_ = [('type', DWORD), ('data', InputUnion)]
+
+
+def normalize_position(x, y, rect):
+    """Legacy helper kept for compatibility/tests and absolute-coordinate maths."""
+    left, top, width, height = rect
+    if width < 2 or height < 2 or not (left <= x < left + width and top <= y < top + height):
+        raise ValueError('Mouse position is outside the desktop. Select the drawing area again.')
+    return round((x-left)*65535/(width-1)), round((y-top)*65535/(height-1))
+
+
+class WindowsMouse:
+    def __init__(self):
+        if sys.platform != 'win32':
+            raise OSError('Mouse control requires Windows.')
+
+        self.api = ctypes.WinDLL('user32', use_last_error=True)
+        self.held = False
+        # Input is opt-in. Merely creating Draw Studio or switching profiles can
+        # never move/click the pointer. GuardedMouse arms input only after an
+        # explicit Test mouse / Start drawing action has activated the target.
+        self._input_armed = False
+        self.configure_precision('High')
+        self.drag_backend = 'cursor'
+
+        self.api.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(Input), ctypes.c_int]
+        self.api.SendInput.restype = wintypes.UINT
+        self.api.GetCursorPos.argtypes = [ctypes.POINTER(Point)]
+        self.api.GetCursorPos.restype = wintypes.BOOL
+        self.api.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+        self.api.SetCursorPos.restype = wintypes.BOOL
+        self.api.GetSystemMetrics.argtypes = [ctypes.c_int]
+        self.api.GetSystemMetrics.restype = ctypes.c_int
+        self.api.GetAsyncKeyState.argtypes = [ctypes.c_int]
+        self.api.GetAsyncKeyState.restype = ctypes.c_short
+
+    def configure_precision(self, level='High'):
+        from Precision import profile
+        cfg=profile(level)
+        self.precision_level=level
+        self.position_tolerance=int(cfg['cursor_tolerance_px'])
+        self.position_attempts=int(cfg['cursor_attempts'])
+        self.position_retry_after=int(cfg['cursor_retry_after'])
+
+
+    def configure_drag_backend(self, backend='cursor'):
+        backend=str(backend or 'cursor').strip().lower()
+        if backend not in ('cursor','sendinput'):
+            raise ValueError('Unknown drag backend.')
+        self.drag_backend=backend
+
+    @property
+    def input_armed(self):
+        return bool(getattr(self, '_input_armed', False))
+
+    def arm_input(self):
+        down=self.buttons_down()
+        if down:
+            raise InterruptedError('Release all mouse buttons before starting mouse control: '+', '.join(down)+'.')
+        self._input_armed = True
+
+    def disarm_input(self):
+        # If a drawing was interrupted while the button was held, release first.
+        try:
+            if getattr(self, 'held', False):
+                try:
+                    self._send(0x0004)
+                finally:
+                    self.held = False
+        finally:
+            self._input_armed = False
+
+    def _require_input_armed(self):
+        if not self.input_armed:
+            raise PermissionError(
+                'Mouse input is locked. Use Test mouse without clicking or Start drawing to arm it explicitly.'
+            )
+
+    def buttons_down(self):
+        """Return physical/logical mouse buttons Windows currently reports down."""
+        keys=((0x01,'left'),(0x02,'right'),(0x04,'middle'),(0x05,'x1'),(0x06,'x2'))
+        return tuple(name for vk,name in keys if self.api.GetAsyncKeyState(vk)&0x8000)
+
+    def desktop_rect(self):
+        # SM_X/Y/CX/CYVIRTUALSCREEN = 76,77,78,79
+        return tuple(int(self.api.GetSystemMetrics(i)) for i in (76, 77, 78, 79))
+
+    def get_position(self):
+        p = Point()
+        ctypes.set_last_error(0)
+        if not self.api.GetCursorPos(ctypes.byref(p)):
+            code = ctypes.get_last_error()
+            raise OSError(f'Windows could not read the mouse position (code {code}).')
+        return int(p.x), int(p.y)
+
+    def _send(self, flags):
+        # Button events are relative and therefore use zero dx/dy.
+        event = Input(type=0, mi=MouseInput(0, 0, 0, flags, 0, 0))
+        ctypes.set_last_error(0)
+        result = self.api.SendInput(1, ctypes.byref(event), ctypes.sizeof(Input))
+        if result != 1:
+            code = ctypes.get_last_error()
+            raise OSError(
+                f'Windows did not accept the mouse command (code {code}). '
+                'Run Paint and Draw Studio at the same privilege level and make sure the desktop is unlocked.'
+            )
+
+    def _send_absolute_move(self, x, y):
+        """Deliver one non-coalesced absolute move while a Draw Studio drag is held."""
+        nx, ny = normalize_position(int(x), int(y), self.desktop_rect())
+        # MOVE | MOVE_NOCOALESCE | VIRTUALDESK | ABSOLUTE
+        flags = 0x0001 | 0x2000 | 0x4000 | 0x8000
+        event = Input(type=0, mi=MouseInput(nx, ny, 0, flags, 0, 0))
+        ctypes.set_last_error(0)
+        result = self.api.SendInput(1, ctypes.byref(event), ctypes.sizeof(Input))
+        if result != 1:
+            code = ctypes.get_last_error()
+            raise OSError(
+                f'Windows did not accept the drag movement (code {code}). '
+                'Run Paint and Draw Studio at the same privilege level and make sure the desktop is unlocked.'
+            )
+
+    def move(self, x, y):
+        self._require_input_armed()
+        if not self.held:
+            down=self.buttons_down()
+            if down:
+                raise InterruptedError('Stopped: a mouse button is held ('+', '.join(down)+'). Release it before moving the pointer.')
+        x, y = round(x), round(y)
+        # Validate against the complete virtual desktop before calling user32.
+        normalize_position(x, y, self.desktop_rect())
+        def send_position():
+            if self.held and getattr(self, 'drag_backend', 'cursor') == 'sendinput':
+                self._send_absolute_move(x, y)
+                return
+            ctypes.set_last_error(0)
+            if not self.api.SetCursorPos(x, y):
+                code = ctypes.get_last_error()
+                raise OSError(
+                    f'Windows could not move the pointer to {x},{y} (code {code}). '
+                    'Check permissions, Remote Desktop and that the screen is unlocked.'
+                )
+
+        send_position()
+        actual = self.get_position()
+        tolerance=int(getattr(self,'position_tolerance',1))
+        attempts=max(1,int(getattr(self,'position_attempts',10)))
+        retry_after=max(0,int(getattr(self,'position_retry_after',0)))
+        for attempt in range(attempts):
+            if max(abs(actual[0]-x), abs(actual[1]-y)) <= tolerance:
+                return
+            if retry_after and attempt>=retry_after and (attempt-retry_after)%2==0:
+                send_position()
+            time.sleep(.004 if tolerance==0 else .005)
+            actual = self.get_position()
+        raise OSError(
+            f'The mouse did not reach the target {x},{y}; Windows reports {actual}. '
+            'Select the area again and check Windows display scaling.'
+        )
+
+    def press(self):
+        self._require_input_armed()
+        down=self.buttons_down()
+        if down:
+            raise InterruptedError('Stopped: release all mouse buttons before Draw Studio presses the brush.')
+        self._send(0x0002)  # MOUSEEVENTF_LEFTDOWN
+        self.held = True
+
+    def release(self):
+        if self.held:
+            try:
+                self._send(0x0004)  # MOUSEEVENTF_LEFTUP
+            finally:
+                self.held = False
+
+    def click(self):
+        try:
+            self.press()
+            time.sleep(.02)
+        finally:
+            self.release()
+
+    def diagnostics(self):
+        return {
+            'pointer_bits': ctypes.sizeof(ctypes.c_void_p) * 8,
+            'input_size': ctypes.sizeof(Input),
+            'desktop_rect': self.desktop_rect(),
+            'cursor': self.get_position(),
+            'input_armed': self.input_armed,
+            'precision': getattr(self,'precision_level','High'),
+            'position_tolerance_px': getattr(self,'position_tolerance',0),
+            'drag_move_backend': ('SendInput absolute' if getattr(self,'drag_backend','cursor')=='sendinput' else 'SetCursorPos compatible'),
+        }

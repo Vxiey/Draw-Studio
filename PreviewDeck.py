@@ -1,0 +1,24 @@
+"""Preview pages selected by a compact menu instead of nine wide tabs."""
+import tkinter as tk
+import customtkinter as ctk
+
+class PreviewDeck(ctk.CTkFrame):
+    def __init__(self,parent,**kwargs):
+        super().__init__(parent,**kwargs)
+        self.pages={};self.current=tk.StringVar(value='Original')
+        self.selector=ctk.CTkOptionMenu(self,variable=self.current,values=['Original'],
+            command=self.set,dynamic_resizing=False,width=210,height=32,fg_color='#283548',button_color='#354966')
+        self.selector.pack(anchor='w',padx=8,pady=(6,4))
+        self.host=ctk.CTkFrame(self,fg_color='transparent')
+        self.host.pack(fill='both',expand=True)
+    def add(self,name):
+        page=ctk.CTkFrame(self.host,fg_color='transparent')
+        self.pages[name]=page;self.selector.configure(values=list(self.pages))
+        if len(self.pages)==1:self.set(name)
+        return page
+    def set(self,name):
+        if name not in self.pages:raise ValueError(name)
+        for page in self.pages.values():page.pack_forget()
+        self.pages[name].pack(fill='both',expand=True)
+        self.current.set(name)
+    def get(self):return self.current.get()

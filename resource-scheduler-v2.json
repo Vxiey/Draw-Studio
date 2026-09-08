@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "created_at": 1788872800,
+  "machine_signature": "Linux|x86_64|cpu5|ram1GB",
+  "logical_cpus": 5,
+  "recommended_workers": 4,
+  "recommended_engine": "Threads",
+  "best_score": 3.255,
+  "scores": [
+    {
+      "workers": 1,
+      "score": 3.206,
+      "adjusted_score": 3.206
+    },
+    {
+      "workers": 2,
+      "score": 3.217,
+      "adjusted_score": 3.217
+    },
+    {
+      "workers": 4,
+      "score": 3.255,
+      "adjusted_score": 3.255
+    }
+  ],
+  "ram_budget_mb": 1701
+}

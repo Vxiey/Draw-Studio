@@ -1,0 +1,269 @@
+"""Preview-time CanvasGuard/Edge Behavior mirroring for Draw Studio v1.0.56.
+
+Smart Preview Safety is deterministic and UI-only: it replays the same
+CanvasGuard + EdgeBehavior path filtering used by execute_plan(), but in the
+preview canvas coordinate space.  The generated preview therefore shows the
+paths that can actually be drawn: clipped paths, skipped unsafe edge paths and
+adaptive/outline edge-follow paths.  No AI/ML/OCR is used.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Iterable, Sequence
+
+from PIL import Image, ImageDraw
+
+from CanvasGuard import CanvasGuard, CanvasSafetyStop, normalize_canvas_anchors
+from EdgeBehavior import apply_edge_behavior, resolve_edge_behavior
+from SafetyDebugOverlay import add_debug_event, make_debug_event, summarize_debug
+from Precision import CanvasTransform
+
+Point = tuple[int, int]
+Path = tuple[Point, ...]
+
+
+@dataclass
+class PreviewSafetyPlan:
+    groups: list[list[Path]]
+    mode: str
+    meta: dict = field(default_factory=dict)
+
+    def as_dict(self) -> dict:
+        return dict(self.meta)
+
+
+def _preview_polygon_options(options: dict, fitted: Sequence[int | float]) -> tuple[object | None, str | None, tuple]:
+    """Return polygon/space/anchors translated for preview-local coordinates."""
+    polygon = options.get('canvas_polygon') or options.get('canvas_safe_polygon')
+    space = options.get('canvas_polygon_space') or options.get('canvas_coordinate_space')
+    anchor_space = options.get('canvas_anchor_space') or space
+    anchors = options.get('canvas_anchors') or ()
+    fitted_area = (0, 0, int(round(float(fitted[0]))), int(round(float(fitted[1]))))
+
+    # Normalized and area-relative data is already independent of the real window.
+    if polygon and str(space or 'auto').strip().lower() in ('normalized', 'relative', 'area', 'auto'):
+        return polygon, space, normalize_canvas_anchors(anchors, area=fitted_area, coordinate_space=anchor_space)
+
+    # Absolute/screen polygons can appear when a future detector writes screen
+    # geometry.  Convert via target_area -> local normalized -> current fitted.
+    target_area = options.get('_target_area') or options.get('target_area')
+    preview_area = options.get('_preview_area') or fitted_area
+    try:
+        if polygon and target_area and str(space or '').strip().lower() in ('screen', 'absolute'):
+            tx, ty, tw, th = [float(v) for v in target_area]
+            fw, fh = float(fitted[0]), float(fitted[1])
+            converted = []
+            for raw in polygon:  # type: ignore[union-attr]
+                sx, sy = float(raw[0]), float(raw[1])
+                nx = 0.0 if tw <= 0 else (sx - tx) / tw
+                ny = 0.0 if th <= 0 else (sy - ty) / th
+                converted.append((nx * fw, ny * fh))
+            converted_anchors = normalize_canvas_anchors(anchors, area=tuple(target_area), coordinate_space=anchor_space)
+            # Re-normalize anchor centers from real target area into preview local area.
+            anchor_dicts = []
+            for anchor in converted_anchors:
+                cx = 0.0 if tw <= 0 else (anchor.center[0] - tx) / tw * fw
+                cy = 0.0 if th <= 0 else (anchor.center[1] - ty) / th * fh
+                tip = None
+                if anchor.tip is not None:
+                    tip = ((anchor.tip[0] - tx) / tw * fw if tw > 0 else 0.0,
+                           (anchor.tip[1] - ty) / th * fh if th > 0 else 0.0)
+                anchor_dicts.append({'kind': anchor.kind, 'center': (cx, cy), 'tip': tip,
+                                     'confidence': anchor.confidence, 'orientation': anchor.orientation})
+            return tuple(converted), 'area', normalize_canvas_anchors(anchor_dicts, area=fitted_area, coordinate_space='area')
+    except (TypeError, ValueError, ZeroDivisionError):
+        pass
+
+    if anchors:
+        try:
+            return polygon, space, normalize_canvas_anchors(anchors, area=fitted_area, coordinate_space=anchor_space)
+        except (TypeError, ValueError):
+            return polygon, space, ()
+    return polygon, space, ()
+
+
+def preview_canvas_guard(options: dict, fitted: Sequence[int | float]) -> CanvasGuard:
+    area = (0, 0, int(round(float(fitted[0]))), int(round(float(fitted[1]))))
+    polygon, space, anchors = _preview_polygon_options(options, fitted)
+    confidence = 1.0
+    anchor_meta = options.get('canvas_anchor_meta')
+    if isinstance(anchor_meta, dict):
+        try:
+            confidence = float(anchor_meta.get('confidence', 1.0))
+        except (TypeError, ValueError):
+            confidence = 1.0
+    return CanvasGuard.from_area_or_polygon(
+        area,
+        polygon=polygon,
+        coordinate_space=space,
+        brush_px=options.get('brush_px', 3),
+        edge_margin_px=2,
+        anchors=anchors,
+        confidence=confidence,
+    )
+
+
+def build_preview_safety_plan(
+    image_size: Sequence[int | float],
+    fitted: Sequence[int | float],
+    groups,
+    execution_groups,
+    options: dict,
+    cancelled=lambda: False,
+) -> PreviewSafetyPlan:
+    """Replay execution path safety in preview-local canvas coordinates."""
+    width, height = int(image_size[0]), int(image_size[1])
+    guard = preview_canvas_guard(options, fitted)
+    transform = CanvasTransform(width, height, fitted)
+    edge_mode = resolve_edge_behavior(
+        options.get('edge_behavior', 'Hard Clip'),
+        profile_name=options.get('profile_name'),
+        drawing_mode=options.get('drawing_mode'),
+        outline=bool(options.get('outline')),
+    )
+    source_groups = execution_groups if execution_groups is not None else groups
+    safe_groups: list[list[Path]] = []
+    meta = {
+        'active': True,
+        'mode': edge_mode,
+        'source': 'execution_groups' if execution_groups is not None else 'legacy_groups',
+        'paths_in': 0,
+        'drawable_subpaths': 0,
+        'output_points': 0,
+        'hard_clip': 0,
+        'hard_skip': 0,
+        'adaptive_boundary': 0,
+        'preserve_outline_boundary': 0,
+        'safe_skip': 0,
+        'source_outside_canvas': 0,
+        'stopped': False,
+        'canvas_guard': guard.model.as_dict(),
+    }
+    path_index = 0
+    for color_index, items in enumerate(source_groups or []):
+        if cancelled():
+            raise InterruptedError()
+        color_paths: list[Path] = []
+        for item in items:
+            if cancelled():
+                raise InterruptedError()
+            path_index += 1
+            meta['paths_in'] += 1
+            if execution_groups is not None:
+                source_points = list(item)
+                raw_canvas_points = [transform.point(x, y) for x, y in source_points]
+            else:
+                x1, y1, x2, y2 = item
+                raw_canvas_points = [transform.point(x1, y1), transform.point(x2, y2)]
+            try:
+                result = apply_edge_behavior(
+                    guard,
+                    raw_canvas_points,
+                    behavior=edge_mode,
+                    profile_name=options.get('profile_name'),
+                    drawing_mode=options.get('drawing_mode'),
+                    outline=bool(options.get('outline')),
+                    context='preview stroke',
+                )
+            except CanvasSafetyStop as error:
+                meta['source_outside_canvas'] += 1
+                meta['stopped'] = True
+                add_debug_event(meta, make_debug_event(path_index, color_index, raw_canvas_points, exception=error))
+                continue
+            meta[result.strategy] = int(meta.get(result.strategy, 0)) + 1
+            add_debug_event(meta, make_debug_event(path_index, color_index, raw_canvas_points, result))
+            if not result.subpaths:
+                continue
+            for subpath in result.subpaths:
+                if len(subpath) >= 1:
+                    color_paths.append(tuple(subpath))
+                    meta['drawable_subpaths'] += 1
+                    meta['output_points'] += len(subpath)
+        safe_groups.append(color_paths)
+    skipped = int(meta.get('hard_skip', 0)) + int(meta.get('safe_skip', 0)) + int(meta.get('source_outside_canvas', 0))
+    adapted = int(meta.get('adaptive_boundary', 0)) + int(meta.get('preserve_outline_boundary', 0))
+    meta['skipped_total'] = skipped
+    meta['adapted_total'] = adapted
+    meta['changed_total'] = skipped + adapted
+    meta['clipped_or_guarded'] = int(meta.get('hard_clip', 0)) + adapted
+    meta['safety_debug'] = summarize_debug(meta)
+    return PreviewSafetyPlan(safe_groups, edge_mode, meta)
+
+
+def canvas_to_preview(point: Sequence[int | float], fitted: Sequence[int | float], preview_size: Sequence[int | float]) -> tuple[float, float]:
+    fw, fh = max(1.0, float(fitted[0])), max(1.0, float(fitted[1]))
+    pw, ph = max(1.0, float(preview_size[0])), max(1.0, float(preview_size[1]))
+    return (float(point[0]) * pw / fw, float(point[1]) * ph / fh)
+
+
+def draw_safe_paths(draw: ImageDraw.ImageDraw, safety_plan: PreviewSafetyPlan, fitted, preview_size, palette_rgb, brush: int) -> tuple[int, int]:
+    path_count = 0
+    dot_count = 0
+    for index, paths in enumerate(safety_plan.groups):
+        color = palette_rgb[index] if index < len(palette_rgb) else (0, 0, 0)
+        for path in paths:
+            mapped = [canvas_to_preview(p, fitted, preview_size) for p in path]
+            if len(mapped) == 1:
+                x, y = mapped[0]
+                radius = max(1, brush) / 2
+                draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=color)
+                dot_count += 1
+                path_count += 1
+                continue
+            draw.line([coord for p in mapped for coord in p], fill=color, width=max(1, int(brush)), joint='curve')
+            radius = max(1, brush) / 2
+            for x, y in (mapped[0], mapped[-1]):
+                draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=color)
+            path_count += 1
+    return path_count, dot_count
+
+
+def render_preview_safety_map(source: Image.Image, preview_size, safety_plan: PreviewSafetyPlan, palette_rgb, brush: int, cancelled=lambda: False) -> Image.Image:
+    w, h = int(preview_size[0]), int(preview_size[1])
+    base = Image.new('RGB', (max(1, w), max(1, h)), (15, 20, 29))
+    draw = ImageDraw.Draw(base)
+    guard_meta = safety_plan.meta.get('canvas_guard') or {}
+    polygon = guard_meta.get('polygon') or ()
+    safe_polygon = guard_meta.get('safe_polygon') or ()
+    fitted = guard_meta.get('area') or (0, 0, w, h)
+    if len(fitted) == 4:
+        fitted_size = (max(1, int(fitted[2])), max(1, int(fitted[3])))
+    else:
+        fitted_size = preview_size
+
+    def mapped_poly(poly):
+        out = []
+        for p in poly:
+            try:
+                out.append(canvas_to_preview(p, fitted_size, preview_size))
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    outer = mapped_poly(polygon)
+    inner = mapped_poly(safe_polygon)
+    if len(outer) >= 2:
+        draw.line([coord for p in outer + outer[:1] for coord in p], fill=(220, 87, 87), width=2)
+    if len(inner) >= 2:
+        draw.line([coord for p in inner + inner[:1] for coord in p], fill=(98, 226, 146), width=2)
+
+    # Draw the executable preview paths.  Use a slightly brighter visible palette
+    # against the dark safety map without changing the actual drawing preview.
+    visible_palette = []
+    for rgb in palette_rgb:
+        r, g, b = [max(0, min(255, int(v))) for v in rgb[:3]]
+        if r * 0.299 + g * 0.587 + b * 0.114 < 95:
+            r = min(255, r + 95); g = min(255, g + 95); b = min(255, b + 95)
+        visible_palette.append((r, g, b))
+    draw_safe_paths(draw, safety_plan, fitted_size, preview_size, tuple(visible_palette), max(1, min(4, int(brush))))
+
+    skipped = int(safety_plan.meta.get('skipped_total', 0) or 0)
+    adapted = int(safety_plan.meta.get('adapted_total', 0) or 0)
+    text = f"Safety preview: {safety_plan.mode} · draw {int(safety_plan.meta.get('drawable_subpaths', 0))} · skip {skipped} · edge-follow {adapted}"
+    draw.rectangle((8, 8, min(w - 8, 8 + len(text) * 6 + 14), 30), fill=(15, 20, 29))
+    draw.text((14, 13), text, fill=(230, 237, 245))
+    if safety_plan.meta.get('stopped'):
+        warn = 'Plan has source points outside the selected canvas polygon; real drawing will stop before input.'
+        draw.rectangle((8, 34, min(w - 8, 8 + len(warn) * 6 + 14), 57), fill=(52, 24, 24))
+        draw.text((14, 39), warn, fill=(255, 210, 210))
+    return base

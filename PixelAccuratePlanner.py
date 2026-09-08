@@ -1,0 +1,369 @@
+"""Pixel-accurate analysis core for Draw Studio Step 26.
+
+Step 26 is deliberately analysis-first. Every target pixel survives into a
+PixelMap before any path optimisation. Step 23 routes palette matching and edge analysis through the fastest measured
+CUDA/OpenCL/NumPy backend per workload; NumPy remains the deterministic fallback.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Sequence
+import math
+
+import numpy as np
+from PIL import Image, ImageOps
+
+
+@dataclass
+class PixelMap:
+    width: int
+    height: int
+    rgb: np.ndarray
+    palette_index: np.ndarray
+    drawable_mask: np.ndarray
+    edge_map: np.ndarray
+    importance_map: np.ndarray
+    protected_mask: np.ndarray
+    metadata: dict
+    contour_map: np.ndarray | None = None
+    shadow_map: np.ndarray | None = None
+    shadow_detail_map: np.ndarray | None = None
+    micro_detail_map: np.ndarray | None = None
+
+    @property
+    def pixels(self) -> int:
+        return int(self.width * self.height)
+
+    def as_meta(self) -> dict:
+        out = dict(self.metadata)
+        out.update({
+            "width": self.width,
+            "height": self.height,
+            "pixels": self.pixels,
+            "drawable_pixels": int(np.count_nonzero(self.drawable_mask)),
+            "protected_pixels": int(np.count_nonzero(self.protected_mask)),
+            "protected_percent": round(float(np.mean(self.protected_mask) * 100.0), 3),
+            "edge_mean": round(float(np.mean(self.edge_map)), 4),
+            "importance_mean": round(float(np.mean(self.importance_map)), 4),
+        })
+        if self.contour_map is not None:
+            out["contour_mean"] = round(float(np.mean(self.contour_map)), 4)
+        if self.shadow_map is not None:
+            out["shadow_mean"] = round(float(np.mean(self.shadow_map)), 4)
+        if self.shadow_detail_map is not None:
+            out["shadow_detail_mean"] = round(float(np.mean(self.shadow_detail_map)), 4)
+        if self.micro_detail_map is not None:
+            micro = np.asarray(self.micro_detail_map, dtype=np.float32)
+            out["micro_detail_mean"] = round(float(np.mean(micro)), 4)
+            out["micro_detail_percent"] = round(float(np.mean(micro >= .5) * 100.0), 3)
+        return out
+
+
+def _visible_rgb_rgba(image: Image.Image) -> tuple[Image.Image, np.ndarray]:
+    rgba = ImageOps.exif_transpose(image).convert("RGBA")
+    raw = np.asarray(rgba, dtype=np.uint8)
+    alpha = raw[..., 3:4].astype(np.float32) / 255.0
+    rgb = raw[..., :3].astype(np.float32) * alpha + 255.0 * (1.0 - alpha)
+    return rgba, np.rint(rgb).clip(0, 255).astype(np.uint8)
+
+
+def _to_oklab(arr: np.ndarray) -> np.ndarray:
+    """Vectorized sRGB 0..255 -> OKLab float32."""
+    c = np.clip(arr.astype(np.float32) / 255.0, 0.0, 1.0)
+    lin = np.where(c <= 0.04045, c / 12.92, np.power((c + 0.055) / 1.055, 2.4))
+    r, g, b = lin[..., 0], lin[..., 1], lin[..., 2]
+    l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
+    m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
+    ss = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b
+    ll, mm, s3 = np.cbrt(l), np.cbrt(m), np.cbrt(ss)
+    return np.stack((
+        0.2104542553 * ll + 0.7936177850 * mm - 0.0040720468 * s3,
+        1.9779984951 * ll - 2.4285922050 * mm + 0.4505937099 * s3,
+        0.0259040371 * ll + 0.7827717662 * mm - 0.8086757660 * s3,
+    ), axis=-1).astype(np.float32, copy=False)
+
+
+def _oklab_chroma_hue(lab: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    aa, bb = lab[..., 1], lab[..., 2]
+    chroma = np.hypot(aa, bb).astype(np.float32, copy=False) * 100.0
+    hue = np.mod(np.degrees(np.arctan2(bb, aa)), 360.0).astype(np.float32, copy=False)
+    return chroma, hue
+
+
+def _cpu_palette_map(rgb: np.ndarray, palette: np.ndarray, *, perceptual: bool,
+                     color_fidelity: str = "Faithful", row_chunk: int = 96) -> np.ndarray:
+    h, w = rgb.shape[:2]
+    out = np.empty((h, w), dtype=np.int16)
+    pal = palette.astype(np.float32)
+    if perceptual:
+        pal_ok = _to_oklab(pal)
+        pal_L = pal_ok[:, 0] * 100.0
+        pal_chroma, pal_hue = _oklab_chroma_hue(pal_ok)
+        for y0 in range(0, h, row_chunk):
+            y1 = min(h, y0 + row_chunk)
+            src_ok = _to_oklab(rgb[y0:y1])
+            diff = src_ok[:, :, None, :] - pal_ok[None, None, :, :]
+            dist = np.sqrt(np.sum(diff * diff, axis=3, dtype=np.float32), dtype=np.float32) * 100.0
+            if color_fidelity in ("Balanced", "Faithful"):
+                src_L = src_ok[..., 0] * 100.0
+                light_error = np.abs(src_L[:, :, None] - pal_L[None, None, :])
+                dark_loss = np.maximum(src_L[:, :, None] - pal_L[None, None, :], 0.0)
+                src_chroma, src_hue = _oklab_chroma_hue(src_ok)
+                chroma_error = np.abs(src_chroma[:, :, None] - pal_chroma[None, None, :])
+                hue_delta = np.abs(src_hue[:, :, None] - pal_hue[None, None, :])
+                hue_error = np.minimum(hue_delta, 360.0 - hue_delta)
+                hue_error = np.where(np.minimum(src_chroma[:, :, None], pal_chroma[None, None, :]) < 2.5, 0.0, hue_error)
+                bright_boost = 1.0 + np.maximum(src_L - 52.0, 0.0)[:, :, None] / 80.0
+                vivid = src_chroma[:, :, None] >= 5.0
+                neutral_cut = np.maximum(2.5, src_chroma[:, :, None] * 0.28)
+                neutral_loss = np.where(vivid & (pal_chroma[None, None, :] < neutral_cut),
+                                        src_chroma[:, :, None] - pal_chroma[None, None, :], 0.0)
+                hue_excess = np.maximum(hue_error - 45.0, 0.0)
+                hue_extreme = np.maximum(hue_error - 85.0, 0.0)
+                if color_fidelity == "Balanced":
+                    family = neutral_loss * 0.18 + hue_excess * 0.035 + hue_extreme * 0.060
+                    dist += light_error * 0.10 + dark_loss * 0.24 * bright_boost + chroma_error * 0.055 + hue_error * 0.010 + family
+                else:
+                    family = neutral_loss * 0.32 + hue_excess * 0.080 + hue_extreme * 0.120
+                    dist += light_error * 0.22 + dark_loss * 0.55 * bright_boost + chroma_error * 0.115 + hue_error * 0.026 + family
+            out[y0:y1] = np.argmin(dist, axis=2).astype(np.int16)
+    else:
+        for y0 in range(0, h, row_chunk):
+            y1 = min(h, y0 + row_chunk)
+            src = rgb[y0:y1].astype(np.float32)
+            diff = src[:, :, None, :] - pal[None, None, :, :]
+            dist = np.sum(diff * diff, axis=3)
+            out[y0:y1] = np.argmin(dist, axis=2).astype(np.int16)
+    return out
+
+def exact_palette_map(image: Image.Image, palette_rgb: Sequence[Sequence[int]], *,
+                      color_rendering: str = "Perceptual match", color_fidelity: str = "Faithful", skip_white: bool = True,
+                      gpu_mode: str = "Auto", gpu_vram: str = "Auto",
+                      gpu_performance: str = "High throughput") -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
+    rgba, rgb = _visible_rgb_rgba(image)
+    palette = np.asarray([tuple(map(int, p[:3])) for p in palette_rgb], dtype=np.uint8)
+    if palette.ndim != 2 or palette.shape[0] < 1 or palette.shape[1] != 3:
+        raise ValueError("Pixel Accurate mode requires at least one RGB palette colour.")
+
+    drawable = np.any(np.asarray(rgba, dtype=np.uint8)[..., 3:4] > 0, axis=2)
+    if skip_white:
+        drawable &= np.min(rgb, axis=2) < 245
+
+    # Step 23: Auto is vendor-neutral. The saved Step 22 profile may select
+    # CUDA, OpenCL (AMD/Intel/NVIDIA) or CPU independently for palette matching.
+    try:
+        from UniversalGpuAcceleration import palette_indices_rgba as universal_palette_indices
+        candidates = tuple(range(len(palette)))
+        (index_map, routed_drawable), route = universal_palette_indices(
+            rgba, tuple(map(tuple, palette.tolist())), candidates, tuple(False for _ in candidates),
+            color_rendering=color_rendering, custom_mode="Calibrated palette",
+            color_fidelity=color_fidelity, skip_white=skip_white, gpu_mode=gpu_mode)
+        backend_id = str(route.get("backend_id") or "cpu:numpy")
+        legacy_backend = "cpu-numpy" if backend_id == "cpu:numpy" else ("cuda" if backend_id.startswith("cuda:") else ("opencl" if backend_id.startswith("opencl:") else str(route.get("backend") or backend_id)))
+        return (np.asarray(index_map, dtype=np.int16),
+                np.asarray(routed_drawable, dtype=np.bool_), rgb,
+                {"palette_backend": legacy_backend,
+                 "palette_backend_id": backend_id,
+                 "palette_vendor": str(route.get("vendor") or "CPU"),
+                 "palette_device": str(route.get("device") or "CPU"),
+                 "palette_route": dict(route),
+                 "palette_distance": "OKLab" if color_rendering != "RGB nearest" else "RGB nearest",
+                 "palette_fidelity": str(color_fidelity)})
+    except InterruptedError:
+        raise
+    except Exception as exc:
+        # Last-resort deterministic path. UniversalGpuAcceleration already
+        # falls back internally, but this protects imports/corrupt profiles too.
+        perceptual = color_rendering != "RGB nearest"
+        index_map = _cpu_palette_map(rgb, palette, perceptual=perceptual, color_fidelity=color_fidelity)
+        return index_map, drawable.astype(np.bool_), rgb, {
+            "palette_backend": "cpu-numpy", "palette_backend_id": "cpu:numpy",
+            "palette_route": {"fallback_reason": f"{type(exc).__name__}: {exc}"},
+            "palette_distance": "OKLab" if perceptual else "RGB nearest",
+            "palette_fidelity": str(color_fidelity),
+        }
+
+
+def edge_map(rgb: np.ndarray, *, gpu_mode: str = "Auto", gpu_vram: str = "Auto",
+             gpu_performance: str = "High throughput") -> tuple[np.ndarray, dict]:
+    gray = np.rint(rgb[..., 0] * .299 + rgb[..., 1] * .587 + rgb[..., 2] * .114).clip(0, 255).astype(np.uint8)
+    try:
+        from UniversalGpuAcceleration import edge_magnitude
+        mag, route = edge_magnitude(gray.astype(np.float32), gpu_mode=gpu_mode)
+        scale = max(1.0, float(np.percentile(mag, 99.5)))
+        backend_id = str(route.get("backend_id") or "cpu:numpy")
+        legacy_backend = "cpu-numpy" if backend_id == "cpu:numpy" else ("cuda" if backend_id.startswith("cuda:") else ("opencl" if backend_id.startswith("opencl:") else str(route.get("backend") or backend_id)))
+        return np.clip(mag / scale, 0.0, 1.0).astype(np.float32), {
+            "edge_backend": legacy_backend,
+            "edge_backend_id": backend_id,
+            "edge_vendor": str(route.get("vendor") or "CPU"),
+            "edge_device": str(route.get("device") or "CPU"),
+            "edge_route": dict(route)}
+    except InterruptedError:
+        raise
+    except Exception as exc:
+        f = gray.astype(np.float32)
+        gx = np.zeros_like(f); gy = np.zeros_like(f)
+        gx[:, 1:-1] = (f[:, 2:] - f[:, :-2]) * .5
+        gy[1:-1, :] = (f[2:, :] - f[:-2, :]) * .5
+        mag = np.hypot(gx, gy)
+        scale = max(1.0, float(np.percentile(mag, 99.5)))
+        return np.clip(mag / scale, 0.0, 1.0).astype(np.float32), {
+            "edge_backend": "cpu-numpy", "edge_backend_id": "cpu:numpy",
+            "edge_route": {"fallback_reason": f"{type(exc).__name__}: {exc}"}}
+
+
+def micro_detail_map(palette_index: np.ndarray, drawable: np.ndarray, edges: np.ndarray) -> np.ndarray:
+    """Detect tiny/thin palette features without connected-component allocation.
+
+    A pixel scores highly when it lies on a palette boundary, has strong edge
+    energy and has few same-colour 4-neighbours. This catches pupils, whiskers,
+    small text/marks and one-pixel contour fragments that global rarity alone can
+    underweight. The calculation is deterministic NumPy and complements the
+    GPU-routed palette/edge stages.
+    """
+    idx = np.asarray(palette_index)
+    mask = np.asarray(drawable, dtype=np.bool_)
+    edge = np.asarray(edges, dtype=np.float32)
+    same = np.zeros(idx.shape, dtype=np.float32)
+    neighbours = np.zeros(idx.shape, dtype=np.float32)
+    for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+        src_y = slice(max(0, -dy), idx.shape[0] - max(0, dy))
+        src_x = slice(max(0, -dx), idx.shape[1] - max(0, dx))
+        dst_y = slice(max(0, dy), idx.shape[0] - max(0, -dy))
+        dst_x = slice(max(0, dx), idx.shape[1] - max(0, -dx))
+        valid = mask[src_y, src_x] & mask[dst_y, dst_x]
+        neighbours[src_y, src_x] += valid.astype(np.float32)
+        same[src_y, src_x] += (valid & (idx[src_y, src_x] == idx[dst_y, dst_x])).astype(np.float32)
+    boundary = np.where(neighbours > 0, 1.0 - same / np.maximum(neighbours, 1.0), 0.0).astype(np.float32)
+    thin = np.clip((2.5 - same) / 2.5, 0.0, 1.0).astype(np.float32)
+    score = np.clip(boundary * .48 + edge * .34 + thin * .18, 0.0, 1.0)
+    score *= mask.astype(np.float32)
+    return score.astype(np.float32, copy=False)
+
+
+def importance_map(rgb: np.ndarray, palette_index: np.ndarray, edges: np.ndarray,
+                   drawable: np.ndarray, *, contour_map: np.ndarray | None = None,
+                   shadow_map: np.ndarray | None = None,
+                   shadow_detail_map: np.ndarray | None = None,
+                   micro_detail: np.ndarray | None = None) -> np.ndarray:
+    gray = rgb.astype(np.float32).mean(axis=2) / 255.0
+    local = np.zeros_like(gray, dtype=np.float32)
+    local[:, 1:-1] += np.abs(gray[:, 2:] - gray[:, :-2]) * .5
+    local[1:-1, :] += np.abs(gray[2:, :] - gray[:-2, :]) * .5
+    local = np.clip(local, 0.0, 1.0)
+
+    valid = palette_index[drawable]
+    rarity = np.zeros_like(gray, dtype=np.float32)
+    if valid.size:
+        counts = np.bincount(valid.astype(np.int64), minlength=int(np.max(palette_index)) + 1).astype(np.float64)
+        pixel_counts = counts[np.clip(palette_index, 0, len(counts) - 1)]
+        rarity = np.where(drawable, 1.0 - np.clip(pixel_counts / max(1.0, float(valid.size)), 0.0, 1.0), 0.0).astype(np.float32)
+    darkness = (1.0 - gray).astype(np.float32)
+    contour = np.asarray(contour_map, dtype=np.float32) if contour_map is not None else edges
+    shadow = np.asarray(shadow_map, dtype=np.float32) if shadow_map is not None else np.zeros_like(gray, dtype=np.float32)
+    shadow_detail = np.asarray(shadow_detail_map, dtype=np.float32) if shadow_detail_map is not None else np.zeros_like(gray, dtype=np.float32)
+    micro = np.asarray(micro_detail, dtype=np.float32) if micro_detail is not None else np.zeros_like(gray, dtype=np.float32)
+    # Step 26 explicitly boosts tiny/thin palette transitions in addition to
+    # contours/shadows so a small but recognizable feature is not treated like
+    # disposable texture merely because its global pixel count is low.
+    imp = (contour * .29 + edges * .18 + shadow_detail * .15 + micro * .18 + local * .08 +
+           rarity * .06 + darkness * .03 + shadow * .03)
+    imp *= drawable.astype(np.float32)
+    return np.clip(imp, 0.0, 1.0).astype(np.float32)
+
+
+def protect_tiny_features(palette_index: np.ndarray, drawable: np.ndarray,
+                          edges: np.ndarray, importance: np.ndarray, *,
+                          contour_map: np.ndarray | None = None,
+                          shadow_detail_map: np.ndarray | None = None,
+                          micro_detail: np.ndarray | None = None) -> np.ndarray:
+    if not np.any(drawable):
+        return np.zeros_like(drawable, dtype=np.bool_)
+    scores = importance[drawable]
+    hi = max(.58, float(np.percentile(scores, 88.0))) if scores.size else .58
+    contour = np.asarray(contour_map, dtype=np.float32) if contour_map is not None else edges
+    shadow_detail = np.asarray(shadow_detail_map, dtype=np.float32) if shadow_detail_map is not None else np.zeros_like(importance)
+    micro = np.asarray(micro_detail, dtype=np.float32) if micro_detail is not None else np.zeros_like(importance)
+    protected = drawable & ((importance >= hi) | (edges >= .68) | (contour >= .62) |
+                            (shadow_detail >= .58) | (micro >= .56))
+    # One-pixel dilation keeps the visual footprint of a tiny eye/edge from being
+    # split by later brush-aware planning, without changing its palette index.
+    grown = protected.copy()
+    grown[1:, :] |= protected[:-1, :]
+    grown[:-1, :] |= protected[1:, :]
+    grown[:, 1:] |= protected[:, :-1]
+    grown[:, :-1] |= protected[:, 1:]
+    # Only protect neighbouring pixels if they are drawable and have either the
+    # same colour or meaningful local importance.
+    same_or_important = np.zeros_like(drawable, dtype=np.bool_)
+    same_or_important[1:, :] |= palette_index[1:, :] == palette_index[:-1, :]
+    same_or_important[:-1, :] |= palette_index[:-1, :] == palette_index[1:, :]
+    same_or_important[:, 1:] |= palette_index[:, 1:] == palette_index[:, :-1]
+    same_or_important[:, :-1] |= palette_index[:, :-1] == palette_index[:, 1:]
+    return drawable & grown & (same_or_important | (importance >= .42) | (micro >= .56))
+
+
+def groups_from_pixel_map(pixel_map: PixelMap, palette_count: int, *, lines: bool = True,
+                          cancelled=lambda: False) -> list[list[tuple[int, int, int, int]]]:
+    groups = [[] for _ in range(int(palette_count))]
+    idx = pixel_map.palette_index; mask = pixel_map.drawable_mask
+    for y in range(pixel_map.height):
+        if cancelled():
+            raise InterruptedError()
+        previous = None; start = None
+        for x in range(pixel_map.width + 1):
+            color = int(idx[y, x]) if x < pixel_map.width and bool(mask[y, x]) else None
+            if not lines:
+                if color is not None:
+                    groups[color].append((x, y, x, y))
+            elif color != previous:
+                if previous is not None:
+                    groups[previous].append((int(start), y, x - 1, y))
+                previous = color
+                start = x if color is not None else None
+    return groups
+
+
+def build_pixel_map(image: Image.Image, palette_rgb: Sequence[Sequence[int]], *,
+                    color_rendering: str = "Perceptual match", color_fidelity: str = "Faithful", skip_white: bool = True,
+                    gpu_mode: str = "Auto", gpu_vram: str = "Auto",
+                    gpu_performance: str = "High throughput") -> PixelMap:
+    index_map, drawable, rgb, palette_meta = exact_palette_map(
+        image, palette_rgb, color_rendering=color_rendering, color_fidelity=color_fidelity, skip_white=skip_white,
+        gpu_mode=gpu_mode, gpu_vram=gpu_vram, gpu_performance=gpu_performance)
+    edges, edge_meta = edge_map(rgb, gpu_mode=gpu_mode, gpu_vram=gpu_vram,
+                                gpu_performance=gpu_performance)
+    from ShadowDetailEngine import analyze_shadow_contours
+    tone = analyze_shadow_contours(rgb, index_map, drawable, edges)
+    micro = micro_detail_map(index_map, drawable, edges)
+    importance = importance_map(
+        rgb, index_map, edges, drawable, contour_map=tone["contour_map"],
+        shadow_map=tone["shadow_map"], shadow_detail_map=tone["shadow_detail_map"],
+        micro_detail=micro)
+    protected = protect_tiny_features(
+        index_map, drawable, edges, importance, contour_map=tone["contour_map"],
+        shadow_detail_map=tone["shadow_detail_map"], micro_detail=micro)
+    meta = {
+        "engine": "Step 26 Detail Fidelity PixelMap + Shadow/Contour",
+        "step": 26,
+        "detail_fidelity": True,
+        "full_resolution": True,
+        "destructive_simplification": False,
+        "tiny_feature_protection": True,
+        "shadow_analysis": True,
+        "contour_analysis": True,
+        "post_processing_priority": True,
+        "micro_detail_protection": True,
+        "simplification_policy": "lossless-only",
+        "analysis_backends": {
+            "palette": palette_meta.get("palette_backend_id", palette_meta.get("palette_backend", "cpu:numpy")),
+            "edge": edge_meta.get("edge_backend_id", edge_meta.get("edge_backend", "cpu:numpy")),
+            "importance": "cpu:numpy",
+            "micro_detail": "cpu:numpy",
+        },
+        **palette_meta, **edge_meta, **tone["metadata"],
+    }
+    return PixelMap(rgb.shape[1], rgb.shape[0], rgb, index_map, drawable,
+                    edges, importance, protected, meta, tone["contour_map"],
+                    tone["shadow_map"], tone["shadow_detail_map"], micro)

@@ -1,0 +1,219 @@
+"""Experimental smart canvas Drop-In support for browser drawing profiles.
+
+This module intentionally keeps detection/validation separate from Tk UI code.
+The feature is early-stage: it uses read-only screenshots to locate a likely
+canvas, then DrawBot creates a temporary drag/drop overlay over the target
+browser client area. Native drawing input remains guarded by the normal
+CanvasGuard / Browser One-Click preflight chain.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Iterable, Mapping, Sequence
+
+EXPERIMENTAL_WARNING = (
+    'Experimental: Smart Canvas Drop is very early stage and may not work as '
+    'planned on every Gartic/browser layout yet.'
+)
+MIN_CANVAS_CONFIDENCE = 0.68
+DROP_EDGE_MARGIN_PX = 4
+
+_PROFILE_TITLE_HINTS = {
+    'gartic-phone': ('gartic',),
+    'skribbl': ('skribbl',),
+    'skribbl-fast': ('skribbl',),
+    'sketchheads': ('sketchheads', 'sketch heads'),
+    'sketchful': ('sketchful',),
+}
+
+
+@dataclass(frozen=True)
+class SmartCanvasCandidate:
+    handle: int
+    rect: tuple[int, int, int, int]
+    client_rect: tuple[int, int, int, int]
+    dpi: int | None
+    pid: int | None
+    title: str
+    canvas_box: tuple[int, int, int, int]
+    canvas_confidence: float
+    score: float
+
+    def as_payload(self) -> dict:
+        return {
+            'target_meta': {
+                'handle': int(self.handle),
+                'rect': tuple(map(int, self.rect)),
+                'client_rect': tuple(map(int, self.client_rect)),
+                'dpi': self.dpi,
+                'target_pid': self.pid,
+                'title': self.title,
+            },
+            'canvas_box': tuple(map(int, self.canvas_box)),
+            'canvas_confidence': float(self.canvas_confidence),
+            'score': float(self.score),
+            'experimental': True,
+            'warning': EXPERIMENTAL_WARNING,
+        }
+
+
+def normalize_box(box: Sequence[int], *, name: str = 'box') -> tuple[int, int, int, int]:
+    if not isinstance(box, (tuple, list)) or len(box) != 4:
+        raise ValueError(f'{name} is unavailable.')
+    l, t, r, b = map(int, box)
+    if r <= l or b <= t:
+        raise ValueError(f'{name} has invalid geometry.')
+    return l, t, r, b
+
+
+def canvas_inside_client(canvas_box: Sequence[int], client_rect: Sequence[int]) -> bool:
+    l, t, r, b = normalize_box(canvas_box, name='Canvas')
+    cl, ct, cr, cb = normalize_box(client_rect, name='Target client')
+    return cl <= l < r <= cr and ct <= t < b <= cb
+
+
+def point_in_canvas(point: Sequence[int], canvas_box: Sequence[int], *, margin: int = DROP_EDGE_MARGIN_PX) -> bool:
+    if not isinstance(point, (tuple, list)) or len(point) != 2:
+        return False
+    x, y = map(int, point)
+    l, t, r, b = normalize_box(canvas_box, name='Canvas')
+    safe = max(0, int(margin))
+    # Avoid treating an uncertain anti-aliased edge as a valid drop location.
+    if r - l <= safe * 2 or b - t <= safe * 2:
+        safe = 0
+    return l + safe <= x < r - safe and t + safe <= y < b - safe
+
+
+def overlay_geometry(client_rect: Sequence[int]) -> str:
+    l, t, r, b = normalize_box(client_rect, name='Target client')
+    return f'{r-l}x{b-t}{l:+d}{t:+d}'
+
+
+def canvas_overlay_geometry(canvas_box: Sequence[int]) -> str:
+    """Geometry for the canvas-only OS drop target overlay.
+
+    Keeping the overlay constrained to the detected drawable canvas means a
+    browser image is only accepted when it is actually released on the game
+    canvas, while the rest of the browser remains untouched.
+    """
+    l, t, r, b = normalize_box(canvas_box, name='Canvas')
+    return f'{r-l}x{b-t}{l:+d}{t:+d}'
+
+
+def canvas_relative_box(canvas_box: Sequence[int], client_rect: Sequence[int]) -> tuple[int, int, int, int]:
+    if not canvas_inside_client(canvas_box, client_rect):
+        raise ValueError('Detected canvas is outside the target browser client area.')
+    l, t, r, b = normalize_box(canvas_box, name='Canvas')
+    cl, ct, _, _ = normalize_box(client_rect, name='Target client')
+    return l - cl, t - ct, r - cl, b - ct
+
+
+def _title_bonus(profile_key: str, title: str) -> float:
+    lowered = str(title or '').lower()
+    hints = _PROFILE_TITLE_HINTS.get(str(profile_key or '').lower(), ())
+    return 0.12 if any(hint in lowered for hint in hints) else 0.0
+
+
+def score_candidate(profile_key: str, *, confidence: float, canvas_box: Sequence[int], client_rect: Sequence[int], title: str = '') -> float:
+    canvas = normalize_box(canvas_box, name='Canvas')
+    client = normalize_box(client_rect, name='Target client')
+    if not canvas_inside_client(canvas, client):
+        return -1.0
+    cw, ch = canvas[2] - canvas[0], canvas[3] - canvas[1]
+    ww, wh = client[2] - client[0], client[3] - client[1]
+    area_ratio = (cw * ch) / max(1.0, float(ww * wh))
+    # Confidence dominates. Area is only a gentle tie-breaker so a huge panel
+    # cannot beat a visually stronger canvas detector result.
+    return float(confidence) + min(0.08, max(0.0, area_ratio) * 0.08) + _title_bonus(profile_key, title)
+
+
+def choose_candidate(candidates: Iterable[SmartCanvasCandidate], *, ambiguity_gap: float = 0.035) -> SmartCanvasCandidate:
+    ranked = sorted(candidates, key=lambda c: (c.score, c.canvas_confidence), reverse=True)
+    if not ranked:
+        raise ValueError('Smart Canvas Drop could not find a supported drawable canvas. Bring the game window fully into view and try again.')
+    best = ranked[0]
+    if best.canvas_confidence < MIN_CANVAS_CONFIDENCE:
+        raise ValueError(f'Smart Canvas Drop canvas confidence is too low ({best.canvas_confidence*100:.0f}%). Use manual canvas selection for now.')
+    if len(ranked) > 1 and ranked[1].score >= best.score - float(ambiguity_gap):
+        raise ValueError('Smart Canvas Drop found more than one plausible browser canvas. Keep only the intended game clearly visible or select its target manually first.')
+    return best
+
+
+def _capture_candidate(profile_key: str, meta: Mapping[str, object]) -> SmartCanvasCandidate:
+    from PIL import ImageGrab
+    from BrowserAutoCalibration import detect_browser_canvas
+
+    client = normalize_box(meta.get('client_rect'), name='Target client')
+    shot = ImageGrab.grab(bbox=client, all_screens=True).convert('RGB')
+    detected = detect_browser_canvas(profile_key, shot, screen_origin=client[:2])
+    canvas = detected.get('canvas_box')
+    confidence = float(detected.get('canvas_confidence') or 0.0)
+    if canvas is None:
+        raise ValueError('No drawable canvas was detected in this browser window.')
+    canvas = normalize_box(canvas, name='Canvas')
+    if not canvas_inside_client(canvas, client):
+        raise ValueError('Detected canvas is outside the browser client area.')
+    score = score_candidate(profile_key, confidence=confidence, canvas_box=canvas, client_rect=client, title=str(meta.get('title') or ''))
+    return SmartCanvasCandidate(
+        handle=int(meta.get('handle') or 0), rect=normalize_box(meta.get('rect'), name='Target window'),
+        client_rect=client, dpi=(int(meta['dpi']) if meta.get('dpi') is not None else None),
+        pid=(int(meta['target_pid']) if meta.get('target_pid') is not None else int(meta['pid']) if meta.get('pid') is not None else None),
+        title=str(meta.get('title') or ''), canvas_box=canvas,
+        canvas_confidence=confidence, score=score,
+    )
+
+
+def discover_canvas_target(profile_key: str, *, preferred_handle: int | None = None, exclude_pid: int | None = None) -> dict:
+    """Find a visible supported browser canvas without sending mouse input."""
+    from BrowserAutoCalibration import SUPPORTED_BROWSER_PROFILES
+    key = str(profile_key or '').lower()
+    if key not in SUPPORTED_BROWSER_PROFILES:
+        raise ValueError('Smart Canvas Drop currently supports Gartic Phone, Skribbl.io/Fast, SketchHeads and Sketchful.io.')
+
+    # Reuse an explicitly selected target first. This avoids choosing another
+    # browser window when the user has already told Draw Studio which one to use.
+    if preferred_handle:
+        try:
+            from TargetCapture import probe_handle_isolated
+            meta = dict(probe_handle_isolated(int(preferred_handle)))
+            meta.setdefault('handle', int(preferred_handle))
+            candidate = _capture_candidate(key, meta)
+            if candidate.canvas_confidence >= MIN_CANVAS_CONFIDENCE:
+                return candidate.as_payload()
+        except Exception:
+            pass
+
+    from BrowserOneClick import _enumerate_windows
+    candidates = []
+    for meta in _enumerate_windows(exclude_pid=exclude_pid):
+        try:
+            candidate = _capture_candidate(key, meta)
+            if candidate.canvas_confidence >= MIN_CANVAS_CONFIDENCE:
+                candidates.append(candidate)
+        except Exception:
+            continue
+    return choose_candidate(candidates).as_payload()
+
+
+def cursor_position() -> tuple[int, int] | None:
+    """Best-effort current cursor position for DnD builds missing x_root/y_root."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        point = wintypes.POINT()
+        if ctypes.windll.user32.GetCursorPos(ctypes.byref(point)):
+            return int(point.x), int(point.y)
+    except Exception:
+        pass
+    return None
+
+
+def event_screen_point(event) -> tuple[int, int] | None:
+    for x_name, y_name in (('x_root', 'y_root'), ('x', 'y')):
+        try:
+            x, y = int(getattr(event, x_name)), int(getattr(event, y_name))
+            if x_name == 'x_root':
+                return x, y
+        except Exception:
+            continue
+    return cursor_position()

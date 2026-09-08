@@ -1,0 +1,530 @@
+"""Windows window/position checks before mouse input. No input on import."""
+import ctypes
+import os
+import time
+from ctypes import wintypes
+
+from DpiSupport import get_window_dpi_info
+
+
+class WindowMonitor:
+    def __init__(self):
+        # Explicit signatures reduce the chance of ctypes using an incorrect
+        # default integer ABI on 64-bit Windows.
+        self.api=ctypes.WinDLL('user32', use_last_error=True)
+        self.api.WindowFromPoint.argtypes=[wintypes.POINT]
+        self.api.WindowFromPoint.restype=wintypes.HWND
+        self.api.GetAncestor.argtypes=[wintypes.HWND,wintypes.UINT]
+        self.api.GetAncestor.restype=wintypes.HWND
+        self.api.GetForegroundWindow.argtypes=[]
+        self.api.GetForegroundWindow.restype=wintypes.HWND
+        self.api.SetForegroundWindow.argtypes=[wintypes.HWND]
+        self.api.SetForegroundWindow.restype=wintypes.BOOL
+        self.api.GetWindowRect.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.RECT)]
+        self.api.GetWindowRect.restype=wintypes.BOOL
+        self.api.GetClientRect.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.RECT)]
+        self.api.GetClientRect.restype=wintypes.BOOL
+        self.api.ClientToScreen.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.POINT)]
+        self.api.ClientToScreen.restype=wintypes.BOOL
+        self.api.GetWindowThreadProcessId.argtypes=[wintypes.HWND,ctypes.POINTER(wintypes.DWORD)]
+        self.api.GetWindowThreadProcessId.restype=wintypes.DWORD
+        self.api.IsWindow.argtypes=[wintypes.HWND]
+        self.api.IsWindow.restype=wintypes.BOOL
+        self.api.IsWindowVisible.argtypes=[wintypes.HWND]
+        self.api.IsWindowVisible.restype=wintypes.BOOL
+        self.api.IsIconic.argtypes=[wintypes.HWND]
+        self.api.IsIconic.restype=wintypes.BOOL
+        try:
+            self.api.GetDpiForWindow.argtypes=[wintypes.HWND]
+            self.api.GetDpiForWindow.restype=wintypes.UINT
+        except AttributeError:
+            pass
+
+    def _validate_handle(self,handle):
+        if not handle or not self.api.IsWindow(handle):
+            raise InterruptedError('The target window no longer exists. Select the drawing area again.')
+        if not self.api.IsWindowVisible(handle):
+            raise InterruptedError('The target window is not visible. Restore it and select the drawing area again.')
+        return handle
+
+    def at(self,point):
+        handle=self.api.WindowFromPoint(wintypes.POINT(*map(int,point)))
+        return self.api.GetAncestor(handle,2) if handle else None
+
+    def rectangle(self,handle):
+        self._validate_handle(handle)
+        rect=wintypes.RECT()
+        ctypes.set_last_error(0)
+        if not self.api.GetWindowRect(handle,ctypes.byref(rect)):
+            code=ctypes.get_last_error()
+            raise InterruptedError(f'Windows could not read the target window position (code {code}). Select the drawing area again.')
+        return rect.left,rect.top,rect.right,rect.bottom
+
+    def client_rectangle(self,handle):
+        """Return the drawable client rectangle in physical screen coordinates."""
+        self._validate_handle(handle)
+        rect=wintypes.RECT()
+        if not self.api.GetClientRect(handle,ctypes.byref(rect)):
+            code=ctypes.get_last_error()
+            raise InterruptedError(f'Windows could not read the target client area (code {code}).')
+        origin=wintypes.POINT(0,0)
+        if not self.api.ClientToScreen(handle,ctypes.byref(origin)):
+            code=ctypes.get_last_error()
+            raise InterruptedError(f'Windows could not map the target client area (code {code}).')
+        return origin.x,origin.y,origin.x+(rect.right-rect.left),origin.y+(rect.bottom-rect.top)
+
+    def in_client_area(self,handle,point):
+        left,top,right,bottom=self.client_rectangle(handle)
+        x,y=map(int,point)
+        return left<=x<right and top<=y<bottom
+
+    def dpi_info(self,handle):
+        self._validate_handle(handle)
+        return get_window_dpi_info(handle, user32=self.api)
+
+    def dpi(self,handle):
+        return int(self.dpi_info(handle).dpi)
+
+    def capture(self,area,excluded_pids=()):
+        x,y,w,h=map(int,area)
+        if w < 10 or h < 10:
+            raise ValueError('The drawing area is too small. Select at least 10 × 10 pixels.')
+        handle=self.at((x+w//2,y+h//2))
+        pid=wintypes.DWORD()
+        if not handle:raise ValueError('No window was found under the drawing area.')
+        self.api.GetWindowThreadProcessId(handle,ctypes.byref(pid))
+        excluded={int(value) for value in excluded_pids if value is not None}
+        if pid.value==os.getpid() or pid.value in excluded:
+            raise ValueError('You selected the Draw Studio window. Move it aside and select the target application.')
+        # Probe points slightly inside the rectangle. Borders, resize handles and
+        # shadows can belong to another HWND even though the drawing surface is
+        # entirely inside the intended top-level window.
+        inset_x=min(2,max(0,w//4));inset_y=min(2,max(0,h//4))
+        points=((x+inset_x,y+inset_y),(x+w-1-inset_x,y+h-1-inset_y))
+        if any(self.at(p)!=handle for p in points):
+            raise ValueError('The drawing area is covered by different windows. Select it again in the target application.')
+        if any(not self.in_client_area(handle,p) for p in points):
+            raise ValueError('The drawing area touches the title bar/window border. Select only the drawable client area.')
+        return handle,self.rectangle(handle)
+
+    def activate(self,target):
+        handle,rectangle=target
+        if self.rectangle(handle)!=rectangle:
+            raise InterruptedError('The target window moved or changed size. Select the drawing area again.')
+        if self.api.IsIconic(handle):
+            raise InterruptedError('The target window is minimized. Restore it and try again.')
+        ctypes.set_last_error(0)
+        return bool(self.api.SetForegroundWindow(handle))
+
+    def active(self,target):
+        handle,rectangle=target
+        if self.rectangle(handle)!=rectangle:
+            raise InterruptedError('The target window moved or changed size. Select the drawing area again.')
+        return self.api.GetForegroundWindow()==handle
+
+    def color(self,point):
+        from Colors import sample_screen_color
+        return tuple(sample_screen_color(*point))
+
+    def colors_near(self,point,radius=2):
+        """Sample a small screen patch around a rendered stroke.
+
+        Modern Paint can anti-alias or slightly offset a freehand stroke, so the
+        verifier samples a bounded neighborhood instead of trusting one pixel.
+        """
+        from Colors import sample_screen_colors
+        x,y=map(int,point);radius=max(0,min(6,int(radius)))
+        points=[(x+dx,y+dy) for dy in range(-radius,radius+1) for dx in range(-radius,radius+1)]
+        return sample_screen_colors(points)
+
+    def verify(self,target,point):
+        handle,rectangle=target
+        if self.api.GetForegroundWindow()!=handle:
+            raise InterruptedError('Stopped: the wrong window is active. Switch to the target application and start again manually.')
+        if self.rectangle(handle)!=rectangle:
+            raise InterruptedError('Stopped: the target window moved or changed size. Select the drawing area again.')
+        if self.at(point)!=handle:
+            raise InterruptedError('Stopped: another window covers the click position.')
+        if not self.in_client_area(handle,point):
+            raise InterruptedError('Stopped: the pointer would enter the title bar/window border. Select only the drawable client area.')
+
+
+class GuardedMouse:
+    def __init__(self,mouse,monitor,target,palette_colors=None,live_target_check=None):
+        self.mouse,self.monitor,self.target=mouse,monitor,target
+        self.last=None
+        self.palette_colors=palette_colors or {}
+        self.last_palette_check=0
+        self.palette_verified=False
+        self.tracking_tolerance=4
+        self.precision_level='High'
+        # v1.0.25: optional live setup/fingerprint monitor supplied by DrawBot.
+        # GuardedMouse remains generic; the callback may check DPI, client rect,
+        # drawing-area lock, palette/tool fingerprint and other app-specific gates.
+        self.live_target_check=live_target_check
+        self.manual_movement_confirm_seconds=0.014
+        self.transient_cover_retry_seconds=0.08
+
+    def configure_precision(self,level='High'):
+        from Precision import profile
+        cfg=profile(level)
+        self.precision_level=level
+        self.tracking_tolerance=int(cfg['tracking_tolerance_px'])
+        if hasattr(self.mouse,'configure_precision'):
+            self.mouse.configure_precision(level)
+
+    def configure_drag_backend(self, backend='cursor'):
+        if hasattr(self.mouse,'configure_drag_backend'):
+            self.mouse.configure_drag_backend(backend)
+
+    def prepare_target(self,stop,wait,report):
+        # Activation may be denied by Windows. Wait without moving/clicking.
+        if stop.is_set():raise InterruptedError()
+        self.monitor.activate(self.target)
+        for attempt in range(81):
+            if stop.is_set():raise InterruptedError()
+            if self.monitor.active(self.target):
+                # This is the only transition that arms the native mouse backend,
+                # and prepare_target is called only by explicit test/draw actions.
+                if hasattr(self.mouse,'arm_input'):self.mouse.arm_input()
+                self.reset_tracking();return
+            if attempt==80:break
+            if attempt%4==0:
+                report('status',f'Waiting for the target window ({20-attempt//4} s). Select Paint/the target app with Alt+Tab. Esc cancels.')
+            wait(.25)
+        raise InterruptedError('The target window did not become active within 20 seconds. Select the drawing area in the correct window and try again.')
+
+    def reset_tracking(self):
+        self.last=None
+
+    def disarm_input(self):
+        if hasattr(self.mouse,'disarm_input'):self.mouse.disarm_input()
+        self.last=None
+
+    def check(self,point=None):
+        current=self.mouse.get_position()
+        if self.live_target_check is not None:
+            self.live_target_check(self.monitor,self.target,current if point is None else point)
+        verify_point=current if point is None else point
+        try:
+            self.monitor.verify(self.target,verify_point)
+        except InterruptedError as error:
+            # Tooltips/transient overlays can momentarily own WindowFromPoint even
+            # though Paint is still foreground. Retry once before treating a cover
+            # as a real safety failure. Geometry/foreground failures still stop
+            # immediately because their messages do not match this branch.
+            if 'another window covers the click position' not in str(error):
+                raise
+            time.sleep(float(getattr(self,'transient_cover_retry_seconds',0.08)))
+            self.monitor.verify(self.target,verify_point)
+        # Palette geometry/color is verified once before any UI click. Rechecking
+        # it after selecting a color can false-trigger because Paint may draw a
+        # selection indicator around the active swatch.
+        if self.palette_colors and not self.palette_verified:
+            self.verify_palette_layout()
+        if self.last is not None:
+            tolerance=max(1,int(getattr(self,'tracking_tolerance',4)))
+            delta=max(abs(current[i]-self.last[i]) for i in (0,1))
+            if delta>tolerance:
+                # A single cursor read can catch the tail of our own Windows move.
+                # Confirm the deviation once before declaring manual takeover.
+                time.sleep(float(getattr(self,'manual_movement_confirm_seconds',0.014)))
+                confirmed=self.mouse.get_position()
+                confirmed_delta=max(abs(confirmed[i]-self.last[i]) for i in (0,1))
+                if confirmed_delta>tolerance:
+                    raise InterruptedError(
+                        f'Stopped: the mouse was moved manually (delta {confirmed_delta}px). No automatic restart.'
+                    )
+
+    def verify_palette_layout(self):
+        if not self.palette_colors:
+            self.palette_verified=True;return
+        handle,rectangle=self.target
+        if self.monitor.rectangle(handle)!=rectangle:
+            raise InterruptedError('Stopped before input: the target window changed geometry. Select the drawing area again.')
+        mismatches=[]
+        for position,rgb in self.palette_colors.items():
+            actual=self.monitor.color(position)
+            error=max(abs(int(actual[i])-int(rgb[i])) for i in (0,1,2))
+            if error>45:mismatches.append((position,tuple(rgb),tuple(actual),error))
+        if mismatches:
+            pos,expected,actual,error=max(mismatches,key=lambda row:row[3])
+            raise InterruptedError(
+                f'Stopped before input: the calibrated color palette no longer matches the selected drawing application at {pos}. '
+                f'Expected {expected}, saw {actual}. Keep the target application at the calibrated window size with its palette/tool UI visible, then recalibrate colors. '
+                'No mouse input was sent.')
+        self.palette_verified=True;self.last_palette_check=time.monotonic()
+
+    def move(self,x,y):
+        self.check((x,y));self.mouse.move(x,y)
+        # Track the actual Windows cursor endpoint rather than the requested point.
+        # This avoids treating a harmless one-pixel rounding/settling difference as
+        # user takeover on the next guarded move.
+        self.last=self.mouse.get_position()
+
+    def click(self):
+        # Keep button-down visible to event loops; release even on cancellation/errors.
+        import time
+        self.check()
+        try:
+            self.mouse.press();time.sleep(.015)
+        finally:self.mouse.release()
+
+    def _check_modal_geometry(self):
+        """Keep modal color-picker sampling tied to the originally locked target."""
+        handle,rectangle=self.target
+        if self.monitor.rectangle(handle)!=rectangle:
+            raise InterruptedError('Stopped: target window geometry changed while the custom-color dialog was open.')
+
+    @staticmethod
+    def _rgb_error(actual, expected):
+        # Weighted RGB is inexpensive and tracks visual error better than raw max-channel
+        # distance for the rendered picker spectrum. Exact stroke verification still
+        # happens later on the canvas.
+        ar,ag,ab=map(int,actual);er,eg,eb=map(int,expected)
+        return ((ar-er)**2*0.30+(ag-eg)**2*0.59+(ab-eb)**2*0.11) ** .5
+
+    def calibrated_modal_nearest_color_rect(self, corner_a, corner_b, expected, max_samples=70000):
+        """Read a calibrated 2-D color spectrum and return its nearest visible RGB point.
+
+        The picker may be a separate modal HWND, so this deliberately does not call
+        normal WindowFromPoint/foreground guards. Only the user-calibrated rectangle
+        is sampled and the original target window geometry must remain unchanged.
+        """
+        from PIL import ImageGrab
+        import math
+        self._check_modal_geometry()
+        x0,y0=map(int,corner_a);x1,y1=map(int,corner_b)
+        left,right=sorted((x0,x1));top,bottom=sorted((y0,y1))
+        width=max(1,right-left+1);height=max(1,bottom-top+1)
+        if width>1800 or height>1800 or width*height>2_000_000:
+            raise ValueError('The calibrated custom color spectrum is too large. Recalibrate only the visible color field.')
+        shot=ImageGrab.grab(bbox=(left,top,right+1,bottom+1),all_screens=True).convert('RGB')
+        expected=tuple(map(int,expected))
+        stride=max(1,int(math.ceil(math.sqrt((width*height)/max(1,int(max_samples))))))
+        best=None
+        for y in range(0,height,stride):
+            for x in range(0,width,stride):
+                rgb=shot.getpixel((x,y));err=self._rgb_error(rgb,expected)
+                if best is None or err<best[0]:best=(err,x,y,rgb)
+        if best is None:raise ValueError('Could not read the calibrated color spectrum.')
+        _,bx,by,_=best
+        radius=max(2,stride+1)
+        for y in range(max(0,by-radius),min(height,by+radius+1)):
+            for x in range(max(0,bx-radius),min(width,bx+radius+1)):
+                rgb=shot.getpixel((x,y));err=self._rgb_error(rgb,expected)
+                if err<best[0]:best=(err,x,y,rgb)
+        err,bx,by,rgb=best
+        return (left+bx,top+by),tuple(map(int,rgb)),float(err)
+
+    def calibrated_modal_nearest_color_line(self, point_a, point_b, expected, samples=320):
+        """Find the closest rendered color along a calibrated brightness/value scale."""
+        from PIL import ImageGrab
+        self._check_modal_geometry()
+        x0,y0=map(int,point_a);x1,y1=map(int,point_b);expected=tuple(map(int,expected))
+        left,right=sorted((x0,x1));top,bottom=sorted((y0,y1))
+        pad=2
+        shot=ImageGrab.grab(bbox=(left-pad,top-pad,right+pad+1,bottom+pad+1),all_screens=True).convert('RGB')
+        best=None;n=max(2,min(1200,int(samples)))
+        for i in range(n):
+            t=i/(n-1);sx=round(x0+(x1-x0)*t);sy=round(y0+(y1-y0)*t)
+            px=max(0,min(shot.width-1,sx-(left-pad)));py=max(0,min(shot.height-1,sy-(top-pad)))
+            rgb=shot.getpixel((px,py));err=self._rgb_error(rgb,expected)
+            if best is None or err<best[0]:best=(err,sx,sy,rgb)
+        if best is None:raise ValueError('Could not read the calibrated brightness scale.')
+        err,sx,sy,rgb=best
+        return (sx,sy),tuple(map(int,rgb)),float(err)
+
+    def calibrated_modal_color(self, point, radius=2):
+        """Read a calibrated preview swatch robustly using the local median RGB.
+
+        A single pixel can land on an antialiased border/cursor. Sampling a tiny
+        patch around the captured swatch point makes exact-color verification much
+        less likely to accept or reject the wrong RGB because of one bad pixel.
+        """
+        from PIL import ImageGrab
+        import numpy as np
+        self._check_modal_geometry();x,y=map(int,point);r=max(0,min(6,int(radius)))
+        shot=ImageGrab.grab(bbox=(x-r,y-r,x+r+1,y+r+1),all_screens=True).convert('RGB')
+        arr=np.asarray(shot,dtype=np.uint8).reshape(-1,3)
+        return tuple(int(v) for v in np.median(arr,axis=0))
+
+    def calibrated_modal_click(self, point):
+        """Click one explicitly calibrated modal-dialog control safely.
+
+        Custom-color dialogs can become a separate foreground HWND, so the
+        normal foreground/WindowFromPoint guard cannot be used while that modal
+        dialog is open. The original target top-level rectangle must still be
+        unchanged, and this method is only called for saved calibration points.
+        """
+        import time
+        handle,rectangle=self.target
+        if self.monitor.rectangle(handle)!=rectangle:
+            raise InterruptedError('Stopped: target window geometry changed while the custom-color dialog was open.')
+        current=self.mouse.get_position()
+        if self.last is not None and max(abs(current[i]-self.last[i]) for i in (0,1))>getattr(self,'tracking_tolerance',4):
+            raise InterruptedError('Stopped: the mouse was moved manually while selecting an exact color.')
+        self.mouse.move(*map(int,point));self.last=tuple(map(int,point))
+        try:self.mouse.press();time.sleep(.015)
+        finally:self.mouse.release()
+
+    def press(self):
+        self.check();self.mouse.press()
+
+    def release(self):
+        self.mouse.release()
+
+    @staticmethod
+    def _ink_probe_points(start,end):
+        x1,y1=map(int,start);x2,y2=map(int,end)
+        if (x1,y1)==(x2,y2):return [(x1,y1)]
+        # Avoid only sampling the endpoints: the cursor and Paint's rounded caps
+        # can make endpoint pixels less representative than the middle section.
+        return [(round(x1+(x2-x1)*t),round(y1+(y2-y1)*t)) for t in (.2,.35,.5,.65,.8)]
+
+    def inspect_ink_segment(self,start,end,expected,brush_px=1,tolerance=48):
+        """Measure the rendered color of one stroke without deciding recovery policy.
+
+        v1.0.35 uses this for one verification per color batch.  The caller can
+        retry a different color-selection method and overwrite the same probe
+        stroke instead of aborting the entire drawing immediately.
+        """
+        expected=tuple(map(int,expected));tolerance=max(1,min(120,int(tolerance)))
+        points=self._ink_probe_points(start,end)
+        for point in points:self.check(point)
+        radius=max(2,min(6,int(round(max(1,int(brush_px))/2))+2))
+        best_error=999;best=None;sample_count=0
+        for settle in (0.0,0.08,0.18,0.32):
+            if settle:time.sleep(settle)
+            samples=[]
+            for point in points:
+                try:samples.extend(self.monitor.colors_near(point,radius))
+                except AttributeError:samples.append(self.monitor.color(point))
+            if not samples:continue
+            sample_count+=len(samples)
+            scored=[(max(abs(int(actual[i])-expected[i]) for i in range(3)),tuple(map(int,actual))) for actual in samples]
+            error,color=min(scored,key=lambda item:item[0])
+            if error<best_error:best_error,best=error,color
+            if best_error<=tolerance:break
+        if best is None:best=tuple(map(int,self.monitor.color(points[len(points)//2])))
+        confidence=max(0.0,min(100.0,100.0*(1.0-float(best_error)/255.0)))
+        expected_luma=sum(expected)/3;best_luma=sum(best)/3
+        # Do not infer transparency/opacity from a single failed RGB probe. A light
+        # sample can also be unchanged canvas/background, a missed stroke, a stale
+        # palette coordinate, or a probe that landed beside a very thin Pencil line.
+        # The verifier reports only what it can actually observe; recovery policy is
+        # decided by DrawBot after trying the available safe color selectors.
+        if expected_luma<80 and best_luma>180:
+            failure_kind='stroke-or-selection-mismatch'
+            reason=('The expected dark ink was not found in the sampled stroke area. '
+                    'The sample may still be canvas/background, the stroke may not have been delivered, '
+                    'or Paint may have selected a different color.')
+        elif expected_luma<80 and 20<best_luma<=180:
+            failure_kind='weak-dark-ink'
+            reason=('Paint produced dark ink, but it was much lighter than the requested color. '
+                    'If Brush is selected, verify the solid preset and 100% opacity; otherwise re-check the selected color.')
+        else:
+            failure_kind='color-mismatch'
+            reason='The rendered stroke color does not match the requested color closely enough.'
+        return {'matched':best_error<=tolerance,'expected':expected,'actual':best,'error':int(best_error),
+                'confidence':confidence,'sample_count':sample_count,'reason':reason,'failure_kind':failure_kind}
+
+    def verify_ink_segment(self,start,end,expected,brush_px=1):
+        """Backward-compatible strict verifier used by older callers/plugins."""
+        result=self.inspect_ink_segment(start,end,expected,brush_px)
+        if result['matched']:return result
+        raise InterruptedError(
+            f"Stopped: the first stroke did not get the expected color {result['expected']}. "
+            f"Closest rendered RGB was {result['actual']} after sampling {result['sample_count']} pixels along the stroke. "
+            f"{result['reason']} Re-check the palette/tool calibration and retry the small test. "
+            'Adaptive color verification could not confirm this stroke.')
+
+    def snapshot_colors(self,points):
+        """Capture bounded guard pixels before a risky fill operation."""
+        values=[]
+        for point in points:
+            self.check(point)
+            values.append(tuple(map(int,self.monitor.color(point))))
+        return values
+
+    def verify_unchanged(self,points,before,tolerance=65):
+        """Stop if a Fill appears to have escaped a closed region."""
+        if len(points)!=len(before):
+            raise ValueError('Fill guard snapshot length mismatch.')
+        for point,expected in zip(points,before):
+            self.check(point)
+            actual=tuple(map(int,self.monitor.color(point)))
+            if max(abs(actual[i]-int(expected[i])) for i in range(3))>int(tolerance):
+                raise InterruptedError(
+                    f'Stopped: Auto Fill appears to have changed pixels outside the planned region near {point}. '
+                    'The Fill pass was stopped before continuing with detail strokes. Use Conservative Auto Fill or turn Auto Fill off.'
+                )
+
+    def verify_fill(self,point,expected):
+        """Verify a bucket/base fill without assuming Microsoft Paint."""
+        expected=tuple(map(int,expected));self.check(point)
+        best=None;best_error=999
+        for settle in (0.0,.10,.22,.38):
+            if settle:time.sleep(settle)
+            try:samples=self.monitor.colors_near(point,4)
+            except AttributeError:samples=[self.monitor.color(point)]
+            for actual in samples or []:
+                actual=tuple(map(int,actual));error=max(abs(actual[i]-expected[i]) for i in range(3))
+                if error<best_error:best_error,best=error,actual
+            if best_error<=52:return
+        if best is None:best=self.monitor.color(point)
+        raise InterruptedError(
+            f'Stopped: the Fill tool did not produce the expected color {expected}. Closest rendered RGB was {best}. '
+            'Recalibrate the Fill tool/color palette, confirm the canvas is blank, and retry with the target application at the same window size.')
+
+
+    def snapshot_canvas(self, area):
+        """Capture the selected canvas after verifying it still belongs to the target.
+
+        This is read-only: no cursor movement, clicking, pressing or arming occurs.
+        The four inset corners and center are checked against the locked target
+        before PIL reads the pixels.
+        """
+        from PIL import ImageGrab
+        x, y, w, h = map(int, area)
+        if w < 2 or h < 2:
+            raise ValueError('The drawing area is too small to verify visually.')
+        inset_x = min(4, max(0, w // 5)); inset_y = min(4, max(0, h // 5))
+        points = ((x + inset_x, y + inset_y), (x + w - 1 - inset_x, y + inset_y),
+                  (x + inset_x, y + h - 1 - inset_y), (x + w - 1 - inset_x, y + h - 1 - inset_y),
+                  (x + w // 2, y + h // 2))
+        for point in points:
+            self.monitor.verify(self.target, point)
+        return ImageGrab.grab(bbox=(x, y, x + w, y + h), all_screens=True).convert('RGB')
+
+    def snapshot_canvas_with_margin(self, area, margin=24):
+        """Capture a read-only canvas neighborhood for edge verification.
+
+        The capture is clipped to the target client area.  The returned selected
+        box is relative to the screenshot, so deterministic edge detection can
+        compare the saved drawing rectangle against visible canvas borders
+        without moving or clicking the mouse.
+        """
+        from PIL import ImageGrab
+        x, y, w, h = map(int, area)
+        if w < 2 or h < 2:
+            raise ValueError('The drawing area is too small to verify visually.')
+        pad = max(0, min(96, int(round(float(margin)))))
+        handle = self.target[0]
+        client_left, client_top, client_right, client_bottom = self.monitor.client_rectangle(handle)
+        left = max(client_left, x - pad); top = max(client_top, y - pad)
+        right = min(client_right, x + w + pad); bottom = min(client_bottom, y + h + pad)
+        if right <= left or bottom <= top:
+            raise ValueError('The edge-verification capture area is empty.')
+        probe_points = ((max(left, min(right - 1, x)), max(top, min(bottom - 1, y))),
+                        (max(left, min(right - 1, x + w - 1)), max(top, min(bottom - 1, y + h - 1))),
+                        (max(left, min(right - 1, x + w // 2)), max(top, min(bottom - 1, y + h // 2))))
+        for point in probe_points:
+            self.monitor.verify(self.target, point)
+        image = ImageGrab.grab(bbox=(left, top, right, bottom), all_screens=True).convert('RGB')
+        selected_box = (x - left, y - top, w, h)
+        return image, selected_box, (left, top, right, bottom)
+
+    def verify_ink(self,point,expected):
+        # Backward-compatible single-point API used by older tests/plugins.
+        return self.verify_ink_segment(point,point,expected,1)

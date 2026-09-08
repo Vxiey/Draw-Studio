@@ -1,0 +1,171 @@
+"""Full-resolution visual importance analysis for v1.0.118-beta.
+
+The map is rule-based (no face recognition model).  It protects high-contrast
+micro-features, boundaries and foreground structure during deadline pruning.
+NumPy is the authoritative path; CuPy is used opportunistically without repeated
+CPU/GPU transfers.
+"""
+from __future__ import annotations
+
+from typing import Any
+import math
+import numpy as np
+from PIL import Image
+
+
+def _normalize(a):
+    a = np.asarray(a, dtype=np.float32)
+    lo = float(np.percentile(a, 2.0)) if a.size else 0.0
+    hi = float(np.percentile(a, 98.0)) if a.size else 1.0
+    if not math.isfinite(lo) or not math.isfinite(hi) or hi <= lo + 1e-6:
+        lo, hi = float(a.min(initial=0.0)), float(a.max(initial=1.0))
+    return np.clip((a - lo) / max(1e-6, hi - lo), 0.0, 1.0)
+
+
+def _cpu_map(rgb: np.ndarray) -> tuple[np.ndarray, dict[str, Any]]:
+    f = rgb.astype(np.float32) / 255.0
+    lum = f[..., 0] * .2126 + f[..., 1] * .7152 + f[..., 2] * .0722
+    gx = np.zeros_like(lum); gy = np.zeros_like(lum)
+    gx[:, 1:-1] = np.abs(lum[:, 2:] - lum[:, :-2]) * .5
+    gy[1:-1, :] = np.abs(lum[2:, :] - lum[:-2, :]) * .5
+    edge = np.hypot(gx, gy)
+
+    # Cheap local contrast using four-neighbour differences.  This catches eyes,
+    # mouth lines and isolated dark details without semantic/AI detection.
+    local = np.zeros_like(lum)
+    local[1:-1, 1:-1] = (
+        np.abs(lum[1:-1, 1:-1] - lum[:-2, 1:-1]) +
+        np.abs(lum[1:-1, 1:-1] - lum[2:, 1:-1]) +
+        np.abs(lum[1:-1, 1:-1] - lum[1:-1, :-2]) +
+        np.abs(lum[1:-1, 1:-1] - lum[1:-1, 2:])
+    ) * .25
+
+    # Foreground pressure: distance from the robust border colour.  It is not a
+    # segmentation oracle; it merely stops flat backgrounds consuming budget.
+    border = np.concatenate((f[0], f[-1], f[:, 0], f[:, -1]), axis=0)
+    border_rgb = np.median(border, axis=0)
+    fg = np.sqrt(np.sum((f - border_rgb[None, None, :]) ** 2, axis=2))
+
+    dark_micro = np.clip((.48 - lum) * 2.0, 0.0, 1.0) * np.clip(local * 6.0, 0.0, 1.0)
+    edge_n = _normalize(edge)
+    contrast_n = _normalize(local)
+    fg_n = _normalize(fg)
+
+    imp = .48 * edge_n + .22 * contrast_n + .20 * fg_n + .10 * dark_micro
+    # Center weighting is deliberately mild.  It helps portraits while not
+    # deleting important edge objects in landscape/game images.
+    h, w = lum.shape
+    yy, xx = np.ogrid[:h, :w]
+    nx = (xx - (w - 1) * .5) / max(1.0, w * .5)
+    ny = (yy - (h - 1) * .5) / max(1.0, h * .5)
+    center = np.clip(1.0 - np.sqrt(nx * nx + ny * ny), 0.0, 1.0)
+    imp = np.clip(imp + center.astype(np.float32) * .05, 0.0, 1.0)
+    return imp.astype(np.float32, copy=False), {
+        "backend": "cpu-numpy", "edge_mean": float(edge_n.mean()),
+        "contrast_mean": float(contrast_n.mean()), "foreground_mean": float(fg_n.mean()),
+        "protected_percent": float((imp >= .62).mean() * 100.0),
+        "border_rgb": tuple(int(round(v * 255)) for v in border_rgb),
+    }
+
+
+def _gpu_map(rgb: np.ndarray) -> tuple[np.ndarray, dict[str, Any]]:
+    import cupy as cp
+    x = cp.asarray(rgb, dtype=cp.float32) / 255.0
+    lum = x[..., 0] * .2126 + x[..., 1] * .7152 + x[..., 2] * .0722
+    gx = cp.zeros_like(lum); gy = cp.zeros_like(lum)
+    gx[:, 1:-1] = cp.abs(lum[:, 2:] - lum[:, :-2]) * .5
+    gy[1:-1, :] = cp.abs(lum[2:, :] - lum[:-2, :]) * .5
+    edge = cp.sqrt(gx * gx + gy * gy)
+    local = cp.zeros_like(lum)
+    local[1:-1, 1:-1] = (
+        cp.abs(lum[1:-1, 1:-1] - lum[:-2, 1:-1]) +
+        cp.abs(lum[1:-1, 1:-1] - lum[2:, 1:-1]) +
+        cp.abs(lum[1:-1, 1:-1] - lum[1:-1, :-2]) +
+        cp.abs(lum[1:-1, 1:-1] - lum[1:-1, 2:])
+    ) * .25
+    border = cp.concatenate((x[0], x[-1], x[:, 0], x[:, -1]), axis=0)
+    border_rgb = cp.median(border, axis=0)
+    fg = cp.sqrt(cp.sum((x - border_rgb[None, None, :]) ** 2, axis=2))
+
+    def norm(a):
+        # Percentiles stay on GPU; only the final map crosses PCIe.
+        lo = cp.percentile(a, 2.0); hi = cp.percentile(a, 98.0)
+        return cp.clip((a - lo) / cp.maximum(cp.float32(1e-6), hi - lo), 0.0, 1.0)
+    edge_n, contrast_n, fg_n = norm(edge), norm(local), norm(fg)
+    dark_micro = cp.clip((.48 - lum) * 2.0, 0.0, 1.0) * cp.clip(local * 6.0, 0.0, 1.0)
+    imp = cp.clip(.48 * edge_n + .22 * contrast_n + .20 * fg_n + .10 * dark_micro, 0.0, 1.0)
+    h, w = lum.shape
+    yy, xx = cp.ogrid[:h, :w]
+    nx = (xx - (w - 1) * .5) / max(1.0, w * .5)
+    ny = (yy - (h - 1) * .5) / max(1.0, h * .5)
+    center = cp.clip(1.0 - cp.sqrt(nx * nx + ny * ny), 0.0, 1.0)
+    imp = cp.clip(imp + center * .05, 0.0, 1.0)
+    meta = {
+        "backend": "gpu-cupy", "edge_mean": float(edge_n.mean().get()),
+        "contrast_mean": float(contrast_n.mean().get()), "foreground_mean": float(fg_n.mean().get()),
+        "protected_percent": float(((imp >= .62).mean() * 100.0).get()),
+        "border_rgb": tuple(int(round(float(v) * 255)) for v in cp.asnumpy(border_rgb)),
+    }
+    return cp.asnumpy(imp).astype(np.float32, copy=False), meta
+
+
+def build_importance_map(image: Image.Image, options: dict[str, Any] | None = None,
+                         cancelled=lambda: False) -> tuple[np.ndarray, dict[str, Any]]:
+    if cancelled():
+        raise InterruptedError()
+    options = options or {}
+    rgb = np.asarray(image.convert("RGB"), dtype=np.uint8)
+    h, w = rgb.shape[:2]
+    pixels = int(h * w)
+    use_gpu = str(options.get("gpu_mode") or "Auto") != "CPU"
+    # Approx working set ~ 12 float planes. Respect an explicit VRAM allocation
+    # if one is available from ResourceAllocation.
+    vram_mb = float(options.get("gpu_vram_budget_mb") or options.get("vram_budget_mb") or 0.0)
+    estimated_mb = pixels * 4 * 12 / (1024 * 1024)
+    if use_gpu and (not vram_mb or estimated_mb <= max(128.0, vram_mb * .55)):
+        try:
+            out, meta = _gpu_map(rgb)
+            meta.update(width=w, height=h, pixels=pixels, estimated_working_mb=round(estimated_mb, 2))
+            return out, meta
+        except Exception as error:
+            gpu_error = repr(error)
+    else:
+        gpu_error = "GPU disabled or VRAM budget too small"
+    if cancelled():
+        raise InterruptedError()
+    out, meta = _cpu_map(rgb)
+    meta.update(width=w, height=h, pixels=pixels, estimated_working_mb=round(estimated_mb, 2), gpu_fallback_reason=gpu_error)
+    return out, meta
+
+
+def sample_path_importance(path, importance: np.ndarray) -> float:
+    if not path or importance.size == 0:
+        return 0.0
+    h, w = importance.shape
+    n = len(path)
+    # Bound work for very long polylines while always sampling endpoints and
+    # central structure.
+    step = max(1, n // 24)
+    values = []
+    for i in range(0, n, step):
+        try:
+            x, y = path[i]
+            values.append(float(importance[min(h-1,max(0,int(y))), min(w-1,max(0,int(x))) ]))
+        except Exception:
+            continue
+    try:
+        x, y = path[-1]
+        values.append(float(importance[min(h-1,max(0,int(y))), min(w-1,max(0,int(x))) ]))
+    except Exception:
+        pass
+    if not values:
+        return 0.0
+    values.sort()
+    mean = sum(values) / len(values)
+    high = values[max(0, int(len(values) * .80) - 1)]
+    return max(0.0, min(1.0, mean * .62 + high * .38))
+
+
+def render_importance_preview(importance: np.ndarray) -> Image.Image:
+    arr = np.clip(importance * 255.0, 0, 255).astype(np.uint8)
+    return Image.fromarray(arr, mode="L").convert("RGB")

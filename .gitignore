@@ -10,7 +10,7 @@ dist/
 release/
 *.spec
 
-# Draw Studio runtime/user state
+# Draw Studio per-user/source-run state
 logs/
 safety-reports/
 diagnostics/

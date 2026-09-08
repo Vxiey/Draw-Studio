@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "local_only": true,
+  "mouse_input": false,
+  "screen_capture": false,
+  "network": false,
+  "user_image_data": false,
+  "description": "Synthetic Draw Studio golden-image regression fixtures.",
+  "cases": [
+    {
+      "name": "yellow-banana-hue-guard",
+      "description": "Bright yellow banana that must not regress to pink/orange after OKLab and hue preservation fixes.",
+      "time_budget_seconds": 80,
+      "min_visual_accuracy_percent": 72.0,
+      "min_perceptual_color_accuracy_percent": 69.0,
+      "min_hue_accuracy_percent": 78.0,
+      "min_coverage_percent": 86.0,
+      "max_estimated_draw_seconds_ratio": 1.12,
+      "max_p95_delta_e_oklab": 0.25,
+      "requires_correction_safe": false,
+      "expected_keywords": [
+        "yellow",
+        "banana",
+        "hue"
+      ],
+      "file": "yellow-banana-hue-guard.png",
+      "width": 360,
+      "height": 240
+    },
+    {
+      "name": "red-bananas-texture",
+      "description": "Red bananas on noisy warm background; checks texture merging without destroying red/green tone anchors.",
+      "time_budget_seconds": 150,
+      "min_visual_accuracy_percent": 66.0,
+      "min_perceptual_color_accuracy_percent": 62.0,
+      "min_hue_accuracy_percent": 70.0,
+      "min_coverage_percent": 80.0,
+      "max_estimated_draw_seconds_ratio": 1.12,
+      "max_p95_delta_e_oklab": 0.39,
+      "requires_correction_safe": false,
+      "expected_keywords": [
+        "red",
+        "texture",
+        "region"
+      ],
+      "file": "red-bananas-texture.png",
+      "width": 360,
+      "height": 240
+    },
+    {
+      "name": "dominant-hue-four-color",
+      "description": "Large red/yellow/green/blue blocks; catches loss of a dominant hue under tight color ceilings.",
+      "time_budget_seconds": 75,
+      "min_visual_accuracy_percent": 76.0,
+      "min_perceptual_color_accuracy_percent": 73.0,
+      "min_hue_accuracy_percent": 82.0,
+      "min_coverage_percent": 88.0,
+      "max_estimated_draw_seconds_ratio": 1.12,
+      "max_p95_delta_e_oklab": 0.24,
+      "requires_correction_safe": false,
+      "expected_keywords": [
+        "dominant",
+        "hue",
+        "palette"
+      ],
+      "file": "dominant-hue-four-color.png",
+      "width": 360,
+      "height": 240
+    },
+    {
+      "name": "small-detail-preservation",
+      "description": "Small face/line details; catches over-aggressive simplification and correction regressions.",
+      "time_budget_seconds": 80,
+      "min_visual_accuracy_percent": 70.0,
+      "min_perceptual_color_accuracy_percent": 66.0,
+      "min_hue_accuracy_percent": 74.0,
+      "min_coverage_percent": 83.0,
+      "max_estimated_draw_seconds_ratio": 1.12,
+      "max_p95_delta_e_oklab": 0.3,
+      "requires_correction_safe": true,
+      "expected_keywords": [
+        "detail",
+        "edge",
+        "correction"
+      ],
+      "file": "small-detail-preservation.png",
+      "width": 360,
+      "height": 240
+    }
+  ]
+}

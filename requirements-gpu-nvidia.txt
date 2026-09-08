@@ -1,0 +1,4 @@
+# Optional NVIDIA CUDA acceleration for Draw Studio.
+# CuPy 14 + [ctk] brings a matched CUDA runtime/NVRTC/header set into the venv,
+# so a separate system-wide CUDA Toolkit is not required. NVIDIA driver required.
+cupy-cuda12x[ctk]>=14.2,<15

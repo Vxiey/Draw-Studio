@@ -1,0 +1,139 @@
+"""Pure UI-state helpers for Draw Studio's modern workspace.
+
+This module deliberately contains no Tk imports so readiness/error logic can be
+unit-tested without a display. The GUI renders these states on the Tk main loop.
+"""
+from __future__ import annotations
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class ChecklistItem:
+    key: str
+    label: str
+    state: str  # ready, attention, blocked, optional
+    detail: str = ""
+
+
+@dataclass(frozen=True)
+class WorkspaceState:
+    label: str
+    tone: str  # ready, attention, blocked, working, error
+    ready: bool
+    can_test: bool
+    items: tuple[ChecklistItem, ...]
+
+
+def _looks_like_error(status: str) -> bool:
+    text = (status or "").strip().lower()
+    if not text:
+        return False
+    markers = (
+        "operation failed", "preflight stopped", "could not", "crash",
+        "did not get the expected color", "unexpectedly", "access violation",
+        "invalid plan", "failed:", "error:", "stopped:",
+    )
+    # Normal user cancellation/stopping should not turn the workspace red.
+    if text in {"stopped.", "stopping…", "stopping...", "cancelled."}:
+        return False
+    return any(marker in text for marker in markers)
+
+
+def compute_workspace_state(*, image_loaded: bool, target_name: str,
+                            paint_tools_ready: bool, area_ready: bool,
+                            palette_ready: bool, test_passed: bool,
+                            target_locked: bool = False,
+                            preflight_passed: bool = True,
+                            dry_run_passed: bool = True,
+                            gpu_text: str = "CPU fallback available", strict_safety: bool = True,
+                            activity: str | None = None, status: str = "") -> WorkspaceState:
+    """Return a compact, deterministic readiness model for the GUI."""
+    paint_selected = target_name == "Microsoft Paint"
+    target_selected = bool((target_name or "").strip())
+    target_label = f"{target_name} profile selected" if target_selected else "Target profile selected"
+    tools_label = "Paint drawing tool ready" if paint_selected else "Drawing controls ready"
+    tools_detail = ("Tool preflight is ready." if paint_tools_ready else "Calibrate Pencil/Brush and 100% opacity.") if paint_selected else \
+                   "Current brush can be used; optional Brush/Fill controls can be calibrated for this profile."
+    items = (
+        ChecklistItem("image", "Image loaded", "ready" if image_loaded else "blocked",
+                      "Source image is ready." if image_loaded else "Choose, paste or drop an image."),
+        ChecklistItem("target", target_label, "ready" if target_selected else "blocked",
+                      f"Current profile: {target_name}" if target_selected else "Choose the drawing application/profile."),
+        ChecklistItem("tools", tools_label,
+                      "ready" if paint_tools_ready else "attention", tools_detail),
+        ChecklistItem("area", "Drawing area selected", "ready" if area_ready else "blocked",
+                      "Canvas coordinates locked." if area_ready else "Select only the drawable canvas."),
+        ChecklistItem("palette", "Palette ready", "ready" if palette_ready else "attention",
+                      "Color input is ready." if palette_ready else "Read colors or use a Paint mode that bypasses palette clicks."),
+        ChecklistItem("test", "First stroke test passed", "ready" if test_passed else ("blocked" if strict_safety else "optional"),
+                      "Small test completed." if test_passed else ("Required for Microsoft Paint." if strict_safety else "Optional diagnostic for this profile.")),
+        ChecklistItem("lock", "Setup locked", "ready" if target_locked else ("blocked" if strict_safety else "optional"),
+                      "Target, DPI, area and palette are fingerprinted." if target_locked else ("Required for Microsoft Paint." if strict_safety else "Optional extra safety for this profile.")),
+        ChecklistItem("preflight", "Safety preflight passed", "ready" if preflight_passed else ("blocked" if strict_safety else "optional"),
+                      "No-click safety validation is current." if preflight_passed else ("Required for Microsoft Paint." if strict_safety else "Optional no-click diagnostic.")),
+        ChecklistItem("dryrun", "Dry run passed", "ready" if dry_run_passed else ("blocked" if strict_safety else "optional"),
+                      "Full route was simulated without clicks." if dry_run_passed else ("Required for Microsoft Paint." if strict_safety else "Optional route diagnostic.")),
+        ChecklistItem("gpu", "GPU ready / CPU fallback active", "ready", gpu_text or "CPU fallback available."),
+    )
+    if _looks_like_error(status):
+        return WorkspaceState("Error", "error", False, False, items)
+    if activity:
+        return WorkspaceState("Drawing" if activity == "draw" else "Working", "working", False, False, items)
+    can_test = image_loaded and area_ready and paint_tools_ready and palette_ready
+    ready = can_test and ((test_passed and target_locked and preflight_passed and dry_run_passed) if strict_safety else True)
+    if ready:
+        return WorkspaceState("Ready to draw", "ready", True, True, items)
+    if image_loaded and (area_ready or paint_tools_ready or palette_ready):
+        return WorkspaceState("Setup needed", "attention", False, can_test, items)
+    if image_loaded:
+        return WorkspaceState("Ready to test" if can_test else "Setup needed", "attention", False, can_test, items)
+    return WorkspaceState("Not ready", "blocked", False, False, items)
+
+
+def classify_error(status: str) -> dict[str, str] | None:
+    """Translate common technical failures into short actionable UI copy."""
+    text = (status or "").strip()
+    low = text.lower()
+    if not _looks_like_error(text):
+        return None
+    if "expected color" in low or "solid black" in low or "closest rendered rgb" in low:
+        return {
+            "title": "Paint color verification failed",
+            "message": "Draw Studio could not confirm the requested color in the test stroke. This can be a missed stroke, a stale palette position, background sampling, or a different selected color.",
+            "action": "Run Auto Paint calibration again, keep the Paint ribbon visible, then retry the small test. If custom colors are enabled, recalibrate the custom color controls too.",
+        }
+    if "drawing area" in low or "target window" in low or "display scaling" in low:
+        return {
+            "title": "Drawing area needs attention",
+            "message": text,
+            "action": "Keep the target on the same display, select only the drawable canvas again, then Lock setup before Start.",
+        }
+    if "preview" in low and ("timeout" in low or "timed out" in low or "too long" in low):
+        return {
+            "title": "Preview planning was too heavy",
+            "message": text,
+            "action": "Use Fast/Balanced preview detail or keep Manual preview. Full Start still builds its own guarded final plan.",
+        }
+    if "start locked" in low or "unlock full drawing" in low or "dry run" in low or "preflight" in low:
+        return {
+            "title": "Start is still safely locked",
+            "message": text,
+            "action": "Open Setup wizard to see the missing step. Paint uses Small test → Lock setup → Safety preflight → Fast Dry run → Unlock → Start.",
+        }
+    if "calibrat" in low or "palette" in low or "color" in low:
+        return {
+            "title": "Calibration needs attention",
+            "message": text,
+            "action": "Re-run the relevant tool or color calibration, then use Draw a small test.",
+        }
+    if "gpu" in low or "cuda" in low or "vram" in low:
+        return {
+            "title": "GPU acceleration issue",
+            "message": text,
+            "action": "Switch GPU acceleration to Auto or CPU, or lower the VRAM budget, then retry.",
+        }
+    return {
+        "title": "Draw Studio could not complete that action",
+        "message": text or "An unexpected error occurred.",
+        "action": "Open the logs for details. You can also create a local sanitized diagnostics ZIP from Tools.",
+    }

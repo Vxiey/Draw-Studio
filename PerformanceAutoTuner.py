@@ -1,0 +1,257 @@
+"""Local performance auto tuner for Draw Studio v1.0.60-beta.
+
+The tuner benchmarks planning resources only. It never arms mouse input and it
+never contacts a network service. Results are stored locally in app data.
+"""
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+import json
+import time
+from pathlib import Path
+from typing import Any, Callable
+
+from RuntimePaths import data_dir
+from ResourceAllocation import available_ram_mb, logical_cpu_count, resolve_allocation
+from ResourceScheduler import benchmark_scheduler
+from UniversalHardwareBenchmark import (run_universal_hardware_benchmark, load_hardware_profile,
+                                        format_hardware_summary as format_universal_hardware_summary)
+
+TUNER_VERSION = 1
+TUNER_FILE = data_dir() / "performance-auto-tuner-v1.json"
+
+
+@dataclass(frozen=True)
+class TuneRecommendation:
+    cpu_workers: str
+    cpu_workers_effective: int
+    cpu_engine: str
+    ram_budget: str
+    ram_custom_mb: str
+    planning_resolution: str
+    resource_scheduler: str
+    gpu_mode: str
+    gpu_vram: str
+    gpu_performance: str
+    gpu_available: bool
+    gpu_detected: bool
+    gpu_device: str
+    gpu_driver_version: str
+    gpu_reason: str
+    cpu_score: float
+    gpu_throughput_mp_s: float
+    logical_cpus: int
+    available_ram_mb: int | None
+    reason: str
+    hardware_profile_signature: str = ""
+    universal_gpu_detected: bool = False
+    primary_compute_backend: str = "CPU/NumPy"
+    primary_compute_vendor: str = "CPU"
+    primary_compute_device: str = "CPU"
+    safe_gpu_memory_mb: int | None = None
+    hardware_tile_size: int | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _ram_recommendation(available_mb: int | None) -> tuple[str, str, int]:
+    """Return UI setting, custom value and resolved budget.
+
+    Leave substantial memory for Windows, the target app and preview images.
+    """
+    if not available_mb:
+        return "2 GB", "2048", 2048
+    avail = max(512, int(available_mb))
+    target = max(512, min(12288, int(avail * 0.35)))
+    # Keep at least 2 GiB of currently available memory unreserved when possible.
+    target = min(target, max(512, avail - 2048))
+    fixed = (
+        (512, "512 MB"), (1024, "1 GB"), (2048, "2 GB"), (4096, "4 GB"),
+        (8192, "8 GB"), (12288, "12 GB"), (16384, "16 GB"),
+    )
+    # Prefer a fixed UI value when it is within 12.5% of the target.
+    nearest_mb, nearest_label = min(fixed, key=lambda item: abs(item[0] - target))
+    if abs(nearest_mb - target) <= max(256, int(target * 0.125)) and nearest_mb <= max(512, avail - 1024):
+        return nearest_label, str(nearest_mb), nearest_mb
+    return "Custom", str(target), target
+
+
+def _vram_recommendation(total_mb: int | None, free_mb: int | None) -> str:
+    if not total_mb or not free_mb:
+        return "Auto"
+    total, free = int(total_mb), int(free_mb)
+    # Use percentages so the setting remains sane after driver/desktop changes.
+    if total >= 12288 and free >= int(total * 0.80):
+        return "75%"
+    if total >= 6144 and free >= int(total * 0.65):
+        return "50%"
+    return "Auto"
+
+
+def _planning_resolution(workers: int, ram_mb: int, gpu_ok: bool, gpu_mp_s: float) -> str:
+    workers = max(1, int(workers))
+    ram_mb = max(128, int(ram_mb))
+    if gpu_ok and gpu_mp_s >= 6.0 and workers >= 12 and ram_mb >= 8192:
+        return "Extreme"
+    if workers >= 10 and ram_mb >= 6144:
+        return "Ultra"
+    if workers >= 6 and ram_mb >= 3072:
+        return "High"
+    return "Standard"
+
+
+def _reason_text(*, workers: int, ram_mb: int, gpu_ok: bool, planning: str) -> str:
+    gpu = "CUDA enabled" if gpu_ok else "CPU fallback"
+    return f"{workers} benchmark-selected planning workers, {ram_mb:,} MB RAM budget, {gpu}, {planning} planning."
+
+
+def build_recommendation(*, scheduler_result: dict[str, Any], available_mb: int | None,
+                         gpu_result: dict[str, Any] | None = None,
+                         hardware_result: dict[str, Any] | None = None) -> TuneRecommendation:
+    logical = max(1, int(scheduler_result.get("logical_cpus", logical_cpu_count()) or 1))
+    workers = max(1, min(logical, int(scheduler_result.get("recommended_workers", 1) or 1)))
+    ram_setting, ram_custom, ram_mb = _ram_recommendation(available_mb)
+    gpu = gpu_result or {}
+    gpu_ok = bool(gpu.get("used_gpu") and gpu.get("accelerated", True))
+    gpu_detected = bool(gpu.get("hardware_detected") or gpu_ok)
+    gpu_mp_s = float(gpu.get("throughput_mp_s", 0.0) or 0.0)
+    hardware = hardware_result or {}
+    detected_adapters = [item for item in (hardware.get("detected_gpus") or []) if isinstance(item, dict)]
+    primary = dict(hardware.get("primary_backend") or {})
+    universal_gpu_detected = bool(detected_adapters)
+    primary_backend = str(primary.get("backend") or "CPU/NumPy")
+    primary_vendor = str(primary.get("vendor") or "CPU")
+    primary_device = str(primary.get("device") or "CPU")
+    safe_gpu_memory = primary.get("safe_memory_budget_mb")
+    hardware_tile = primary.get("tile_size")
+    gpu_mode = "NVIDIA CUDA" if gpu_ok else "CPU"
+    gpu_vram = _vram_recommendation(gpu.get("total_vram_mb"), gpu.get("free_vram_mb")) if gpu_ok else "Auto"
+    gpu_perf = "High throughput" if gpu_ok else "Balanced"
+    planning = _planning_resolution(workers, ram_mb, gpu_ok, gpu_mp_s)
+    return TuneRecommendation(
+        cpu_workers="Auto",
+        cpu_workers_effective=workers,
+        cpu_engine="Threads",
+        ram_budget=ram_setting,
+        ram_custom_mb=ram_custom,
+        planning_resolution=planning,
+        resource_scheduler="Benchmark recommendations",
+        gpu_mode=gpu_mode,
+        gpu_vram=gpu_vram,
+        gpu_performance=gpu_perf,
+        gpu_available=gpu_ok,
+        gpu_detected=gpu_detected,
+        gpu_device=str(gpu.get("hardware_device") or gpu.get("device") or ("CPU" if not gpu_detected else "NVIDIA GPU")),
+        gpu_driver_version=str(gpu.get("driver_version") or ""),
+        gpu_reason=str(gpu.get("reason") or ""),
+        cpu_score=float(scheduler_result.get("best_score", 0.0) or 0.0),
+        gpu_throughput_mp_s=gpu_mp_s,
+        logical_cpus=logical,
+        available_ram_mb=available_mb,
+        reason=_reason_text(workers=workers, ram_mb=ram_mb, gpu_ok=gpu_ok, planning=planning) +
+               (f" Hardware benchmark prefers {primary_backend} on {primary_device}." if hardware else ""),
+        hardware_profile_signature=str(hardware.get("hardware_signature") or ""),
+        universal_gpu_detected=universal_gpu_detected,
+        primary_compute_backend=primary_backend,
+        primary_compute_vendor=primary_vendor,
+        primary_compute_device=primary_device,
+        safe_gpu_memory_mb=int(safe_gpu_memory) if isinstance(safe_gpu_memory, (int, float)) and safe_gpu_memory else None,
+        hardware_tile_size=int(hardware_tile) if isinstance(hardware_tile, (int, float)) and hardware_tile else None,
+    )
+
+
+def run_auto_tune(*, gpu_benchmark: Callable[..., dict[str, Any]] | None = None,
+                  save: bool = True, path: Path | None = None,
+                  scheduler_loops: int = 56_000, gpu_size: int = 768) -> dict[str, Any]:
+    """Benchmark the machine and return a safe planning recommendation.
+
+    gpu_benchmark is injected by DrawBot to keep this module testable on systems
+    without CUDA/CuPy.
+    """
+    started = time.perf_counter()
+    logical = logical_cpu_count()
+    available = available_ram_mb()
+    allocation = resolve_allocation("Auto", "Threads", "Auto", "4096")
+    scheduler = benchmark_scheduler(allocation, loops_per_worker=max(8_000, int(scheduler_loops)), save=True)
+
+    gpu_result: dict[str, Any] = {}
+    gpu_error = ""
+    if gpu_benchmark is not None:
+        try:
+            gpu_result = dict(gpu_benchmark("Auto", max(256, int(gpu_size)), "Auto", "High throughput") or {})
+        except Exception as exc:  # CUDA is optional; fail safely to CPU.
+            gpu_error = f"{type(exc).__name__}: {exc}"
+            gpu_result = {"used_gpu": False, "accelerated": False, "device": "CPU", "reason": gpu_error}
+
+    hardware_result: dict[str, Any] = {}
+    hardware_error = ""
+    try:
+        hardware_result = run_universal_hardware_benchmark(
+            save=save, small_size=128, large_size=max(256, min(768, int(gpu_size))), repeats=2, refresh_hardware=True)
+    except Exception as exc:
+        # The tuner must remain fully usable on CPU if an optional GPU runtime
+        # or vendor driver misbehaves.
+        hardware_error = f"{type(exc).__name__}: {exc}"
+        hardware_result = load_hardware_profile(validate_current=False) or {}
+
+    recommendation = build_recommendation(
+        scheduler_result=scheduler,
+        available_mb=available,
+        gpu_result=gpu_result,
+        hardware_result=hardware_result,
+    )
+    result: dict[str, Any] = {
+        "version": TUNER_VERSION,
+        "created_at": int(time.time()),
+        "elapsed_ms": round((time.perf_counter() - started) * 1000.0, 1),
+        "recommendation": recommendation.as_dict(),
+        "cpu_scores": scheduler.get("scores", []),
+        "gpu_result": gpu_result,
+        "gpu_error": gpu_error,
+        "hardware_profile": hardware_result,
+        "hardware_error": hardware_error,
+    }
+    if save:
+        save_tune_result(result, path=path)
+    return result
+
+
+def save_tune_result(result: dict[str, Any], path: Path | None = None) -> Path:
+    target = Path(path or TUNER_FILE)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temp = target.with_suffix(target.suffix + ".tmp")
+    temp.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp.replace(target)
+    return target
+
+
+def load_tune_result(path: Path | None = None) -> dict[str, Any] | None:
+    target = Path(path or TUNER_FILE)
+    try:
+        value = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(value, dict) or int(value.get("version", 0) or 0) != TUNER_VERSION:
+        return None
+    if not isinstance(value.get("recommendation"), dict):
+        return None
+    return value
+
+
+def format_tune_summary(result: dict[str, Any]) -> str:
+    rec = dict(result.get("recommendation") or {})
+    if rec.get("gpu_available"):
+        renderer_gpu = str(rec.get("gpu_device") or "NVIDIA CUDA GPU")
+    elif rec.get("gpu_detected"):
+        renderer_gpu = f"{rec.get('gpu_device') or 'NVIDIA GPU'} detected · CUDA backend unavailable"
+    else:
+        renderer_gpu = "CPU renderer fallback"
+    compute = str(rec.get("primary_compute_backend") or "CPU/NumPy")
+    compute_device = str(rec.get("primary_compute_device") or "CPU")
+    universal = f"{compute} on {compute_device}" if compute != "CPU/NumPy" else "CPU/NumPy"
+    return (
+        f"CPU {int(rec.get('cpu_workers_effective', 1) or 1)}/{int(rec.get('logical_cpus', 1) or 1)} workers · "
+        f"RAM {rec.get('ram_budget', 'Auto')} · current renderer {renderer_gpu} · measured compute {universal} · "
+        f"Planner {rec.get('planning_resolution', 'Standard')} · {float(result.get('elapsed_ms', 0.0) or 0.0):.0f} ms"
+    )

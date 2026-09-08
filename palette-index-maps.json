@@ -1,0 +1,267 @@
+{
+  "version": 1,
+  "profiles": {
+    "skribbl": {
+      "source": "https://skribbl.io/js/game.js",
+      "checked": "2026-09-05",
+      "source_sha256": "e9a6966d156c776a65a82cd3100ecb7783df97160ee6cd204a1fdaf1689afdba",
+      "status": "source-verified; live drawing untested",
+      "colors": [
+        {
+          "game_index": 0,
+          "name": "White",
+          "rgb": [
+            255,
+            255,
+            255
+          ]
+        },
+        {
+          "game_index": 1,
+          "name": "Black",
+          "rgb": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "game_index": 2,
+          "name": "Light Gray",
+          "rgb": [
+            193,
+            193,
+            193
+          ]
+        },
+        {
+          "game_index": 3,
+          "name": "Gray",
+          "rgb": [
+            80,
+            80,
+            80
+          ]
+        },
+        {
+          "game_index": 4,
+          "name": "Red",
+          "rgb": [
+            239,
+            19,
+            11
+          ]
+        },
+        {
+          "game_index": 5,
+          "name": "Dark Red",
+          "rgb": [
+            116,
+            11,
+            7
+          ]
+        },
+        {
+          "game_index": 6,
+          "name": "Orange",
+          "rgb": [
+            255,
+            113,
+            0
+          ]
+        },
+        {
+          "game_index": 7,
+          "name": "Dark Orange",
+          "rgb": [
+            194,
+            56,
+            0
+          ]
+        },
+        {
+          "game_index": 8,
+          "name": "Yellow",
+          "rgb": [
+            255,
+            228,
+            0
+          ]
+        },
+        {
+          "game_index": 9,
+          "name": "Dark Yellow",
+          "rgb": [
+            232,
+            162,
+            0
+          ]
+        },
+        {
+          "game_index": 10,
+          "name": "Green",
+          "rgb": [
+            0,
+            204,
+            0
+          ]
+        },
+        {
+          "game_index": 11,
+          "name": "Dark Green",
+          "rgb": [
+            0,
+            70,
+            25
+          ]
+        },
+        {
+          "game_index": 12,
+          "name": "Mint",
+          "rgb": [
+            0,
+            255,
+            145
+          ]
+        },
+        {
+          "game_index": 13,
+          "name": "Dark Mint",
+          "rgb": [
+            0,
+            120,
+            93
+          ]
+        },
+        {
+          "game_index": 14,
+          "name": "Skyblue",
+          "rgb": [
+            0,
+            178,
+            255
+          ]
+        },
+        {
+          "game_index": 15,
+          "name": "Dark Skyblue",
+          "rgb": [
+            0,
+            86,
+            158
+          ]
+        },
+        {
+          "game_index": 16,
+          "name": "Seablue",
+          "rgb": [
+            35,
+            31,
+            211
+          ]
+        },
+        {
+          "game_index": 17,
+          "name": "Dark Seablue",
+          "rgb": [
+            14,
+            8,
+            101
+          ]
+        },
+        {
+          "game_index": 18,
+          "name": "Purple",
+          "rgb": [
+            163,
+            0,
+            186
+          ]
+        },
+        {
+          "game_index": 19,
+          "name": "Dark Purple",
+          "rgb": [
+            85,
+            0,
+            105
+          ]
+        },
+        {
+          "game_index": 20,
+          "name": "Pink",
+          "rgb": [
+            223,
+            105,
+            167
+          ]
+        },
+        {
+          "game_index": 21,
+          "name": "Dark Pink",
+          "rgb": [
+            135,
+            53,
+            84
+          ]
+        },
+        {
+          "game_index": 22,
+          "name": "Beige",
+          "rgb": [
+            255,
+            172,
+            142
+          ]
+        },
+        {
+          "game_index": 23,
+          "name": "Dark Beige",
+          "rgb": [
+            204,
+            119,
+            77
+          ]
+        },
+        {
+          "game_index": 24,
+          "name": "Brown",
+          "rgb": [
+            160,
+            82,
+            45
+          ]
+        },
+        {
+          "game_index": 25,
+          "name": "Dark Brown",
+          "rgb": [
+            99,
+            48,
+            13
+          ]
+        }
+      ]
+    },
+    "gartic-phone": {
+      "status": "unverified",
+      "fallback": "visible uniform grid capture or manual capture",
+      "colors": []
+    },
+    "sketchful": {
+      "status": "unverified",
+      "fallback": "visible uniform grid capture or manual capture",
+      "colors": []
+    },
+    "drawize": {
+      "status": "unverified",
+      "fallback": "visible uniform grid capture or manual capture",
+      "colors": []
+    },
+    "gartic-io": {
+      "status": "unverified",
+      "fallback": "visible uniform grid capture or manual capture",
+      "colors": []
+    }
+  }
+}
