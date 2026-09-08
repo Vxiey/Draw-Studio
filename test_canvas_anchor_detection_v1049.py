@@ -57,8 +57,8 @@ def base_plan_with_anchors(options):
 
 class CanvasAnchorDetectionV1049Tests(unittest.TestCase):
     def test_version_bumped(self):
-        self.assertEqual(APP_VERSION,'1.0.129-rc1')
-        self.assertEqual(FILE_VERSION,'1.0.129')
+        self.assertEqual(APP_VERSION,'1.0.130-rc2')
+        self.assertEqual(FILE_VERSION,'1.0.130')
 
     def test_blank_canvas_still_produces_corner_anchors(self):
         result=detect_canvas_anchors(Image.new('RGB',(80,50),'white'))

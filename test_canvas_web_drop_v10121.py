@@ -21,8 +21,8 @@ class Root:
 
 class CanvasWebDropV10121Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.129-rc1')
-        self.assertEqual(FILE_VERSION,'1.0.129')
+        self.assertEqual(APP_VERSION,'1.0.130-rc2')
+        self.assertEqual(FILE_VERSION,'1.0.130')
 
     def test_local_file_drop(self):
         with tempfile.NamedTemporaryFile(suffix='.png') as handle:

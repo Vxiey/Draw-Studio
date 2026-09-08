@@ -1,4 +1,4 @@
-"""Step 30 — Release Candidate Hardening for Draw Studio.
+"""Release Candidate Hardening for Draw Studio.
 
 This module contains deterministic, non-interactive release gates.  It does not
 move the mouse, activate target windows, download updates, or change user
@@ -74,6 +74,29 @@ def _assert_contains(text: str, token: str, label: str, errors: list[str]) -> No
         errors.append(f"{label}: missing {token!r}")
 
 
+def find_one_shot_source_files(root: Path) -> list[str]:
+    """Return temporary integration/patch files that must never ship from main."""
+    root = Path(root)
+    found: list[str] = []
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        try:
+            rel = path.relative_to(root).as_posix()
+        except ValueError:
+            continue
+        lowered = rel.lower()
+        if lowered.startswith(".git/") or "/.git/" in lowered:
+            continue
+        base = path.name.lower()
+        if base.endswith("_once.py"):
+            found.append(rel)
+            continue
+        if lowered.startswith(".github/workflows/") and re.search(r"(?:^|[-_])once(?:[-_.]|$)", base) and base.endswith((".yml", ".yaml")):
+            found.append(rel)
+    return sorted(set(found))
+
+
 def collect_source_gate_errors(root: Path, *, app_version: str, file_version: str,
                                channel: str, expected_repository: str = EXPECTED_REPOSITORY) -> list[str]:
     """Return release-blocking source metadata/configuration errors."""
@@ -84,6 +107,10 @@ def collect_source_gate_errors(root: Path, *, app_version: str, file_version: st
     updater = _read(root / "UpdateCenter.py")
     build_release = _read(root / "build_release.py")
     workflow = _read(root / ".github" / "workflows" / "build-windows.yml")
+
+    one_shot_files = find_one_shot_source_files(root)
+    if one_shot_files:
+        errors.append("source tree: temporary one-shot files are present: " + ", ".join(one_shot_files[:12]))
 
     major, minor, patch = _version_tuple(file_version)
     _assert_contains(version_info, f"filevers=({major},{minor},{patch},0)", "version_info", errors)
@@ -103,12 +130,12 @@ def collect_source_gate_errors(root: Path, *, app_version: str, file_version: st
     _assert_contains(build_release, "validate_windows_release", "build_release", errors)
     _assert_contains(workflow, "ReleaseCandidateHardening.py --source-gate", "build-windows workflow", errors)
     _assert_contains(workflow, "Validate silent installer round-trip", "build-windows workflow", errors)
-    _assert_contains(workflow, f"RELEASE-NOTES-v{app_version}-Step30.md", "build-windows workflow", errors)
+    _assert_contains(workflow, f"RELEASE-NOTES-v{app_version}.md", "build-windows workflow", errors)
 
     if channel != "rc":
-        errors.append(f"Version.py: Step 30 release candidate must use BUILD_CHANNEL='rc', got {channel!r}")
+        errors.append(f"Version.py: release candidate must use BUILD_CHANNEL='rc', got {channel!r}")
     if not re.fullmatch(r"\d+\.\d+\.\d+-rc\d+", app_version):
-        errors.append(f"Version.py: Step 30 APP_VERSION is not an rcN version: {app_version!r}")
+        errors.append(f"Version.py: APP_VERSION is not an rcN version: {app_version!r}")
 
     return errors
 
@@ -182,7 +209,7 @@ def run_source_release_gate(root: Path, *, app_version: str | None = None,
         str(app_version), str(file_version), str(channel), expected_repository,
         int(soak_cycles),
         ("version-metadata", "installer-metadata", "update-repository", "workflow-gates",
-         "lifecycle-soak", "profile-isolation-soak"),
+         "source-one-shot-hygiene", "lifecycle-soak", "profile-isolation-soak"),
     )
 
 
@@ -255,26 +282,50 @@ def verify_checksum_file(path: Path, *, base_dir: Path | None = None) -> dict:
     return {"verified": len(rows), "files": rows}
 
 
-def validate_manifest(path: Path, *, app_version: str, expected_files: Iterable[str]) -> dict:
+def validate_manifest(path: Path, *, app_version: str, expected_files: Iterable[str],
+                      file_version: str | None = None, channel: str | None = None,
+                      base_dir: Path | None = None) -> dict:
+    path = Path(path)
     try:
-        data = json.loads(_read(Path(path)))
+        data = json.loads(_read(path))
     except json.JSONDecodeError as error:
         raise ReleaseGateError("Release manifest is not valid JSON") from error
     if data.get("schema") != RELEASE_GATE_SCHEMA or data.get("version") != app_version:
         raise ReleaseGateError("Release manifest metadata does not match this build")
+    if file_version is not None and data.get("file_version") != file_version:
+        raise ReleaseGateError("Release manifest file_version does not match Version.py")
+    if channel is not None and data.get("channel") != channel:
+        raise ReleaseGateError("Release manifest channel does not match Version.py")
+    if data.get("architecture") != "windows-x64":
+        raise ReleaseGateError("Release manifest architecture must be windows-x64")
     artifacts = data.get("artifacts")
-    if not isinstance(artifacts, list):
+    if not isinstance(artifacts, list) or not artifacts:
         raise ReleaseGateError("Release manifest artifacts are invalid")
-    names = {str(item.get("name")) for item in artifacts if isinstance(item, dict)}
-    missing = set(expected_files) - names
+    rows = {str(item.get("name")): item for item in artifacts if isinstance(item, dict) and item.get("name")}
+    missing = set(expected_files) - set(rows)
     if missing:
         raise ReleaseGateError("Release manifest is missing artifacts: " + ", ".join(sorted(missing)))
+    base = Path(base_dir) if base_dir is not None else path.parent
+    for name in expected_files:
+        item = rows[name]
+        target = base / name
+        if not target.is_file():
+            raise ReleaseGateError(f"Release manifest target is missing: {name}")
+        digest = str(item.get("sha256", "")).lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", digest) or digest != _sha256(target):
+            raise ReleaseGateError(f"Release manifest SHA-256 mismatch for {name}")
+        try:
+            declared_bytes = int(item.get("bytes"))
+        except (TypeError, ValueError):
+            raise ReleaseGateError(f"Release manifest byte size is invalid for {name}")
+        if declared_bytes != target.stat().st_size:
+            raise ReleaseGateError(f"Release manifest byte size mismatch for {name}")
     return data
 
 
 def validate_windows_release(release_dir: Path, *, app_version: str | None = None,
                              require_installer: bool = True) -> dict:
-    from Version import APP_VERSION
+    from Version import APP_VERSION, FILE_VERSION, BUILD_CHANNEL
     app_version = APP_VERSION if app_version is None else str(app_version)
     release = Path(release_dir)
     zip_path = release / f"DrawStudio-{app_version}-Windows-x64.zip"
@@ -288,13 +339,14 @@ def validate_windows_release(release_dir: Path, *, app_version: str | None = Non
         result["installer"] = validate_installer(setup_path, app_version=app_version)
         expected.append(setup_path.name)
     result["checksums"] = verify_checksum_file(checksum_path, base_dir=release)
-    result["manifest"] = validate_manifest(manifest_path, app_version=app_version, expected_files=expected)
+    result["manifest"] = validate_manifest(manifest_path, app_version=app_version, expected_files=expected,
+                                           file_version=FILE_VERSION, channel=BUILD_CHANNEL, base_dir=release)
     return result
 
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
-    parser = argparse.ArgumentParser(description="Draw Studio Step 30 release gates")
+    parser = argparse.ArgumentParser(description="Draw Studio release-candidate gates")
     parser.add_argument("--source-gate", action="store_true")
     parser.add_argument("--release-dir")
     parser.add_argument("--soak-cycles", type=int, default=DEFAULT_SOAK_CYCLES)

@@ -114,12 +114,12 @@ If you later move, resize, zoom or significantly change the target app, Draw Stu
 
 Download the latest Windows ZIP or installer from the repository's **Releases** page.
 
-Current release candidate: **v1.0.129-rc1**
+Current release candidate: **v1.0.130-rc2**
 
 Expected Windows artifacts:
 
-- `DrawStudio-1.0.129-rc1-Windows-x64.zip`
-- `DrawStudio-1.0.129-rc1-Windows-x64-Setup.exe`
+- `DrawStudio-1.0.130-rc2-Windows-x64.zip`
+- `DrawStudio-1.0.130-rc2-Windows-x64-Setup.exe`
 
 Extract the **entire ZIP** to a normal folder before starting the program, or use the installer build.
 
@@ -261,13 +261,23 @@ These extra color names are **not added to the drawing palette automatically**. 
 
 ## Current release candidate
 
-**v1.0.129-rc1 — Release Candidate Hardening**
+**v1.0.130-rc2 — Release Candidate Hardening II**
 
 Current Windows release artifact names:
 
-- `DrawStudio-1.0.129-rc1-Windows-x64.zip`
-- `DrawStudio-1.0.129-rc1-Windows-x64-Setup.exe`
+- `DrawStudio-1.0.130-rc2-Windows-x64.zip`
+- `DrawStudio-1.0.130-rc2-Windows-x64-Setup.exe`
 - SHA-256 hashes are generated with the release artifacts
+
+### v1.0.130-rc2 — Release Candidate Hardening II
+
+- Removes leftover one-shot integration/patch scripts and workflows from the release branch
+- Adds a permanent source-tree hygiene gate that rejects future `*_once.py` and one-shot workflow leakage
+- Uses version-only release-note naming for current publishing metadata
+- Strengthens manifest validation for app version, file version, channel, architecture, SHA-256 and byte size
+- Keeps the RC feature freeze: no renderer or input-safety behavior is loosened
+- Retains the verified Windows silent install → installed EXE self-test → silent uninstall gate
+- Requires full regression discovery and the 5,000-cycle lifecycle soak before Windows artifacts are accepted
 
 ### v1.0.129-rc1 — Release Candidate Hardening
 

@@ -43,8 +43,8 @@ def make_app(profile='Gartic Phone', image=None):
 
 class ManualDropInStartV1067Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.129-rc1')
-        self.assertEqual(FILE_VERSION,'1.0.129')
+        self.assertEqual(APP_VERSION,'1.0.130-rc2')
+        self.assertEqual(FILE_VERSION,'1.0.130')
 
     def test_policy_accepts_only_new_explicit_action(self):
         self.assertEqual(action_for_import(armed=True), DROP_IN_ACTION)

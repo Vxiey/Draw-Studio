@@ -5,9 +5,9 @@ import zipfile
 from pathlib import Path
 
 from ReleaseCandidateHardening import (
-    EXPECTED_REPOSITORY, ReleaseGateError, collect_source_gate_errors,
+    EXPECTED_REPOSITORY, ReleaseGateError, collect_source_gate_errors, find_one_shot_source_files,
     run_lifecycle_soak, run_profile_isolation_soak, validate_windows_zip,
-    verify_checksum_file,
+    verify_checksum_file, validate_manifest,
 )
 
 
@@ -31,36 +31,69 @@ class Step30ReleaseCandidateHardeningTests(unittest.TestCase):
         (root/'.github/workflows').mkdir(parents=True)
         (root/'installer').mkdir(parents=True)
         (root/'version_info.txt').write_text(
-            "filevers=(1,0,129,0)\nprodvers=(1,0,129,0)\n"
-            "StringStruct('FileVersion', '1.0.129')\n"
-            "StringStruct('ProductVersion', '1.0.129')\n", encoding='utf-8')
+            "filevers=(1,0,130,0)\nprodvers=(1,0,130,0)\n"
+            "StringStruct('FileVersion', '1.0.130')\n"
+            "StringStruct('ProductVersion', '1.0.130')\n", encoding='utf-8')
         (root/'installer/DrawStudio.iss').write_text(
-            '#define MyAppVersion "1.0.129-rc1"\n'
+            '#define MyAppVersion "1.0.130-rc2"\n'
             'AppId={{6A4AD303-4F16-4ED7-A9AF-5B912352D83E}\nPrivilegesRequired=lowest\n', encoding='utf-8')
         (root/'UpdateCenter.py').write_text(f'GITHUB_REPOSITORY = "{updater_repo}"\n', encoding='utf-8')
         (root/'build_release.py').write_text('run_source_release_gate\nvalidate_windows_release\n', encoding='utf-8')
         (root/'.github/workflows/build-windows.yml').write_text(
             'ReleaseCandidateHardening.py --source-gate\n'
             'Validate silent installer round-trip\n'
-            'RELEASE-NOTES-v1.0.129-rc1-Step30.md\n', encoding='utf-8')
+            'RELEASE-NOTES-v1.0.130-rc2.md\n', encoding='utf-8')
 
     def test_source_gate_detects_stale_update_repository(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); self._fake_root(root, updater_repo='yesverynice12/Draw-Studio')
-            errors=collect_source_gate_errors(root, app_version='1.0.129-rc1', file_version='1.0.129', channel='rc')
+            errors=collect_source_gate_errors(root, app_version='1.0.130-rc2', file_version='1.0.130', channel='rc')
             self.assertTrue(any('legacy GitHub repository' in e or 'UpdateCenter' in e for e in errors))
 
     def test_source_gate_detects_non_rc_channel(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); self._fake_root(root)
-            errors=collect_source_gate_errors(root, app_version='1.0.129-rc1', file_version='1.0.129', channel='beta')
+            errors=collect_source_gate_errors(root, app_version='1.0.130-rc2', file_version='1.0.130', channel='beta')
             self.assertTrue(any("BUILD_CHANNEL='rc'" in e for e in errors))
 
     def test_source_gate_accepts_consistent_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); self._fake_root(root)
-            errors=collect_source_gate_errors(root, app_version='1.0.129-rc1', file_version='1.0.129', channel='rc')
+            errors=collect_source_gate_errors(root, app_version='1.0.130-rc2', file_version='1.0.130', channel='rc')
             self.assertEqual(errors, [])
+
+
+    def test_source_hygiene_detects_one_shot_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root/'step99_patch_once.py').write_text('x=1\n', encoding='utf-8')
+            (root/'.github/workflows').mkdir(parents=True)
+            (root/'.github/workflows/release-once.yml').write_text('name: temp\n', encoding='utf-8')
+            found = find_one_shot_source_files(root)
+            self.assertIn('step99_patch_once.py', found)
+            self.assertIn('.github/workflows/release-once.yml', found)
+
+    def test_manifest_rejects_stale_hash_and_metadata(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact = root/'DrawStudio-1.0.130-rc2-Windows-x64.zip'
+            artifact.write_bytes(b'payload')
+            digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+            manifest = root/'manifest.json'
+            payload = {
+                'schema': 1, 'app': 'Draw Studio', 'version': '1.0.130-rc2',
+                'file_version': '1.0.130', 'channel': 'rc', 'architecture': 'windows-x64',
+                'artifacts': [{'name': artifact.name, 'type': 'windows-zip', 'sha256': digest, 'bytes': artifact.stat().st_size}],
+            }
+            manifest.write_text(json.dumps(payload), encoding='utf-8')
+            validate_manifest(manifest, app_version='1.0.130-rc2', expected_files=[artifact.name],
+                              file_version='1.0.130', channel='rc', base_dir=root)
+            payload['channel'] = 'beta'
+            manifest.write_text(json.dumps(payload), encoding='utf-8')
+            with self.assertRaises(ReleaseGateError):
+                validate_manifest(manifest, app_version='1.0.130-rc2', expected_files=[artifact.name],
+                                  file_version='1.0.130', channel='rc', base_dir=root)
 
     def test_windows_zip_rejects_test_and_runtime_leaks(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -98,10 +131,10 @@ class Step30ReleaseCandidateHardeningTests(unittest.TestCase):
         self.assertIn('ReleaseCandidateHardening.py --source-gate', (root/'.github/workflows/build-windows.yml').read_text(encoding='utf-8'))
         self.assertIn('Vxiey/Draw-Studio', (root/'UpdateCenter.py').read_text(encoding='utf-8'))
 
-    def test_release_version_is_rc1(self):
+    def test_release_version_is_rc2(self):
         from Version import APP_VERSION, FILE_VERSION, BUILD_CHANNEL
-        self.assertEqual(APP_VERSION,'1.0.129-rc1')
-        self.assertEqual(FILE_VERSION,'1.0.129')
+        self.assertEqual(APP_VERSION,'1.0.130-rc2')
+        self.assertEqual(FILE_VERSION,'1.0.130')
         self.assertEqual(BUILD_CHANNEL,'rc')
 
 

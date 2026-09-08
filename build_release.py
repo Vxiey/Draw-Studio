@@ -11,7 +11,7 @@ import subprocess
 import sys
 import zipfile
 
-from Version import APP_VERSION, BUILD_CHANNEL
+from Version import APP_VERSION, FILE_VERSION, BUILD_CHANNEL
 from ReleaseCandidateHardening import run_source_release_gate, validate_windows_release
 
 BASE = Path(__file__).resolve().parent
@@ -70,6 +70,7 @@ def _write_manifest(artifacts: list[dict]) -> Path:
         "schema":1,
         "app":"Draw Studio",
         "version":APP_VERSION,
+        "file_version":FILE_VERSION,
         "channel":BUILD_CHANNEL,
         "architecture":"windows-x64",
         "unsigned":True,
@@ -93,7 +94,7 @@ def main() -> int:
         raise SystemExit(f'Git tag {github_ref!r} does not match Version.py ({APP_VERSION}). Expected tag v{APP_VERSION}.')
 
     report=run_source_release_gate(BASE,soak_cycles=5000)
-    print('Step 30 source gate: PASS',report.as_dict())
+    print('RC source gate: PASS', report.as_dict())
     _clean_current_release_outputs()
 
     run([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
@@ -134,7 +135,7 @@ def main() -> int:
     manifest=_write_manifest(artifacts)
 
     validate_windows_release(RELEASE,app_version=APP_VERSION,require_installer=args.installer)
-    print("Step 30 Windows artifact gate: PASS")
+    print("RC Windows artifact gate: PASS")
     print("\nRelease artifacts:")
     for row in hash_rows:
         print(" ", row)

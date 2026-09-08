@@ -42,4 +42,4 @@ Step docs:
 - `ROADMAP-STEP22-PLUS.md`
 
 - `STEP-30-RELEASE-CANDIDATE-HARDENING.md` — RC release gates, installer/update validation and feature freeze
-- `RELEASE-NOTES-v1.0.129-rc1-Step30.md` — v1.0.129-rc1 release notes
+- `RELEASE-NOTES-v1.0.130-rc2-Step30.md` — v1.0.130-rc2 release notes

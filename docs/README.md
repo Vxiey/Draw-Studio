@@ -7,7 +7,7 @@ For normal installation and first-use instructions, start with the repository `R
 Current release-candidate documents:
 
 - `../STEP-30-RELEASE-CANDIDATE-HARDENING.md` — Step 30 release gates, installer/update validation and feature freeze
-- `../RELEASE-NOTES-v1.0.129-rc1-Step30.md` — RC1 release notes
+- `../RELEASE-NOTES-v1.0.130-rc2-Step30.md` — RC1 release notes
 - `PUBLISHING.md` — local and GitHub publishing workflow
 - `VERSION-HISTORY.md` — detailed version history
 - `history/README.md` — historical documentation index
