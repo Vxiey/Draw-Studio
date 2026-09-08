@@ -35,6 +35,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python step30_preview_fix_once.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python step30_readme_rc_once.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python step30_full_regression_fix_once.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
