@@ -114,7 +114,7 @@ If you later move, resize, zoom or significantly change the target app, Draw Stu
 
 Download the latest ZIP from this repository:
 
-`Draw-Studio-1.0.126-beta-Step27.5-One-Click-Setup-Verification.zip`
+`Draw-Studio-1.0.128-beta-Step29-Hybrid-Renderer-3.zip`
 
 Extract the **entire ZIP** to a normal folder before starting the program.
 
@@ -252,12 +252,28 @@ These extra color names are **not added to the drawing palette automatically**. 
 
 ## Current beta
 
-**v1.0.127-beta — Step 28: More Drawing Targets**
+**v1.0.128-beta — Step 29: Hybrid Renderer 3.0**
 
 Current verified source package:
 
-- `Draw-Studio-1.0.127-beta-Step28-More-Drawing-Targets.zip`
+- `Draw-Studio-1.0.128-beta-Step29-Hybrid-Renderer-3.zip`
 - SHA-256 is published in `SOURCE-PACKAGE-SHA256.txt`
+
+### Step 29 highlights
+
+- New **Hybrid Renderer 3.0** rendering style
+- **Auto Hybrid** uses bounded local Pillow/NumPy structure analysis — no AI, ML or OCR
+- Dedicated **Pixel Art** mode routes into full-resolution Pixel Accurate planning
+- **Icon / Logo** uses safe Fill + contour + structural detail passes
+- **Line Art** uses contour-first Better Shapes v2 with structural-line preservation
+- **Portrait** reuses PortraitPlanner for single-colour targets and high-detail perceptual planning for colour targets
+- **Shaded Object** uses progressive base, shade/highlight, contour and detail passes
+- **Deadline Silhouette** prioritizes a recognizable subject under short time budgets
+- Hybrid policy cannot modify CanvasGuard, target locks, calibration, preflight, dry-run or Start authorization
+- Hybrid mode is saved per profile and supported by `.drawprofile` export/import
+- Preview diagnostics show requested/resolved Hybrid mode, passes and source-analysis metrics
+- Windows Step 29 regression selection: **64/64 passed**
+- Step 30 remains **Release Candidate Hardening**
 
 ### Step 28 highlights
 

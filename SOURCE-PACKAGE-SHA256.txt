@@ -1,1 +1,1 @@
-6a85a534952aa675b8f3ca9601faa1d3f510aa518a406f432817e2b29053eb9d  Draw-Studio-1.0.127-beta-Step28-More-Drawing-Targets.zip
+af86661d192c2aa2ccf50ee625f986128bf648c6a0f603aa70feca6c80ea7d97  Draw-Studio-1.0.128-beta-Step29-Hybrid-Renderer-3.zip
