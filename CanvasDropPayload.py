@@ -44,6 +44,20 @@ def _file_uri_to_path(value: str) -> str | None:
     return path or None
 
 
+def _host_is_or_subdomain(host: str, domain: str) -> bool:
+    """Return True only when *host* is *domain* or a real DNS subdomain.
+
+    Comparing hostname labels avoids substring checks such as ``'bing.com' in
+    host`` which would also trust attacker-controlled hosts like
+    ``bing.com.evil.example`` or ``notbing.com``.
+    """
+    normalized_host = str(host or '').strip().lower().rstrip('.')
+    normalized_domain = str(domain or '').strip().lower().rstrip('.')
+    if not normalized_host or not normalized_domain:
+        return False
+    return normalized_host == normalized_domain or normalized_host.endswith('.' + normalized_domain)
+
+
 def _looks_like_image_url(url: str) -> bool:
     try:
         parsed = urlparse(url)
@@ -54,7 +68,10 @@ def _looks_like_image_url(url: str) -> bool:
     if suffix in _IMAGE_EXTENSIONS:
         return True
     # Google Images commonly supplies extensionless CDN URLs.
-    return any(token in host for token in ('gstatic.com', 'googleusercontent.com', 'ggpht.com'))
+    return any(
+        _host_is_or_subdomain(host, domain)
+        for domain in ('gstatic.com', 'googleusercontent.com', 'ggpht.com')
+    )
 
 
 def _clean_url(value: str) -> str:
@@ -66,20 +83,22 @@ def _clean_url(value: str) -> str:
 def _unwrap_image_search_url(url: str) -> str:
     """Unwrap common image-search redirect URLs without network access."""
     try:
-        parsed=urlparse(url)
-        host=(parsed.hostname or '').lower()
-        query=parse_qs(parsed.query)
+        parsed = urlparse(url)
+        host = (parsed.hostname or '').lower()
+        query = parse_qs(parsed.query)
     except Exception:
         return url
-    keys=()
-    if 'google.' in host or host.endswith('google.com'):
-        keys=('imgurl','mediaurl')
-    elif 'bing.com' in host:
-        keys=('mediaurl','imgurl')
+
+    keys = ()
+    if _host_is_or_subdomain(host, 'google.com'):
+        keys = ('imgurl', 'mediaurl')
+    elif _host_is_or_subdomain(host, 'bing.com'):
+        keys = ('mediaurl', 'imgurl')
+
     for key in keys:
         for value in query.get(key) or ():
-            candidate=_clean_url(unquote(str(value)))
-            if urlparse(candidate).scheme.lower() in ('http','https'):
+            candidate = _clean_url(unquote(str(value)))
+            if urlparse(candidate).scheme.lower() in ('http', 'https'):
                 return candidate
     return url
 
@@ -127,7 +146,8 @@ def parse_canvas_drop(raw_data: object, *, split_items=()) -> CanvasDropSource:
             candidates = [_clean_url(match) for match in _URL_RE.findall(text)]
         for url in candidates:
             if url not in seen and urlparse(url).scheme.lower() in ('http', 'https'):
-                seen.add(url); urls.append(url)
+                seen.add(url)
+                urls.append(url)
     if urls:
         urls.sort(key=lambda url: (not _looks_like_image_url(url), len(url)))
         return CanvasDropSource(_unwrap_image_search_url(urls[0]), 'Dropped web image', 'url')
