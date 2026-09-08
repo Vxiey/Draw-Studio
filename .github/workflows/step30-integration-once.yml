@@ -72,6 +72,6 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add Version.py version_info.txt UpdateCenter.py installer/DrawStudio.iss build_release.py ReleasePackage.py SkribblFastRenderer.py PreviewDiagnostics.py README.md VERSION-HISTORY.md docs/VERSION-HISTORY.md .github/workflows/build-windows.yml ROADMAP-STEP22-PLUS.md README-INDEX.md test_*.py
+          git add Version.py version_info.txt UpdateCenter.py installer/DrawStudio.iss build_release.py ReleasePackage.py SkribblFastRenderer.py PreviewDiagnostics.py README.md VERSION-HISTORY.md docs/VERSION-HISTORY.md ROADMAP-STEP22-PLUS.md README-INDEX.md test_*.py
           git commit -m 'Complete Step 30 Release Candidate Hardening'
           git push
