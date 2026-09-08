@@ -30,7 +30,11 @@ jobs:
 
       - name: Apply Step 30 integration
         shell: pwsh
-        run: python step30_integrate_once.py
+        run: |
+          python step30_integrate_once.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python step30_preview_fix_once.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run Step 30 targeted regressions
         shell: pwsh
@@ -51,7 +55,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python ReleaseCandidateHardening.py --source-gate --soak-cycles 5000
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m py_compile ReleaseCandidateHardening.py StabilityRC.py ReleaseStabilityHardening.py UpdateCenter.py build_release.py DrawBot.py HybridRenderer3.py Version.py
+          python -m py_compile ReleaseCandidateHardening.py StabilityRC.py ReleaseStabilityHardening.py UpdateCenter.py build_release.py PreviewDiagnostics.py DrawBot.py HybridRenderer3.py Version.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Commit integrated Step 30
@@ -60,6 +64,6 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add Version.py version_info.txt UpdateCenter.py installer/DrawStudio.iss build_release.py .github/workflows/build-windows.yml ROADMAP-STEP22-PLUS.md README-INDEX.md test_*.py
+          git add Version.py version_info.txt UpdateCenter.py installer/DrawStudio.iss build_release.py PreviewDiagnostics.py .github/workflows/build-windows.yml ROADMAP-STEP22-PLUS.md README-INDEX.md test_*.py
           git commit -m 'Complete Step 30 Release Candidate Hardening'
           git push
