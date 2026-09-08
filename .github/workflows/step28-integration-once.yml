@@ -1,4 +1,5 @@
 name: Step 28 more drawing targets integration once
+# retry: corrected Step 28 + legacy version assertions
 
 on:
   push:
