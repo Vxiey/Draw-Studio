@@ -1,0 +1,41 @@
+name: Package v1.0.127-beta Step 28 once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/step28-package-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  package-step28:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Verify Step 28 core
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest -v test_target_capabilities_v10127.py test_step28_more_targets_v10127.py
+          python -m py_compile TargetCapabilities.py GameProfiles.py ProfileEngine.py BrowserAutoCalibration.py SmartRecovery.py StrokeDeliveryVerification.py OneClickSetupVerification.py ProfileIsolation.py BeginnerSetupWizard.py StudioUI.py AppTools.py build_exe.py Version.py
+
+      - name: Build clean source ZIP
+        run: python step28_package_once.py
+
+      - name: Commit Step 28 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Draw-Studio-1.0.127-beta-Step28-More-Drawing-Targets.zip SOURCE-PACKAGE-SHA256.txt README.md docs/VERSION-HISTORY.md VERSION-HISTORY.md
+          git commit -m 'Add v1.0.127-beta Step 28 source package'
+          git push
