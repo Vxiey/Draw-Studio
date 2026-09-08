@@ -72,6 +72,10 @@ jobs:
               rel = src.relative_to(source).as_posix()
               name = PurePosixPath(rel).name
 
+              # Keep repository-owned workflows intact. The normal Actions token
+              # can publish source files but cannot modify workflow files.
+              if rel.startswith('.github/workflows/'):
+                  continue
               if rel in skip_exact or rel.startswith('docs/history/'):
                   continue
 
@@ -85,7 +89,6 @@ jobs:
                   if not keep:
                       continue
 
-              # Never publish runtime/build/user state even if it appears in a future package.
               parts = set(PurePosixPath(rel).parts)
               if parts & {'.venv', '.build-venv', '__pycache__', 'build', 'dist', 'release', 'logs', 'safety-reports', 'diagnostics', 'reports'}:
                   continue
