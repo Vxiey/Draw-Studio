@@ -1,0 +1,65 @@
+name: Step 30 Release Candidate Hardening integration once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/step30-integration-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  integrate-step30:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+
+      - name: Install runtime dependencies
+        shell: pwsh
+        run: python -m pip install -r requirements.txt
+
+      - name: Apply Step 30 integration
+        shell: pwsh
+        run: python step30_integrate_once.py
+
+      - name: Run Step 30 targeted regressions
+        shell: pwsh
+        run: |
+          python -m unittest -v test_step30_release_candidate_hardening_v10129rc1.py test_hybrid_renderer3_v10128.py test_step28_more_targets_v10127.py test_one_click_setup_verification_v10126.py test_profile_portability_step27.py test_stability_release_candidate_v1081.py test_step18_release_stability_hardening_v10142.py test_update_center_v1059.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run complete regression discovery
+        shell: pwsh
+        run: |
+          python -m unittest discover -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run self-test and source release gate
+        shell: pwsh
+        run: |
+          python DrawBot.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python ReleaseCandidateHardening.py --source-gate --soak-cycles 5000
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m py_compile ReleaseCandidateHardening.py StabilityRC.py ReleaseStabilityHardening.py UpdateCenter.py build_release.py DrawBot.py HybridRenderer3.py Version.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Commit integrated Step 30
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Version.py version_info.txt UpdateCenter.py installer/DrawStudio.iss build_release.py .github/workflows/build-windows.yml ROADMAP-STEP22-PLUS.md README-INDEX.md test_*.py
+          git commit -m 'Complete Step 30 Release Candidate Hardening'
+          git push
