@@ -1,4 +1,4 @@
-name: Step 27 profile portability test once
+name: Step 27 profile portability integration once
 
 on:
   push:
@@ -8,15 +8,31 @@ on:
       - '.github/workflows/step27-profile-test-once.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  test-step27:
+  integrate-step27:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Run Step 27 tests
+
+      - name: Apply Step 27 integration
+        run: python step27_integrate_once.py
+
+      - name: Run Step 27 and profile isolation tests
         run: |
-          python -m unittest -v test_profile_portability_step27.py
-          python -m py_compile ProfilePortability.py
+          python -m unittest -v \
+            test_profile_portability_step27.py \
+            test_profile_isolation_v107.py \
+            test_profile_switch_safety.py \
+            test_step9_profile_calibration_isolation_v10133.py
+          python -m py_compile ProfilePortability.py StudioUI.py DrawBot.py GameProfiles.py ProfileStorage.py ProfileIsolation.py
+
+      - name: Commit integrated Step 27
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ProfilePortability.py StudioUI.py Version.py ROADMAP-STEP22-PLUS.md test_profile_portability_step27.py
+          git commit -m 'Complete Step 27 profile portability integration'
+          git push
