@@ -1,16 +1,9 @@
-"""Create a release-grade Windows package for Draw Studio.
-
-Run on Windows:
-    py -3 build_release.py
-    py -3 build_release.py --installer
-
-The default artifact is a PyInstaller onedir build packed as a ZIP. With
---installer, Inno Setup is used to create a per-user installer as well.
-"""
+"""Create and validate a release-grade Windows package for Draw Studio."""
 from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -18,7 +11,8 @@ import subprocess
 import sys
 import zipfile
 
-from Version import APP_VERSION
+from Version import APP_VERSION, BUILD_CHANNEL
+from ReleaseCandidateHardening import run_source_release_gate, validate_windows_release
 
 BASE = Path(__file__).resolve().parent
 DIST = BASE / "dist" / "DrawStudio"
@@ -46,6 +40,10 @@ def zip_onedir(destination: Path) -> None:
             if path.is_file():
                 relative = Path("DrawStudio") / path.relative_to(DIST)
                 archive.write(path, relative.as_posix())
+    with zipfile.ZipFile(destination, "r") as archive:
+        bad=archive.testzip()
+        if bad is not None:
+            raise SystemExit(f"Release ZIP failed integrity at {bad}")
 
 
 def find_iscc() -> Path | None:
@@ -59,21 +57,45 @@ def find_iscc() -> Path | None:
     return next((path for path in candidates if path.is_file()), None)
 
 
+def _clean_current_release_outputs() -> None:
+    RELEASE.mkdir(exist_ok=True)
+    for path in RELEASE.glob(f"DrawStudio-{APP_VERSION}-*"):
+        if path.is_file():
+            path.unlink()
+
+
+def _write_manifest(artifacts: list[dict]) -> Path:
+    path=RELEASE / f"DrawStudio-{APP_VERSION}-manifest.json"
+    payload={
+        "schema":1,
+        "app":"Draw Studio",
+        "version":APP_VERSION,
+        "channel":BUILD_CHANNEL,
+        "architecture":"windows-x64",
+        "unsigned":True,
+        "artifacts":artifacts,
+    }
+    path.write_text(json.dumps(payload,indent=2,sort_keys=True)+"\n",encoding="utf-8")
+    return path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--installer", action="store_true", help="Also build the Inno Setup installer")
-    parser.add_argument("--skip-tests", action="store_true", help="Skip Python tests (not recommended for releases)")
+    parser.add_argument("--skip-tests", action="store_true", help="Skip duplicate tests only when CI already ran the complete gate")
     parser.add_argument("--gpu", action="store_true", help="Bundle optional NVIDIA CUDA/CuPy acceleration")
     args = parser.parse_args()
     if sys.platform != "win32":
-        raise SystemExit("Release EXEs must be built on Windows. Use the included GitHub Actions workflow or Build-Release.bat on a Windows PC.")
+        raise SystemExit("Release EXEs must be built on Windows. Use the GitHub Actions release workflow or Build-Release.bat.")
     github_ref=os.environ.get('GITHUB_REF_NAME','').strip()
     github_ref_type=os.environ.get('GITHUB_REF_TYPE','').strip()
     if github_ref_type == 'tag' and github_ref and github_ref != f'v{APP_VERSION}':
         raise SystemExit(f'Git tag {github_ref!r} does not match Version.py ({APP_VERSION}). Expected tag v{APP_VERSION}.')
 
-    # A clean Windows machine may have Python but not the source dependencies.
-    # Bootstrap only the packages declared by the project before running tests.
+    report=run_source_release_gate(BASE,soak_cycles=5000)
+    print('Step 30 source gate: PASS',report.as_dict())
+    _clean_current_release_outputs()
+
     run([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
     run([sys.executable, "-m", "pip", "install", "-r", str(BASE / "requirements.txt")])
 
@@ -85,20 +107,16 @@ def main() -> int:
     exe = DIST / "DrawStudio.exe"
     if not exe.is_file() or exe.read_bytes()[:2] != b"MZ":
         raise SystemExit("Release build did not produce a valid DrawStudio.exe.")
-
-    # Run the frozen binary's non-interactive logic smoke test before packaging.
     run([str(exe), "--self-test"], cwd=DIST)
 
-    RELEASE.mkdir(exist_ok=True)
-    # Standard artifact template: DrawStudio-{APP_VERSION}-Windows-x64.zip
     suffix = "-CUDA" if args.gpu else ""
     zip_path = RELEASE / f"DrawStudio-{APP_VERSION}-Windows-x64{suffix}.zip"
     zip_onedir(zip_path)
-    hash_rows = [f"{sha256(zip_path)}  {zip_path.name}"]
+    artifacts=[{"name":zip_path.name,"type":"windows-zip","sha256":sha256(zip_path),"bytes":zip_path.stat().st_size}]
+    hash_rows = [f"{artifacts[-1]['sha256']}  {zip_path.name}"]
 
     if args.installer and args.gpu:
         raise SystemExit("The CUDA release currently ships as a ZIP. Build the standard installer separately without --gpu.")
-
     if args.installer:
         iscc = find_iscc()
         if iscc is None:
@@ -107,15 +125,22 @@ def main() -> int:
         setup = RELEASE / f"DrawStudio-{APP_VERSION}-Windows-x64-Setup.exe"
         if not setup.is_file() or setup.read_bytes()[:2] != b"MZ":
             raise SystemExit("Installer build did not produce the expected Setup.exe.")
-        hash_rows.append(f"{sha256(setup)}  {setup.name}")
+        digest=sha256(setup)
+        hash_rows.append(f"{digest}  {setup.name}")
+        artifacts.append({"name":setup.name,"type":"inno-setup","sha256":digest,"bytes":setup.stat().st_size})
 
     checksum = RELEASE / f"DrawStudio-{APP_VERSION}-SHA256.txt"
     checksum.write_text("\n".join(hash_rows) + "\n", encoding="utf-8")
+    manifest=_write_manifest(artifacts)
+
+    validate_windows_release(RELEASE,app_version=APP_VERSION,require_installer=args.installer)
+    print("Step 30 Windows artifact gate: PASS")
     print("\nRelease artifacts:")
     for row in hash_rows:
         print(" ", row)
     print(" ", checksum)
-    print("\nThe EXE and installer are unsigned until you add your own Authenticode code-signing certificate.")
+    print(" ", manifest)
+    print("\nThe EXE and installer remain unsigned until an Authenticode certificate is configured.")
     return 0
 
 

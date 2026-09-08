@@ -54,8 +54,8 @@ class GarticPhoneTurboTests(unittest.TestCase):
         self.assertEqual(effective['custom_color_workflow'],'Calibrated palette')
         self.assertEqual(effective['progressive_rendering'],'Off')
         self.assertEqual(effective['adaptive_detail'],'Strong simplify')
-        self.assertEqual(effective['time_budget_mode'],'60 sec')
-        self.assertEqual(effective['max_stroke_cap'],'1000')
+        self.assertEqual(effective['time_budget_mode'],'Gartic Phone Fast')
+        self.assertEqual(effective['max_stroke_cap'],'2500')
 
     def test_manual_settings_do_not_force_turbo(self):
         effective,meta=resolve_profile_policy('Gartic Phone',BASE,mode='Manual settings')

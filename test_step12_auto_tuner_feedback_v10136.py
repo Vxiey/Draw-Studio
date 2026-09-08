@@ -134,15 +134,20 @@ class Step12AutoTunerFeedbackTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'feedback-gartic-phone.json'
             options=base_options(80)
-            for _ in range(3):
-                result=record_completed_feedback(plan_for(options, predicted=50.0, usable=80.0, visual=83.0,
-                                                  source_kind='photo / texture'),
-                                                 70.0, completed_paths=100, path=path)
-                self.assertTrue(result['recorded'])
             original_resolver=AutoTunerFeedback.profile_auto_tuner_feedback_file
             try:
                 AutoTunerFeedback.profile_auto_tuner_feedback_file=lambda profile_key: path
-                tuned=tune_options(flat_image(), options)
+                probe=tune_options(flat_image(), options, source_kind_hint='photo / texture')
+                probe_meta=probe['auto_tuner_meta']
+                strategy=probe_meta['base_strategy']
+                source_kind=probe_meta['source_features']['source_kind']
+                for _ in range(3):
+                    result=record_completed_feedback(
+                        plan_for(options, strategy=strategy, source_kind=source_kind,
+                                 predicted=50.0, usable=80.0, visual=83.0),
+                        70.0, completed_paths=100, path=path)
+                    self.assertTrue(result['recorded'])
+                tuned=tune_options(flat_image(), options, source_kind_hint='photo / texture')
             finally:
                 AutoTunerFeedback.profile_auto_tuner_feedback_file=original_resolver
             feedback=tuned['auto_tuner_meta']['feedback_learning']

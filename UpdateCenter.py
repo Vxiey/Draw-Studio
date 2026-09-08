@@ -14,7 +14,7 @@ from typing import Iterable
 
 from Version import APP_VERSION, BUILD_CHANNEL
 
-GITHUB_REPOSITORY = "yesverynice12/Draw-Studio"
+GITHUB_REPOSITORY = "Vxiey/Draw-Studio"
 GITHUB_RELEASES_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases?per_page=100"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPOSITORY}/releases"
 
@@ -73,16 +73,24 @@ def _release_allowed(release: dict, channel: str) -> bool:
     if not isinstance(release, dict) or bool(release.get("draft")):
         return False
     tag = normalize_tag(release.get("tag_name"))
-    if parse_version(tag) is None:
+    parsed = parse_version(tag)
+    if parsed is None:
         return False
-    # Beta builds may see both beta/prerelease and stable releases. A stable
-    # channel intentionally ignores GitHub prereleases.
-    if str(channel).lower() == "stable" and bool(release.get("prerelease")):
-        return False
+    channel = str(channel or "beta").lower()
+    # Channel floors prevent an RC build from being pointed back toward beta
+    # releases. Higher patch versions still compare normally inside the allowed
+    # channel set. Stable accepts published non-prereleases only.
+    if channel == "stable":
+        return not bool(release.get("prerelease")) and parsed.stage_rank >= _STAGE_RANK["stable"]
+    if channel == "rc":
+        return parsed.stage_rank >= _STAGE_RANK["rc"]
+    if channel == "beta":
+        return parsed.stage_rank >= _STAGE_RANK["beta"]
     return True
 
 
-def select_best_release(releases: Iterable[dict], *, channel: str = BUILD_CHANNEL) -> dict | None:
+def select_best_release(releases: Iterable[dict], *, channel: str | None = None) -> dict | None:
+    channel = BUILD_CHANNEL if channel is None else str(channel)
     candidates = [item for item in releases if _release_allowed(item, channel)]
     if not candidates:
         return None

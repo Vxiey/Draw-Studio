@@ -40,3 +40,6 @@ Step docs:
 - `STEP-29-HYBRID-RENDERER-3.md` — specialised deterministic Hybrid Renderer 3.0 modes
 - `COLOR-ENGINE-NAMED-COLOR-INTELLIGENCE.md` — CSS4/Tk/X11 parsing, aliases and OKLab human-readable diagnostics
 - `ROADMAP-STEP22-PLUS.md`
+
+- `STEP-30-RELEASE-CANDIDATE-HARDENING.md` — RC release gates, installer/update validation and feature freeze
+- `RELEASE-NOTES-v1.0.129-rc1-Step30.md` — v1.0.129-rc1 release notes

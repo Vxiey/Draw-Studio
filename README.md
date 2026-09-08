@@ -114,7 +114,7 @@ If you later move, resize, zoom or significantly change the target app, Draw Stu
 
 Download the latest ZIP from this repository:
 
-`Draw-Studio-1.0.128-beta-Step29-Hybrid-Renderer-3.zip`
+`Draw-Studio-1.0.129-rc1-Step30-Release-Candidate-Hardening.zip`
 
 Extract the **entire ZIP** to a normal folder before starting the program.
 
@@ -212,6 +212,10 @@ Use it when the drawing timer is very short.
 
 Best for most images. These modes try to keep a good balance between speed, color accuracy and detail.
 
+### Hybrid Renderer 3.0
+
+Use Auto Hybrid when you want Draw Studio to choose a deterministic specialised renderer for Pixel Art, Icon / Logo, Line Art, Portrait, Shaded Object or Deadline Silhouette. The analysis is local Pillow/NumPy structure analysis — no AI, ML or OCR.
+
 ### Pixel Accurate
 
 Use this when preserving the original image is more important than drawing speed.
@@ -250,14 +254,27 @@ Step 26 adds **Named Color Intelligence**, including:
 
 These extra color names are **not added to the drawing palette automatically**. Draw Studio still uses the palette that was actually calibrated for the selected target application.
 
-## Current beta
+## Current release candidate
 
-**v1.0.128-beta — Step 29: Hybrid Renderer 3.0**
+**v1.0.129-rc1 — Step 30: Release Candidate Hardening**
 
-Current verified source package:
+Current RC source package:
 
-- `Draw-Studio-1.0.128-beta-Step29-Hybrid-Renderer-3.zip`
-- SHA-256 is published in `SOURCE-PACKAGE-SHA256.txt`
+- `Draw-Studio-1.0.129-rc1-Step30-Release-Candidate-Hardening.zip`
+- SHA-256 is published in `SOURCE-PACKAGE-SHA256.txt` after packaging
+
+### Step 30 highlights
+
+- Numbered feature roadmap is frozen for RC validation
+- 5,000-cycle start/stop/disarm lifecycle soak gate
+- Repeated profile-storage isolation soak
+- Update Center fixed to `Vxiey/Draw-Studio` with RC-aware channel filtering
+- Version.py, PE metadata and Inno Setup version consistency gates
+- Windows ZIP/installer/SHA-256/manifest validation
+- Silent installer → installed EXE self-test → silent uninstall in Windows CI
+- Source/release packages reject logs, dumps, bytecode, tests and one-time patch files
+- Full regression discovery is a release gate
+- Hybrid Renderer 3.0 remains the current renderer; no new renderer feature is added by Step 30
 
 ### Step 29 highlights
 
@@ -514,9 +531,16 @@ A manual workflow run can build downloadable Windows artifacts. Pushing a tag th
 
 ## Developer verification
 
+The source-packaging tools are **local-only** and do not upload runtime data.
+
 ```powershell
+python ReleasePackage.py --check
+python ReleaseCandidateHardening.py --source-gate --soak-cycles 5000
 python -m unittest discover -v
 python DrawBot.py --self-test
 ```
+
+Release architecture and roadmap references: `ROADMAP-STEP22-PLUS.md` and `STEP-22-UNIVERSAL-HARDWARE-AUTO-BENCHMARK.md`.
+ Historical milestone: **Step 22 Universal Hardware Auto Benchmark** introduced the universal hardware benchmark foundation.
 
 A public beta should still be tested on a clean Windows 10/11 x64 system with the real target applications before broad release.

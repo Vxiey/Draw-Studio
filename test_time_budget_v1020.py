@@ -13,8 +13,8 @@ from Version import APP_VERSION, FILE_VERSION
 
 class TimeBudgetV1020Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, '1.0.124-beta')
-        self.assertEqual(FILE_VERSION, '1.0.124')
+        self.assertEqual(APP_VERSION,'1.0.129-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.129')
 
     def test_modes_validate_and_resolve(self):
         self.assertIn('90 sec', TIME_BUDGET_MODES)

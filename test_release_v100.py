@@ -10,9 +10,9 @@ from Version import APP_VERSION, BUILD_CHANNEL, FILE_VERSION
 
 class ReleaseTests(unittest.TestCase):
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, '1.0.124-beta')
-        self.assertEqual(FILE_VERSION, '1.0.124')
-        self.assertEqual(BUILD_CHANNEL, 'beta')
+        self.assertEqual(APP_VERSION,'1.0.129-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.129')
+        self.assertEqual(BUILD_CHANNEL,'rc')
 
     def test_first_run_state_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -38,7 +38,7 @@ class ReleaseTests(unittest.TestCase):
     def test_github_workflow_builds_and_publishes(self):
         text=(Path(__file__).resolve().parent/'.github'/'workflows'/'build-windows.yml').read_text(encoding='utf-8')
         self.assertIn('actions/checkout@v4',text); self.assertIn('actions/setup-python@v5',text)
-        self.assertIn('actions/upload-artifact@v4',text); self.assertIn('python ReleasePackage.py --check',text)
+        self.assertIn('actions/upload-artifact@v4',text); self.assertIn('python ReleasePackage.py --check',text); self.assertIn('ReleaseCandidateHardening.py --source-gate',text)
         self.assertIn('gh release create',text); self.assertIn('--notes-file',text)
 
     def test_runtime_safety_ui_present(self):

@@ -66,11 +66,12 @@ class Step21ReleaseCleanupTests(unittest.TestCase):
 
     def test_readme_and_release_docs_are_current(self):
         readme = (self.root / "README.md").read_text(encoding="utf-8")
-        self.assertIn("Step 22 Universal Hardware Auto Benchmark", readme)
+        self.assertIn("Step 30: Release Candidate Hardening", readme)
         self.assertIn("python ReleasePackage.py --check", readme)
         self.assertIn("local-only", readme)
         self.assertIn("ROADMAP-STEP22-PLUS.md", readme)
         self.assertIn("STEP-22-UNIVERSAL-HARDWARE-AUTO-BENCHMARK.md", readme)
+        self.assertIn("ReleaseCandidateHardening.py --source-gate", readme)
         notes = (self.root / "RELEASE-NOTES-Step21-Build-Publisher-GitHub-Release.md").read_text(encoding="utf-8")
         self.assertIn("ReleasePackage.py", notes)
         self.assertIn("Not changed", notes)
@@ -81,8 +82,9 @@ class Step21ReleaseCleanupTests(unittest.TestCase):
         self.assertIn("actions/setup-python@v5", workflow)
         self.assertIn("actions/upload-artifact@v4", workflow)
         self.assertIn("python ReleasePackage.py --check", workflow)
-        self.assertIn("Draw-Studio-*-Source.zip", workflow)
-        self.assertIn("DrawStudio-*-ReleaseManifest.json", workflow)
+        self.assertIn("ReleaseCandidateHardening.py --source-gate", workflow)
+        self.assertIn("DrawStudio-*-Windows-x64.zip", workflow)
+        self.assertIn("DrawStudio-*-manifest.json", workflow)
         self.assertIn("--notes-file", workflow)
 
     def test_step22_roadmap_rolls_forward_after_implementation(self):

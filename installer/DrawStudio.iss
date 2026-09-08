@@ -1,11 +1,12 @@
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.63-beta"
+#define MyAppVersion "1.0.129-rc1"
 #endif
 
 [Setup]
 AppId={{6A4AD303-4F16-4ED7-A9AF-5B912352D83E}
 AppName=Draw Studio
 AppVersion={#MyAppVersion}
+VersionInfoVersion=1.0.129.0
 AppPublisher=Draw Studio
 DefaultDirName={localappdata}\Programs\Draw Studio
 DefaultGroupName=Draw Studio
@@ -21,6 +22,9 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayName=Draw Studio {#MyAppVersion}
 SetupLogging=yes
+RestartIfNeededByRun=no
+CloseApplications=yes
+RestartApplications=no
 
 [Files]
 Source: "..\dist\DrawStudio\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

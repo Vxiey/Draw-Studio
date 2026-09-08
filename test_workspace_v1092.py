@@ -45,13 +45,13 @@ class WorkspaceTests(unittest.TestCase):
         root=Mock();root.state.return_value='normal';root.winfo_exists.return_value=True;root.update_idletasks.side_effect=RuntimeError('failed')
         with self.assertRaises(RuntimeError):ScreenTaskWindow(root).hide()
         root.deiconify.assert_called_once()
-    def response(self,tag):return SimpleNamespace(raise_for_status=lambda:None,json=lambda:[dict(tag_name=tag,draft=False,prerelease=True,html_url='https://github.com/yesverynice12/Draw-Studio/releases/tag/'+tag)])
+    def response(self,tag):return SimpleNamespace(raise_for_status=lambda:None,json=lambda:[dict(tag_name=tag,draft=False,prerelease=True,html_url='https://github.com/Vxiey/Draw-Studio/releases/tag/'+tag)])
     def test_current_version_message(self):
-        with patch('UpdateCenter.APP_VERSION','1.0.92-beta'):
+        with patch('UpdateCenter.APP_VERSION','1.0.92-beta'), patch('UpdateCenter.BUILD_CHANNEL','beta'):
             r=check_for_updates(request_get=lambda *a,**k:self.response('v1.0.92-beta'))
         self.assertEqual(r['message'],'You are on the latest version.')
     def test_newer_release_download_label(self):
-        with patch('UpdateCenter.APP_VERSION','1.0.92-beta'):
+        with patch('UpdateCenter.APP_VERSION','1.0.92-beta'), patch('UpdateCenter.BUILD_CHANNEL','beta'):
             r=check_for_updates(request_get=lambda *a,**k:self.response('v1.0.93-beta'))
         self.assertTrue(r['update_available']);self.assertEqual(r['message'],'Download version 1.0.93-beta')
     def test_network_failure_is_not_up_to_date(self):

@@ -59,7 +59,7 @@ EXCLUDED_FILE_NAMES = {
 }
 
 OUTPUT_DIR_NAMES = {"build", "dist", "release"}
-NON_FATAL_EXCLUDED_DIR_NAMES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
+NON_FATAL_EXCLUDED_DIR_NAMES = set(EXCLUDED_DIR_NAMES)
 
 EXCLUDED_PREFIXES = (
     "DrawStudio-Safety-",
@@ -141,6 +141,27 @@ def is_forbidden_path(relative_path: str | PurePosixPath) -> bool:
     # Generated release/source archives should never be re-bundled into another release.
     if name.startswith(("Draw-Studio-", "DrawStudio-")) and suffix in {".zip", ".exe"}:
         return True
+    # One-shot integration/packaging helpers are repository maintenance state,
+    # never source-release contents.
+    if name.lower().endswith('_once.py'):
+        return True
+    if len(parts) >= 3 and parts[0] == '.github' and parts[1] == 'workflows' and 'once' in name.lower():
+        return True
+    return False
+
+
+def is_nonfatal_excluded_path(relative_path: str | PurePosixPath) -> bool:
+    rel=PurePosixPath(relative_path)
+    parts=_parts(rel); name=parts[-1] if parts else ''
+    suffix=PurePosixPath(name).suffix.lower()
+    if any(part in NON_FATAL_EXCLUDED_DIR_NAMES for part in parts):
+        return True
+    if name.startswith(("Draw-Studio-", "DrawStudio-")) and suffix in {'.zip','.exe'}:
+        return True
+    if name.lower().endswith('_once.py'):
+        return True
+    if len(parts) >= 3 and parts[0] == '.github' and parts[1] == 'workflows' and 'once' in name.lower():
+        return True
     return False
 
 
@@ -187,6 +208,8 @@ def validate_release_tree(root: Path, *, allow_output_dirs: bool = False) -> Rel
         for filename in files:
             rel = PurePosixPath(rel_current, filename).as_posix() if rel_current else filename
             if is_forbidden_path(rel):
+                if is_nonfatal_excluded_path(rel):
+                    continue
                 forbidden.append(rel)
     warnings: list[str] = []
     if not (root / "golden-regression" / "manifest.json").is_file():

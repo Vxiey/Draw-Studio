@@ -23,5 +23,6 @@ class Profiles(unittest.TestCase):
         finally:reset_palette()
 
     def test_games_paint_and_generic_have_distinct_storage_keys(self):
-        self.assertEqual(len(PROFILES),9)
-        self.assertEqual(len({v[0] for v in PROFILES.values()}),9)
+        self.assertEqual(len(PROFILES),11)
+        self.assertEqual(len({v[0] for v in PROFILES.values()}),11)
+        self.assertIn('Kleki',PROFILES);self.assertIn('Magma',PROFILES)

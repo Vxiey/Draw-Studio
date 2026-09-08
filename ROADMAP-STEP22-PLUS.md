@@ -70,6 +70,6 @@ Adds a central target-capability registry and dedicated **Kleki** + **Magma** pr
 
 Adds a deterministic Hybrid Renderer 3.0 orchestration layer with Auto Hybrid plus specialised Pixel Art, Icon / Logo, Line Art, Portrait, Shaded Object and Deadline Silhouette modes. It routes into the existing Pixel Accurate, Quick Sketch Fill + Contour, Shape Paths, PortraitPlanner, adaptive detail and deadline engines instead of duplicating native input. Auto Hybrid uses bounded Pillow/NumPy structure statistics only; it does not use AI, ML, OCR or face recognition. CanvasGuard, calibration, target locks, preflight and dry-run remain authoritative.
 
-## Step 30 — Release Candidate Hardening
+## Completed — Step 30 — Release Candidate Hardening
 
-Run longer real-world stability passes, validate installer/update flows and freeze the release branch.
+Freezes the numbered feature roadmap for RC1, adds executable source/artifact release gates, 5,000-cycle lifecycle stress checks, profile-isolation soak checks, corrected Update Center repository/channel handling, synchronized installer/version metadata, validated SHA-256 + release manifests, and a Windows silent install → frozen self-test → silent uninstall round trip before release artifacts can be published.

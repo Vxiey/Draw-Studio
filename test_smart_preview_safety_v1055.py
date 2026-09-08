@@ -19,8 +19,8 @@ BASE_OPTIONS = {
 
 class SmartPreviewSafetyV1055Tests(unittest.TestCase):
     def test_version_bumped(self):
-        self.assertEqual(APP_VERSION, '1.0.124-beta')
-        self.assertEqual(FILE_VERSION, '1.0.124')
+        self.assertEqual(APP_VERSION,'1.0.129-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.129')
 
     def test_hard_clip_preview_skips_edge_band_stroke(self):
         image_size = (10, 10)

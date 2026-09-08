@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from typing import Sequence
-from ColorFidelity import color_metrics, validate_color_fidelity
+from ColorFidelity import color_metrics, palette_match_cost, validate_color_fidelity
 from AdaptivePaletteFidelity import select_adaptive_palette
 
 Segment = tuple[int, int, int, int]
@@ -104,6 +104,33 @@ def optimize_skribbl_groups(groups: Sequence[Sequence[Segment]], palette_rgb: Se
     keep,mapping,palette_quality=select_adaptive_palette(selector_groups,palette,max_colors,fidelity=color_fidelity)
     if not keep:
         keep=[darkest];mapping={i:darkest for i in active};palette_quality={}
+    elif darkest not in keep:
+        # Structural dark ink is a semantic geometry anchor for this fast path.
+        # Preserve it even when its pixel weight is tiny, while keeping the same
+        # max-colour budget. Drop the weakest non-dark retained swatch if needed.
+        keep=list(map(int,keep))
+        if len(keep) >= max_colors:
+            removable=[i for i in keep if i != darkest]
+            if removable:
+                drop=min(removable,key=lambda i:(weights[i],i))
+                keep.remove(drop)
+        keep.append(int(darkest))
+        keep=list(dict.fromkeys(keep))
+        mapping={}
+        for index in active:
+            if index in keep:
+                mapping[index]=index
+                continue
+            mapping[index]=min(
+                keep,
+                key=lambda target:(
+                    palette_match_cost(palette[index],palette[target],
+                                       color_rendering='Perceptual match',fidelity=color_fidelity),
+                    -weights[target],target),
+            )
+        mapping[darkest]=darkest
+        palette_quality=dict(palette_quality or {})
+        palette_quality['forced_dark_structure']=True
 
     result: list[list[Segment]] = [[] for _ in work]
     remapped = 0
@@ -145,4 +172,5 @@ def optimize_skribbl_groups(groups: Sequence[Sequence[Segment]], palette_rgb: Se
         'region_aware_quantization': bool(palette_quality.get('region_aware_quantization',False)),
         'region_detail_anchor_indexes': tuple(palette_quality.get('region_detail_anchor_indexes',())),
         'region_detail_anchors_kept': tuple(palette_quality.get('region_detail_anchors_kept',())),
+        'dark_structure_forced': bool(palette_quality.get('forced_dark_structure',False)),
     }

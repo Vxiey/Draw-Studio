@@ -416,7 +416,7 @@ def format_preview_diagnostics(meta: dict[str, Any]) -> str:
                 lines.append('Quick Sketch: fallback · ' + str(quick_sketch.get('reason')))
         except Exception:
             pass
-    hybrid=diagnostics.get('hybrid_renderer') or {}
+    hybrid=meta.get('hybrid_renderer') or {}
     if hybrid.get('enabled'):
         try:
             mode=str(hybrid.get('resolved_mode') or '?')
