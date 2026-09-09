@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-from UpdateCenter import installer_asset,download_installer,UpdateCheckError
+from UpdateCenter import installer_asset,download_installer,installer_launch_args,UpdateCheckError
 
 try:
     from DrawBot import DrawBotApp
@@ -71,6 +71,25 @@ class InstallerUpdateTests(unittest.TestCase):
         app.stop.set()
         self.assertFalse(DrawBotApp._install_checked_update(app,{'request':token}))
 
+
+    def test_installed_build_uses_silent_in_place_relaunch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);setup=root/'setup.exe';setup.write_bytes(DATA)
+            executable=root/'DrawStudio.exe';(root/'unins000.exe').write_bytes(b'MZ')
+            args=installer_launch_args(setup,executable=executable)
+            self.assertIn('/DIR='+str(root),args)
+            for flag in ('/VERYSILENT','/SUPPRESSMSGBOXES','/CLOSEAPPLICATIONS','/RELAUNCHDRAWSTUDIO','/NORESTART'):
+                self.assertIn(flag,args)
+            self.assertNotIn('/FORCECLOSEAPPLICATIONS',args)
+
+    def test_portable_build_never_overwrites_itself_or_forces_silent_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);setup=root/'setup.exe';executable=root/'DrawStudio.exe'
+            args=installer_launch_args(setup,executable=executable)
+            self.assertFalse(any(arg.startswith('/DIR=') for arg in args))
+            self.assertNotIn('/VERYSILENT',args)
+            self.assertNotIn('/RELAUNCHDRAWSTUDIO',args)
+
     @unittest.skipUnless(__import__('os').name=='nt','Windows installer handoff')
     def test_installer_launch_rechecks_bytes_and_preserves_install_directory(self):
         from UpdateCenter import launch_installer
@@ -81,6 +100,8 @@ class InstallerUpdateTests(unittest.TestCase):
             launch_installer(setup,asset,executable=executable,launcher=lambda args:calls.append(args))
             self.assertIn('/DIR='+str(root),calls[0])
             self.assertIn('/NORESTART',calls[0])
+            self.assertIn('/VERYSILENT',calls[0])
+            self.assertIn('/RELAUNCHDRAWSTUDIO',calls[0])
             setup.write_bytes(DATA[:-1]+b'X')
             with self.assertRaises(UpdateCheckError):launch_installer(setup,asset,launcher=lambda args:self.fail('must not execute'))
 

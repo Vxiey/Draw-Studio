@@ -216,10 +216,33 @@ def download_installer(asset, *, directory=None, request_get=None, cancelled=lam
         if response is not None and hasattr(response,'close'):response.close()
         path.unlink(missing_ok=True)
 
+def installer_launch_args(path, *, executable=None):
+    """Build updater arguments without touching the OS, for deterministic tests.
+
+    Installed builds update silently in place and request an explicit relaunch
+    after Setup replaces the application files. Portable/source builds keep
+    the normal interactive installer flow and are never overwritten in place.
+    """
+    import sys
+    from pathlib import Path
+    target=Path(path)
+    current=Path(executable or sys.executable)
+    args=[str(target),'/SP-','/NORESTART']
+    installed=(current.name.lower()=='drawstudio.exe' and any(current.parent.glob('unins*.exe')))
+    if installed:
+        args.extend([
+            '/VERYSILENT',
+            '/SUPPRESSMSGBOXES',
+            '/CLOSEAPPLICATIONS',
+            '/RELAUNCHDRAWSTUDIO',
+            '/DIR='+str(current.parent),
+        ])
+    return args
+
 
 def launch_installer(path, asset, *, executable=None, launcher=None, cancelled=lambda:False):
-    """Recheck staged bytes and open the normal installer, never a shell command."""
-    import hashlib,os,subprocess,sys
+    """Recheck staged bytes and launch the verified Windows updater."""
+    import hashlib,os,subprocess
     from pathlib import Path
     if os.name!='nt':raise UpdateCheckError('Automatic installation requires Windows.')
     target=Path(path)
@@ -232,11 +255,6 @@ def launch_installer(path, asset, *, executable=None, launcher=None, cancelled=l
             digest.update(block)
     if target.stat().st_size!=asset['size'] or digest.hexdigest()!=asset['sha256']:
         raise UpdateCheckError('Installer changed after download; check for updates again.')
-    args=[str(target),'/SP-','/NORESTART']
-    current=Path(executable or sys.executable)
-    # Installed builds update in place. Portable/source builds use the normal
-    # installer destination rather than overwriting a checkout or random folder.
-    if current.name.lower()=='drawstudio.exe' and (current.parent/'unins000.exe').is_file():
-        args.append('/DIR='+str(current.parent))
+    args=installer_launch_args(target,executable=executable)
     if cancelled():raise InterruptedError('Update cancelled.')
     return (launcher or subprocess.Popen)(args)

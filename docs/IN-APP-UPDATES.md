@@ -1,15 +1,21 @@
 # In-app updates
 
-Press **Check updates / install** while idle. Draw Studio checks public GitHub Releases in Vxiey/Draw-Studio for a newer version allowed by the current release channel. It downloads the release's exact Windows x64 Setup asset, verifies its published size and GitHub SHA-256 digest, then opens the normal installer. Settings are saved before handoff. Draw Studio closes only after the installer process has started successfully. The installer offers to launch the updated app.
+Press **Check updates / install** while Draw Studio is idle. The installed Windows app checks public GitHub Releases in `Vxiey/Draw-Studio` for the newest version allowed by the current release channel.
 
-Installed builds pass their existing installation directory to the installer. Portable and Python-source builds use the normal installer destination. Updates use full installers, not binary delta patches. Windows may show its normal security/installer prompts. No background timer checks or downloads are added.
+For installed builds, Draw Studio downloads only the exact versioned Windows x64 Setup asset, validates the published size and GitHub SHA-256 digest, validates the PE header, hashes the file again immediately before launch, and then starts the installer in the existing installation directory. The app performs its normal controlled shutdown after the installer starts. Setup runs silently for an in-app upgrade and relaunches Draw Studio after replacement completes.
 
-Stop cancels download or pending handoff. Failed or mismatched downloads are removed without touching the installed application. The file is hashed again immediately before launch. Only assets belonging to the exact version and repository with a published SHA-256 digest qualify for automatic installation. Missing installers produce a retry/Releases message instead of executing a ZIP or unverified EXE. Stable builds do not upgrade to prereleases; RC builds accept newer RC or stable releases.
+The updater does not use forced process termination. A failed, cancelled, truncated, oversized, redirected-to-an-unexpected-host, or checksum-mismatched download is removed without touching the installed application. The fixed Inno Setup AppId keeps upgrades attached to the same installation.
+
+Portable ZIP and Python-source runs are never silently overwritten in place. They use the normal installer destination/flow instead.
+
+Stable builds do not upgrade to prereleases. RC builds accept newer RC or stable releases. Updates use complete verified installers rather than binary delta patches.
 
 ## Publishing future patches
 
-Increment APP_VERSION and update release metadata, tests and notes. Then change `.github/release-build-trigger` and push main. The workflow builds and tests Windows, checks installation/uninstallation, uploads artifacts and publishes a versioned GitHub Release. The release stays draft until all assets upload successfully. Published versions are not overwritten. Draft upload retries require the same commit. Tags must match APP_VERSION.
+Increment `APP_VERSION`/`FILE_VERSION`, synchronize release metadata/tests, and add the matching release notes. A `Version.py` change merged to `main` automatically triggers the verified Windows release workflow. The workflow runs release hardening, full Windows tests, `DrawBot.py --self-test`, package validation and a silent install/self-test/uninstall round trip before publishing the versioned installer, portable ZIP, SHA-256 file and manifest.
 
-The first updater-enabled release is 1.0.133-rc2. Install it once from Releases; earlier builds do not contain the new download/installer handoff. Subsequent newer releases are found from inside the application.
+Published versions are not overwritten. Draft upload retries must target the same commit. Release tags must match `APP_VERSION`.
+
+The first updater-enabled release was `1.0.133-rc2`; `1.0.140-rc1` strengthens installed-build in-place update and automatic relaunch behavior.
 
 References: [GitHub release asset digests](https://github.blog/changelog/2025-06-03-releases-now-expose-digests-for-release-assets/) and [Inno Setup command-line parameters](https://jrsoftware.org/ishelp/topic_setupcmdline.htm).

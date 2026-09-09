@@ -6,16 +6,16 @@ Draw Studio is a Windows desktop app that recreates images with mouse paths,
 color matching, outlines and fills. It uses local image processing, not AI image
 generation. Each target profile keeps its own calibration and drawing settings.
 
-## Download — v1.0.133-rc3
+## Download — v1.0.140-rc1
 
 | Download | How to use it |
 | --- | --- |
-| [Windows installer — recommended](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.133-rc3/DrawStudio-1.0.133-rc3-Windows-x64-Setup.exe) | Run Setup, then open Draw Studio. No separate Python installation needed. |
-| [Portable Windows ZIP](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.133-rc3/DrawStudio-1.0.133-rc3-Windows-x64.zip) | Extract the entire ZIP, open the DrawStudio folder and run DrawStudio.exe. Keep its supporting files together. |
-| [SHA-256 checksums](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.133-rc3/DrawStudio-1.0.133-rc3-SHA256.txt) | Verify the downloaded files. |
+| [Windows installer — recommended](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.140-rc1/DrawStudio-1.0.140-rc1-Windows-x64-Setup.exe) | Run Setup, then open Draw Studio. No separate Python installation needed. |
+| [Portable Windows ZIP](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.140-rc1/DrawStudio-1.0.140-rc1-Windows-x64.zip) | Extract the entire ZIP, open the DrawStudio folder and run DrawStudio.exe. Keep its supporting files together. |
+| [SHA-256 checksums](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.140-rc1/DrawStudio-1.0.140-rc1-SHA256.txt) | Verify the downloaded files. |
 
 [All releases](https://github.com/Vxiey/Draw-Studio/releases) ·
-[Release notes](RELEASE-NOTES-v1.0.133-rc3.md) ·
+[Release notes](RELEASE-NOTES-v1.0.140-rc1.md) ·
 [Documentation](README-INDEX.md)
 
 Requires **Windows 10/11, 64-bit**. Run Draw Studio and the target app at the same
@@ -72,7 +72,7 @@ scaling and browser zoom unchanged after calibration.
 
 ## Updates
 
-From **v1.0.133-rc3**, press **Check updates / install** while the app is idle.
+Installed Windows builds can press **Check updates / install** while the app is idle. A newer verified release is installed over the same Draw Studio installation and the app relaunches automatically after Setup completes.
 It finds a newer eligible GitHub Release, downloads its Windows installer,
 verifies the published SHA-256 digest and size, and opens the installer.
 Settings are saved and Draw Studio closes after the installer starts.
