@@ -52,7 +52,7 @@ class VerifiedCacheTests(unittest.TestCase):
         for version in ('bad', 2.0, True, {}, None):
             data['version']=version; self.path.write_text(json.dumps(data))
             self.assertEqual(self.load(), {})
-        data['version']=2;self.path.write_text('\ufeff'+json.dumps(data))
+        data['version']=2;self.path.write_text('\ufeff'+json.dumps(data),encoding='utf-8')
         self.assertIn('010203', self.load())
 
     def test_oversize_file_is_not_loaded(self):
@@ -325,7 +325,7 @@ class ProfileImportTests(unittest.TestCase):
 
     def test_bom_and_duplicate_keys(self):
         with tempfile.TemporaryDirectory() as td:
-            path=Path(td)/'profile.drawprofile';path.write_text('\ufeff'+json.dumps(self.package()))
+            path=Path(td)/'profile.drawprofile';path.write_text('\ufeff'+json.dumps(self.package()),encoding='utf-8')
             self.assertEqual(portability.read_profile_file(path)['profile']['name'],'Microsoft Paint')
             path.write_text('{"schema_version":0,"schema_version":1}')
             with self.assertRaises(portability.ProfilePortabilityError):portability.read_profile_file(path)

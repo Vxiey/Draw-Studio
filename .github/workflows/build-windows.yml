@@ -133,3 +133,29 @@ jobs:
             --prerelease `
             --title "Draw Studio $env:GITHUB_REF_NAME" `
             --notes-file RELEASE-NOTES-v1.0.133-rc1.md
+
+  remove-merged-adaptive-branch:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Remove the requested branch only after verifying its history is in main
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch_ref='refs/heads/adaptive-hybrid-132'
+          expected_sha='0fa46061d1d6aff8f853b03cc7245243ac7da318'
+          actual_sha=$(git ls-remote --heads origin "$branch_ref" | cut -f1)
+          if [ -z "$actual_sha" ]; then
+            echo 'Adaptive branch is already removed.'
+            exit 0
+          fi
+          if [ "$actual_sha" != "$expected_sha" ]; then
+            echo 'Adaptive branch changed; refusing deletion.'
+            exit 1
+          fi
+          git merge-base --is-ancestor "$expected_sha" HEAD
+          git push --force-with-lease="$branch_ref:$expected_sha" origin ":$branch_ref"
