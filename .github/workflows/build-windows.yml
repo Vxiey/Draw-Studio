@@ -8,7 +8,7 @@ on:
     tags:
       - 'v*'
     paths:
-      - '.github/step30-build-trigger'
+      - '.github/release-build-trigger'
 
 permissions:
   contents: write
@@ -139,7 +139,7 @@ jobs:
             if ($release.targetCommitish -ne $env:GITHUB_SHA) { throw 'Draft belongs to a different commit; use a new version.' }
             $resumeDraft = $true
           }
-          $notes = 'RELEASE-NOTES-v1.0.133-rc3.md'
+          $notes = "RELEASE-NOTES-v$version.md"
           $flags = @()
           if ($version -match '-') { $flags += '--prerelease' }
           if (-not $resumeDraft) {
