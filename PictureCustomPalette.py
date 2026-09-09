@@ -366,11 +366,6 @@ def start_picture_custom_palette(app) -> bool:
         app.status.set("Load an image first, then build Custom color palette for picture.")
         return False
 
-    from ExactColorTools import numeric_rgb_available
-    if not numeric_rgb_available(PROFILE_KEY):
-        app.status.set("Calibrate Paint Edit colors with numeric R/G/B first. Use Prepare Paint automatically or Smart custom palette / exact color.")
-        return False
-
     source_id = id(source)
     max_colors = _resolve_max_colors(app)
     fidelity = getattr(getattr(app, "color_fidelity", None), "get", lambda: "Faithful")()
@@ -406,7 +401,16 @@ def start_picture_custom_palette(app) -> bool:
             raise InterruptedError("Picture custom palette cancelled.")
         from TargetCapture import probe_handle_isolated
         meta = probe_handle_isolated(handle)
-        from ExactColorTools import resolved_controls
+        from ExactColorTools import numeric_rgb_available, resolved_controls, save as save_exact_colors
+        if not numeric_rgb_available(PROFILE_KEY):
+            # This is deliberately independent from full Paint canvas detection.
+            # A clipped/zoomed canvas must not prevent exact RGB calibration.
+            from PaintPreparation import prepare_controls
+            from CalibrationAnchors import make_anchor
+            app.events.put(("status", "Custom color palette for picture: calibrating Paint Edit colors R/G/B controls…"))
+            exact_controls = prepare_controls(handle, cancelled=app.stop.is_set)
+            meta = probe_handle_isolated(handle)
+            save_exact_colors(PROFILE_KEY, exact_controls, anchor=make_anchor(tuple(meta["client_rect"])))
         controls = resolved_controls(PROFILE_KEY, tuple(meta["client_rect"]))
         custom = tuple(palette.custom_colors)
         if not custom:
@@ -432,6 +436,19 @@ def start_picture_custom_palette(app) -> bool:
             palette.as_dict(), image_id=source_id, prepared_count=completed,
             cache_file=str(cache_path(palette.image_fingerprint, palette.calibration_fingerprint)),
         )
+        # Seed only the method preference, never a fake verification result.
+        # Runtime still performs its normal first-stroke color verification.
+        try:
+            from AdaptiveColor import rgb_key
+            session = getattr(app, 'color_session_cache', None)
+            if isinstance(session, dict):
+                for rgb in custom:
+                    session[rgb_key(rgb)] = {
+                        'method':'numeric', 'confidence':0.0, 'actual':(), 'sample':None,
+                        'prepared_picture_palette':True,
+                    }
+        except Exception:
+            pass
         app.events.put((
             "status",
             f"Picture custom palette ready: {completed} custom RGB colors entered in Paint and {len(palette.palette_colors)} standard palette colors reused. The picture palette is saved for this image/calibration.",

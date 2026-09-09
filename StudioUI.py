@@ -13,6 +13,7 @@ from ProfileEngine import PROFILE_ENGINE_MODES, policy_summary
 from ProfilePortability import export_profile_dialog, import_profile_dialog, reset_profile_dialog
 from EdgeBehavior import EDGE_BEHAVIOR_MODES
 from Version import APP_VERSION
+from PictureCustomPalette import start_picture_custom_palette
 from UIState import compute_workspace_state, classify_error
 from TimeBudget import TIME_BUDGET_MODES, TARGET_STROKE_COUNTS
 from ProgressiveRenderer import PROGRESSIVE_RENDERING_MODES
@@ -377,6 +378,9 @@ def build_ui(a, quality, speed):
     a.exact_color_button = btn(step3, '🌈  Smart custom palette / exact color', a.calibrate_exact_colors, height=34)
     a.exact_color_button.pack(fill='x', pady=(2, 0))
     label(step3, var=a.exact_color_text, muted=True, wraplength=270, size=9).pack(anchor='w', pady=(4, 4))
+    a.picture_palette_button = btn(step3, '🖼  Custom color palette for picture', lambda: start_picture_custom_palette(a), height=34)
+    a.picture_palette_button.pack(fill='x', pady=(2, 0))
+    tooltip(a.picture_palette_button, 'Microsoft Paint: analyze the loaded picture, auto-calibrate Edit colors R/G/B if needed, enter the important exact RGB colors, and save the picture palette for this image/calibration.')
     a.area_button = btn(step3, '▣  Select drawing area', a.set_boundary, height=37)
     a.area_button.pack(fill='x', pady=(2, 0))
     tooltip(a.area_button,'Select ONLY the drawable canvas. CanvasGuard treats this as a hard boundary for every drawing path and Fill action.')
@@ -1004,7 +1008,7 @@ def build_ui(a, quality, speed):
     a.summary.trace_add('write', refresh_ui_state)
     from ProfileIsolation import register_controls
     register_controls(a,[(a.paint_tool_menu,'paint'),(a.paint_tool_label,'paint'),
-        (a.paint_auto_button,'paint'),(a.paint_tool_button,'paint'),
+        (a.paint_auto_button,'paint'),(a.paint_tool_button,'paint'),(a.picture_palette_button,'paint'),
         (a.one_click_setup_button,'oneclick'),(a.one_click_setup_label,'oneclick'),
         (one_click,'browser-auto'),(a.browser_one_click_label,'browser-auto'),
         (a.browser_auto_button,'browser-auto'),(a.browser_auto_label,'browser-auto'),
