@@ -37,6 +37,8 @@ class ExtraFastReviewTests(unittest.TestCase):
         self.assertLess(len(paths[0]),len(group))
         self.assertEqual(raster(paths[0]),raster([[(a,b),(c,d)] for a,b,c,d in group]))
         self.assertGreater(meta['vertical_colors_improved'],0)
+        self.assertTrue(meta['travel_aware_selection_enabled'])
+        self.assertLessEqual(meta['ordered_cost_after_seconds'],meta['ordered_cost_before_seconds'])
 
     def test_adaptive_horizontal_limits_reduce_boundaries_losslessly(self):
         group=[(10,y,390,y) for y in range(10,350)]
@@ -45,7 +47,7 @@ class ExtraFastReviewTests(unittest.TestCase):
         paths,meta=build_fast_paths([group],{})
         self.assertLessEqual(len(paths[0]),len(baseline[0]))
         self.assertEqual(raster_large(paths[0]),raster_large([[(a,b),(c,d)] for a,b,c,d in group]))
-        self.assertLessEqual(meta['intrinsic_cost_after_seconds'],meta['intrinsic_cost_before_seconds'])
+        self.assertLessEqual(meta['ordered_cost_after_seconds'],meta['ordered_cost_before_seconds'])
         self.assertGreater(meta['adaptive_colors_improved'],0)
         self.assertGreater(meta['horizontal_colors_improved'],0)
         self.assertGreater(len(meta['candidate_path_limits']),1)
@@ -58,7 +60,8 @@ class ExtraFastReviewTests(unittest.TestCase):
                 for y in (2,25,50):
                     if rng.random()<.7:
                         groups[rng.randrange(2)].append((x,y,x,y+rng.randrange(1,20)))
-            paths,_=build_fast_paths(groups,{})
+            paths,meta=build_fast_paths(groups,{})
+            self.assertLessEqual(meta['ordered_cost_after_seconds'],meta['ordered_cost_before_seconds']+1e-9)
             for source,result in zip(groups,paths):
                 self.assertEqual(raster(result),raster([[(a,b),(c,d)] for a,b,c,d in source]))
 
@@ -74,13 +77,42 @@ class ExtraFastReviewTests(unittest.TestCase):
 
     def test_cost_increase_keeps_baseline(self):
         class Model:
-            def path_seconds(self,path):return len(path)**2
+            color_change_seconds=0.0
+            def path_seconds(self,path,**kwargs):return len(path)**2
+            def paths_seconds(self,paths,**kwargs):return sum(self.path_seconds(path) for path in paths)
         groups=[[(x,0,x,20) for x in range(20)]]
         with patch('HybridCostModel.build_cost_model',return_value=Model()):
             paths,meta=build_fast_paths(groups,{})
         self.assertEqual(len(paths[0]),20)
         self.assertEqual(meta['vertical_colors_improved'],0)
         self.assertEqual(meta['adaptive_colors_improved'],0)
+        self.assertLessEqual(meta['ordered_cost_after_seconds'],meta['ordered_cost_before_seconds'])
+
+    def test_complete_downstream_regression_falls_back_to_baseline(self):
+        groups=[[(10,y,390,y) for y in range(10,350)]]
+        rows,points,_=path_limits({})
+        baseline=build_execution_paths(groups,enabled=True,max_rows_per_path=rows,max_points_per_path=points)
+        meta_row={'target_cap_applied':False,'stroke_optimizer_effective':'Travel only'}
+        with patch('ExtraFast2._downstream_plan_cost',side_effect=[(1.0,meta_row),(2.0,meta_row)]):
+            paths,meta=build_fast_paths(groups,{})
+        self.assertEqual(paths,baseline)
+        self.assertFalse(meta['downstream_plan_accepted'])
+        self.assertEqual(meta['adaptive_colors_improved'],0)
+        self.assertEqual(meta['ordered_cost_after_seconds'],meta['ordered_cost_before_seconds'])
+
+    def test_travel_aware_mode_can_be_disabled_for_legacy_comparison(self):
+        group=[(x,2,x,60) for x in range(2,60)]
+        paths,meta=build_fast_paths([group],{'extra_fast_travel_optimizer':'Off'})
+        self.assertFalse(meta['travel_aware_selection_enabled'])
+        self.assertIn('legacy intrinsic path cost',meta['cost_scope'])
+        self.assertEqual(raster(paths[0]),raster([[(a,b),(c,d)] for a,b,c,d in group]))
+
+    def test_target_cap_participates_in_complete_downstream_guard(self):
+        group=[(x,2,x,60) for x in range(2,60)]
+        paths,meta=build_fast_paths([group],{'target_stroke_count_resolved':1})
+        self.assertTrue(meta['downstream_target_cap_applied'])
+        self.assertLessEqual(meta['ordered_cost_after_seconds'],meta['ordered_cost_before_seconds']+1e-9)
+        self.assertEqual(raster(paths[0]),raster([[(a,b),(c,d)] for a,b,c,d in group]))
 
     def test_cancel(self):
         with self.assertRaises(InterruptedError):build_fast_paths([[(0,0,0,10)]],{},cancelled=lambda:True)
