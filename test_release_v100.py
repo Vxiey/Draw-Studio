@@ -40,6 +40,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn('actions/checkout@v4',text); self.assertIn('actions/setup-python@v5',text)
         self.assertIn('actions/upload-artifact@v4',text); self.assertIn('python ReleasePackage.py --check',text); self.assertIn('ReleaseCandidateHardening.py --source-gate',text)
         self.assertIn('gh release create',text); self.assertIn('--notes-file',text)
+        self.assertIn("- 'Version.py'",text); self.assertIn("- '.github/release-build-trigger'",text)
 
     def test_runtime_safety_ui_present(self):
         text=(Path(__file__).resolve().parent/'StudioUI.py').read_text(encoding='utf-8')
