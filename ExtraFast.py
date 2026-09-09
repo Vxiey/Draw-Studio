@@ -7,22 +7,27 @@ measured cost when available and charges Fill tool switching per colour batch,
 not once per region.
 """
 from collections import defaultdict
+import math
 from Precision import CanvasTransform,precision_path_count
 from SpeedOptimizer import phase_delay,estimated_motion_seconds
 
 
-def _legacy_cost(region, transform, options):
+def _legacy_cost(region, transform, options, cancelled=lambda:False):
     delay=float(options.get('delay',.01));speed=options.get('speed','Balanced')
     precision=options.get('precision','High');step=options.get('stroke_step_px',8)
     contour=list(region.get('contour') or ())
-    moves=sum(precision_path_count(transform.point(*a),transform.point(*b),precision,step)
-              for a,b in zip(contour,contour[1:]))
+    moves=0
+    for a,b in zip(contour,contour[1:]):
+        if cancelled():raise InterruptedError()
+        moves+=precision_path_count(transform.point(*a),transform.point(*b),precision,step)
     # Tool switches are deliberately excluded here. v2 adds them once per
     # colour batch below rather than once for every region.
     fill_cost=moves*max(.004,phase_delay(delay,speed,'path')) + .24
     spans=region.get('row_spans') or ()
-    scan_moves=sum(precision_path_count(transform.point(x0,y),transform.point(x1,y),precision,step)
-                   for y,x0,x1 in spans)
+    scan_moves=0
+    for y,x0,x1 in spans:
+        if cancelled():raise InterruptedError()
+        scan_moves+=precision_path_count(transform.point(x0,y),transform.point(x1,y),precision,step)
     scan_cost=estimated_motion_seconds(scan_moves,len(spans),0,delay,speed)
     return scan_cost,fill_cost
 
@@ -41,9 +46,9 @@ def select_fast_regions(regions,source_size,target_size,options,cancelled=lambda
         try:
             scan_cost=float(region.get('stroke_cost_seconds'))
             fill_cost=float(region.get('fill_cost_seconds'))
-        except (TypeError,ValueError):
-            scan_cost,fill_cost=_legacy_cost(region,transform,options)
-        if scan_cost<=0 or fill_cost<=0 or fill_cost>=scan_cost*.94:
+        except (TypeError,ValueError,OverflowError):
+            scan_cost,fill_cost=_legacy_cost(region,transform,options,cancelled)
+        if not math.isfinite(scan_cost) or not math.isfinite(fill_cost) or scan_cost<=0 or fill_cost<=0 or fill_cost>=scan_cost*.94:
             rejected+=1;continue
         item=dict(region)
         item['extra_fast_strategy']='OUTLINE_FILL'
@@ -57,7 +62,12 @@ def select_fast_regions(regions,source_size,target_size,options,cancelled=lambda
     # Shared Fill/restore controls are paid once for a same-colour batch.
     ui_actions=len(options.get('fill_tool_actions') or ())+len(options.get('fill_restore_actions') or ())
     if ui_actions==0 and options.get('fill_tool_available'):ui_actions=2
-    ui_delay=float(options.get('ui_control_delay',.22) or .22)
+    try:
+        ui_delay=float(options.get('ui_control_delay',.22))
+    except (TypeError,ValueError,OverflowError):
+        ui_delay=.22
+    if not math.isfinite(ui_delay) or ui_delay<0:
+        ui_delay=.22
     batch_overhead=max(0.,ui_actions*ui_delay)
     accepted=[];seconds=0.;saved=0.;batch_rejected=0
     for color,items in sorted(by_color.items(),key=lambda kv:kv[0]):

@@ -1619,14 +1619,14 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
             preview=is_preview_plan(options), cancelled=cancelled)
     else:
         if options.get('extra_fast') and smart_enabled:
-            from ExtraFast2 import path_limits as extra_fast_path_limits, build_meta as build_extra_fast_v2_meta
-            _ef_rows,_ef_points,_ef_policy=extra_fast_path_limits(options)
-            execution_groups=build_execution_paths(
-                groups,enabled=True,portrait_edge_count=edge_count,
-                max_rows_per_path=_ef_rows,max_points_per_path=_ef_points,cancelled=cancelled)
+            from ExtraFast2 import build_fast_paths, build_meta as build_extra_fast_v2_meta
+            execution_groups,_ef_path_meta=build_fast_paths(
+                groups,dict(options,_hybrid_scale_x=fitted[0]/max(1,image.width),
+                            _hybrid_scale_y=fitted[1]/max(1,image.height)),
+                portrait_edge_count=edge_count,cancelled=cancelled)
             path_meta=continuous_path_stats(groups,execution_groups)
             _ef_meta=build_extra_fast_v2_meta(groups,execution_groups,options,fill_regions=options.get('fill_regions') or ())
-            _ef_meta['path_policy']=_ef_policy
+            _ef_meta.update(_ef_path_meta)
             options['extra_fast_v2_meta']=_ef_meta
             path_meta=dict(path_meta);path_meta.update({
                 'mode':'Extra Fast 2.0 connected regions',
