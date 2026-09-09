@@ -50,4 +50,27 @@ new="""        out,meta=contour_image_v2(im,detail='Detailed')
 """
 if text.count(old)!=1:raise SystemExit('Sketch2 tiny-feature test anchor missing')
 p.write_text(text.replace(old,new,1),encoding='utf-8')
-print('SKETCH2_MICRO_DETAIL_FIX=APPLIED')
+
+# v1.0.131 is a beta after the RC2 field test. Keep release-hardening tests
+# strict, but update only stale fixtures/expectations to the new channel/version.
+p=Path('test_release_v100.py')
+text=p.read_text(encoding='utf-8')
+old="self.assertEqual(BUILD_CHANNEL,'rc')"
+if text.count(old)!=1:raise SystemExit('test_release_v100 BUILD_CHANNEL anchor missing')
+p.write_text(text.replace(old,"self.assertEqual(BUILD_CHANNEL,'beta')",1),encoding='utf-8')
+
+p=Path('test_step30_release_candidate_hardening_v10129rc1.py')
+text=p.read_text(encoding='utf-8')
+old='"filevers=(1,0,129,0)\\nprodvers=(1,0,129,0)\\n"'
+new='"filevers=(1,0,131,0)\\nprodvers=(1,0,131,0)\\n"'
+if text.count(old)!=1:raise SystemExit('release hardening version_info fixture anchor missing')
+text=text.replace(old,new,1)
+# Change only the literal release-manifest fixture channel. The intentional
+# channel='rc' mismatch test remains untouched.
+old='"channel":"rc",\n                    "files"'
+new='"channel":"beta",\n                    "files"'
+if text.count(old)!=1:raise SystemExit('release hardening manifest channel fixture anchor missing')
+text=text.replace(old,new,1)
+p.write_text(text,encoding='utf-8')
+
+print('SKETCH2_MICRO_DETAIL_AND_METADATA_FIX=APPLIED')
