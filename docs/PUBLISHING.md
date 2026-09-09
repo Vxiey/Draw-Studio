@@ -27,7 +27,7 @@ This validates source metadata, builds the PyInstaller application, runs the fro
 
 ## GitHub Actions
 
-`.github/workflows/build-windows.yml` performs the permanent Windows release flow. Tag publication is accepted only when the pushed tag exactly matches `v{APP_VERSION}`.
+`.github/workflows/build-windows.yml` builds when `.github/step30-build-trigger` changes on main, on version tags, or through manual dispatch. For a new release, increment `APP_VERSION`, update matching metadata/tests and release notes, then change the trigger file and push main. A tag build must match `v{APP_VERSION}`.
 
 For RC releases the workflow also performs a silent installer round trip in an isolated temporary directory:
 
@@ -37,10 +37,20 @@ For RC releases the workflow also performs a silent installer round trip in an i
 
 A failure in any gate blocks publication.
 
-## Feature freeze
+## Publishing and updates
 
-During the Step 30 RC line, new renderer features are frozen. Publish only blocker/regression/security/installer/update/documentation/test fixes until the stable release is approved.
+After the gates pass, the workflow creates a draft versioned GitHub Release,
+uploads the installer, portable ZIP, checksums and manifest, then publishes it.
+Published versions are not overwritten. Draft upload retries require the same
+commit. Always use a new version number for the next patch.
 
-## Signing
+The in-app updater reads published Releases, not Actions artifacts or branch
+commits. It requires the correctly named installer with a GitHub SHA-256 digest.
+See [in-app updates](IN-APP-UPDATES.md).
 
-Current binaries are unsigned unless a separate Authenticode signing setup is configured. Do not claim a signed build unless the published artifact was actually signed and verified.
+## Signing status
+
+Code signing is not activated. The published rc2 files remain unsigned. Optional
+local signing support exists for a future provisioned certificate, but do not
+claim signed binaries or Smart App Control compatibility without verification.
+Documentation-only changes on main do not replace immutable release downloads.

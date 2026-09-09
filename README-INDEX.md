@@ -1,51 +1,26 @@
-# Draw Studio documentation index
+# Draw Studio documentation
 
-Start here:
+## Start here
 
-- `README.md` — project overview and quick start
-- `RELEASE-CHECKLIST.md` — release checklist
-- `docs/PUBLISHING.md` — publishing and GitHub release flow
-- `docs/RELEASE-STRUCTURE.md` — source ZIP / portable ZIP / installer layout
-- `VERSION-HISTORY.md` — version history
-- `GITHUB-RELEASE-TEMPLATE.md` — GitHub release notes template
+- [README and downloads](README.md)
+- [Current release: v1.0.133-rc2](RELEASE-NOTES-v1.0.133-rc2.md)
+- [Automatic Paint setup and RGB calibration](docs/PAINT-AUTOMATIC-PREPARATION.md)
+- [In-app updates](docs/IN-APP-UPDATES.md)
+- [Windows installer, portable ZIP and source layout](docs/RELEASE-STRUCTURE.md)
+- [Version history](VERSION-HISTORY.md)
 
-Step docs:
+## Rendering and previous changes
 
-- `STEP-1-SOURCE-RELATIVE-ACCURACY.md`
-- `STEP-2-OKLAB-COLOR-MATCHING.md`
-- `STEP-3-DOMINANT-HUE-PRESERVATION.md`
-- `STEP-4-REGION-AWARE-COLOR-QUANTIZATION.md`
-- `STEP-5-ADAPTIVE-COLOR-COUNT.md`
-- `STEP6-TIME-AWARE-COLOR-BUDGET.md`
-- `STEP-7-EXTRA-FAST-2.md`
-- `STEP-8-DEADLINE-AWARE-SCHEDULER-PANIC.md`
-- `STEP-9-CALIBRATION-STATE-PROFILE-ISOLATION.md`
-- `STEP-10-PREVIEW-DIAGNOSTICS-BENCHMARKS.md`
-- `STEP-11-END-TO-END-AUTO-TUNER.md`
-- `STEP-12-AUTO-TUNER-FEEDBACK-LOOP.md`
-- `STEP-13-REAL-RESULT-VERIFICATION.md`
-- `STEP-14-POST-DRAW-CORRECTION-PASS.md`
-- `STEP-15-CORRECTION-REVIEW-RECOVERY-UI.md`
-- `STEP-16-CORRECTION-HISTORY-BEFORE-AFTER.md`
-- `STEP-17-GOLDEN-IMAGE-REGRESSION.md`
-- `STEP-18-RELEASE-STABILITY-HARDENING.md`
-- `STEP-19-FINAL-PROFILE-POLISH.md`
-- `STEP-20-BEGINNER-SETUP-WIZARD.md`
-- `STEP-21-BUILD-PUBLISHER-GITHUB-RELEASE.md`
-- `STEP-22-UNIVERSAL-HARDWARE-AUTO-BENCHMARK.md`
-- `STEP-23-UNIVERSAL-GPU-ACCELERATION.md`
-- `STEP-24-ADAPTIVE-DETAIL-ZOOM.md`
-- `RELEASE-NOTES-Step24-Step25-Detail-Zoom-Quick-Sketch.md` — Step 25 Quick Sketch Fill + Contour
-- `STEP-26-DETAIL-FIDELITY-PIXEL-ACCURATE.md`
-- `STEP-29-HYBRID-RENDERER-3.md` — specialised deterministic Hybrid Renderer 3.0 modes
-- `COLOR-ENGINE-NAMED-COLOR-INTELLIGENCE.md` — CSS4/Tk/X11 parsing, aliases and OKLab human-readable diagnostics
-- `ROADMAP-STEP22-PLUS.md`
+- [Extra Fast review and reproducible benchmark](docs/EXTRA-FAST-REVIEW.md)
+- [100 maintenance improvements](docs/100-UPPDATERINGAR-v1.0.133-rc1.md)
+- [Engine integration validation](docs/ENGINE-VALIDATION-v1.0.132-rc1.md)
+- [Named color intelligence](COLOR-ENGINE-NAMED-COLOR-INTELLIGENCE.md)
 
-- `STEP-30-RELEASE-CANDIDATE-HARDENING.md` — RC release gates, installer/update validation and feature freeze
-- `RELEASE-NOTES-v1.0.130-rc2-Step30.md` — v1.0.130-rc2 release notes
+## Development
 
-## v1.0.133-rc1 maintenance candidate
+- [Release publishing](docs/PUBLISHING.md)
+- [Release checklist](RELEASE-CHECKLIST.md)
+- [Optional code-signing preparation](docs/WINDOWS-CODE-SIGNING.md) — not activated; published rc2 is unsigned.
 
-- [Release notes](RELEASE-NOTES-v1.0.133-rc1.md)
-- [100 numbered improvements](docs/100-UPPDATERINGAR-v1.0.133-rc1.md)
-- [Validation and limits](docs/VALIDATION-v1.0.133-rc1.md)
+Older Step documents describe the behavior at the time they were written.
+For current setup and update instructions, use the README and guides above.
