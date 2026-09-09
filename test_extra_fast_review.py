@@ -16,6 +16,15 @@ def raster(paths):
     return image.tobytes()
 
 
+def raster_large(paths,size=(420,420)):
+    image=Image.new('1',size)
+    draw=ImageDraw.Draw(image)
+    for path in paths:
+        if len(path)==1:draw.point(path[0],fill=1)
+        else:draw.line(path,fill=1,width=1)
+    return image.tobytes()
+
+
 def region(**kw):
     return dict(dict(contour=[(0,0),(5,0),(5,5),(0,5),(0,0)],
                      color_index=0,stroke_cost_seconds=2,fill_cost_seconds=1,area_pixels=25),**kw)
@@ -28,6 +37,18 @@ class ExtraFastReviewTests(unittest.TestCase):
         self.assertLess(len(paths[0]),len(group))
         self.assertEqual(raster(paths[0]),raster([[(a,b),(c,d)] for a,b,c,d in group]))
         self.assertGreater(meta['vertical_colors_improved'],0)
+
+    def test_adaptive_horizontal_limits_reduce_boundaries_losslessly(self):
+        group=[(10,y,390,y) for y in range(10,350)]
+        rows,points,_=path_limits({})
+        baseline=build_execution_paths([group],enabled=True,max_rows_per_path=rows,max_points_per_path=points)
+        paths,meta=build_fast_paths([group],{})
+        self.assertLessEqual(len(paths[0]),len(baseline[0]))
+        self.assertEqual(raster_large(paths[0]),raster_large([[(a,b),(c,d)] for a,b,c,d in group]))
+        self.assertLessEqual(meta['intrinsic_cost_after_seconds'],meta['intrinsic_cost_before_seconds'])
+        self.assertGreater(meta['adaptive_colors_improved'],0)
+        self.assertGreater(meta['horizontal_colors_improved'],0)
+        self.assertGreater(len(meta['candidate_path_limits']),1)
 
     def test_random_masks_holes_and_multiple_colors(self):
         rng=random.Random(44)
@@ -59,6 +80,7 @@ class ExtraFastReviewTests(unittest.TestCase):
             paths,meta=build_fast_paths(groups,{})
         self.assertEqual(len(paths[0]),20)
         self.assertEqual(meta['vertical_colors_improved'],0)
+        self.assertEqual(meta['adaptive_colors_improved'],0)
 
     def test_cancel(self):
         with self.assertRaises(InterruptedError):build_fast_paths([[(0,0,0,10)]],{},cancelled=lambda:True)
