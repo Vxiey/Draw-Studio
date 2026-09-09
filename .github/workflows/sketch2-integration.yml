@@ -1,0 +1,70 @@
+name: v1.0.131 Sketch 2.0 integration
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/sketch2-integration-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+          cache: 'pip'
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip install -r requirements.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Apply v1.0.131 patch
+        shell: pwsh
+        run: |
+          python sketch2_integrate_once.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Compile and focused tests
+        shell: pwsh
+        run: |
+          python -m py_compile Sketch2Planner.py SketchFillRenderer.py DrawBot.py StudioUI.py ReleaseCandidateHardening.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest -v test_sketch2_v10131.py test_sketch_fill_v10131.py test_black_sketch_v1095.py test_sketch_detail_v1099.py test_stroke_delivery_v1062.py test_paint_custom_color_auto_v10130.py test_gartic_sketch_v1098.py test_gartic_phone_turbo_v1065.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Full regression and self-test
+        shell: pwsh
+        run: |
+          python -m unittest discover -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python DrawBot.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Commit validated v1.0.131 source
+        shell: pwsh
+        run: |
+          git config user.name "Draw Studio CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git reset -- sketch2_integrate_once.py .github/workflows/sketch2-integration.yml .github/sketch2-integration-trigger
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) { throw 'v1.0.131 patch produced no product changes' }
+          git commit -m "Add Sketch 2.0 and Paint Sketch Auto Fill"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin HEAD:main
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
