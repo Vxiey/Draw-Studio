@@ -64,11 +64,11 @@ class DryRunV1023Tests(unittest.TestCase):
         app.safety_preflight_signature=DrawBotApp._current_safety_signature(app)
         return app
 
-    def test_unlock_is_blocked_until_dry_run_passes(self):
+    def test_dry_run_is_optional_for_unlock(self):
         app=self.make_app()
         with patch.object(DrawBotApp,'_verify_target_lock',return_value=True):
             DrawBotApp.unlock_full_drawing(app)
-        self.assertEqual(app.full_draw_armed_until,0.0)
+        self.assertGreater(app.full_draw_armed_until,time.monotonic())
         self.assertIn('dry run',app.status.get().lower())
         app.dry_run_passed=True
         app.dry_run_signature=DrawBotApp._current_safety_signature(app)

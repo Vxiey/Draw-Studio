@@ -38,7 +38,13 @@ def build_setup_wizard(*, profile_name: str = "Other drawing app", image_loaded:
                        small_test_passed: bool = False, target_locked: bool = False,
                        preflight_passed: bool = False, dry_run_passed: bool = False,
                        full_draw_unlocked: bool = False, activity: str | None = None) -> tuple[WizardStep, ...]:
-    strict = profile_name == "Microsoft Paint"
+    if profile_name == "Microsoft Paint":
+        return (
+            WizardStep("image", "Load image", _state(image_loaded), "Select, paste or drop an image.", blocks_start=not image_loaded),
+            WizardStep("prepare", "Automatic Paint preparation", "optional", "Start finds Paint, canvas, pencil size, palette and RGB controls automatically."),
+            WizardStep("start", "Prepare Paint & draw", _state(False, blocked=not image_loaded or bool(activity)), "Press Prepare Paint & draw. Tests and previews are optional.", blocks_start=not image_loaded or bool(activity)),
+        )
+    strict = False
     profile_key=str(PROFILES.get(profile_name,('generic',))[0])
     capability=capability_for_key(profile_key)
     browser=capability.kind.startswith('browser-')
@@ -141,5 +147,5 @@ def friendly_error_message(raw_status: str, *, profile_name: str = "") -> str:
     if "gpu" in low or "cuda" in low or "vram" in low:
         return "GPU acceleration is not required. Switch GPU mode to Auto or CPU and retry."
     if profile_name == "Microsoft Paint" and ("preflight" in low or "dry run" in low):
-        return "Paint requires the strict chain: Small test → Lock setup → Safety preflight → Fast Dry run → Unlock → Start."
+        return "Paint diagnostics are optional. Use Prepare Paint & draw to recalibrate and start."
     return text

@@ -48,11 +48,11 @@ class PreflightLockV1019Tests(unittest.TestCase):
         self.assertEqual(APP_VERSION,'1.0.133-rc1')
         self.assertEqual(FILE_VERSION,'1.0.133')
 
-    def test_small_test_is_mandatory(self):
+    def test_small_test_is_optional(self):
         app=self.make_app(test_passed=False)
         ready,message=DrawBotApp._start_guard_ready(app)
-        self.assertFalse(ready)
-        self.assertIn('small test',message.lower())
+        self.assertTrue(ready)
+        self.assertEqual(message,'Basic setup ready.')
 
     def test_preflight_passes_without_drawing_or_mouse(self):
         app=self.make_app()
@@ -63,19 +63,19 @@ class PreflightLockV1019Tests(unittest.TestCase):
         draw.assert_not_called()
         self.assertIn('passed',app.status.get().lower())
 
-    def test_unlock_blocked_without_preflight(self):
+    def test_unlock_available_without_preflight(self):
         app=self.make_app()
         with patch.object(DrawBotApp,'_verify_target_lock',return_value=True):
             DrawBotApp.unlock_full_drawing(app)
-        self.assertEqual(app.full_draw_armed_until,0.0)
+        self.assertGreater(app.full_draw_armed_until,time.monotonic())
         self.assertIn('preflight',app.status.get().lower())
 
-    def test_unlock_blocked_until_dry_run_passes(self):
+    def test_unlock_available_without_dry_run(self):
         app=self.make_app()
         with patch.object(DrawBotApp,'_verify_target_lock',return_value=True):
             self.assertTrue(DrawBotApp.run_safety_preflight(app))
             DrawBotApp.unlock_full_drawing(app)
-        self.assertEqual(app.full_draw_armed_until,0.0)
+        self.assertGreater(app.full_draw_armed_until,time.monotonic())
         self.assertIn('dry run',app.status.get().lower())
 
     def test_unlock_allowed_after_preflight_and_dry_run(self):

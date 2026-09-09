@@ -42,17 +42,10 @@ class Step19ProfilePolishTests(unittest.TestCase):
 
 
 class Step20BeginnerSetupWizardTests(unittest.TestCase):
-    def test_paint_requires_strict_chain_before_start(self):
-        steps = build_setup_wizard(profile_name="Microsoft Paint", image_loaded=True, tools_ready=True,
-                                   palette_ready=True, area_ready=True, small_test_passed=False,
-                                   target_locked=False, preflight_passed=False, dry_run_passed=False)
-        missing = missing_start_requirements(steps)
-        keys = [s.key for s in missing]
-        self.assertIn("small_test", keys)
-        self.assertIn("lock", keys)
-        self.assertIn("preflight", keys)
-        self.assertIn("dryrun", keys)
-        self.assertIn("Unlock", format_setup_status(steps))
+    def test_paint_uses_automatic_preparation_without_diagnostic_gates(self):
+        steps = build_setup_wizard(profile_name="Microsoft Paint", image_loaded=True)
+        self.assertEqual(missing_start_requirements(steps), ())
+        self.assertEqual([s.key for s in steps], ["image", "prepare", "start"])
 
     def test_browser_profiles_have_optional_diagnostics(self):
         steps = build_setup_wizard(profile_name="Gartic Phone", image_loaded=True, tools_ready=True,

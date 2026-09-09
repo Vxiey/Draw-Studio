@@ -83,7 +83,7 @@ class TargetLockV1024Tests(unittest.TestCase):
         source=(Path(__file__).resolve().parent/'StudioUI.py').read_text(encoding='utf-8')
         self.assertIn('Lock setup', source)
         self.assertIn('a.target_lock_button', source)
-        self.assertIn('Small test → Lock setup → Safety preflight', source)
+        self.assertIn('Paint: load an image, then Prepare Paint & draw.', source)
 
 
 if __name__ == '__main__': unittest.main()

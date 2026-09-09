@@ -50,10 +50,10 @@ _PRESETS: dict[str, ProfileReleasePreset] = {
         color_policy="Perceptual Adaptive Exact custom RGB with OKLab fallback",
         palette_requirement="Verified Paint palette or Adaptive Exact controls",
         tool_requirement="Pencil/Brush plus Fill/Eraser calibration recommended",
-        safety_flow=("image", "paint tools", "palette/exact color", "canvas", "small test", "lock setup", "safety preflight", "dry run", "unlock", "start"),
-        calibration_flow=("Auto setup Paint", "Read Paint colors", "Smart custom palette / exact color", "Select Paint canvas", "Draw small test"),
+        safety_flow=("image", "prepare Paint and calibrate colors", "start"),
+        calibration_flow=("Prepare Paint automatically", "Detect canvas and pencil size", "Read palette and RGB dialog"),
         warnings=(
-            "Paint is strict: run Small test → Lock setup → Safety preflight → Dry run before Start.",
+            "Paint prepares its canvas, pencil and RGB controls before drawing. Small tests and previews are optional.",
             "Keep the Paint window, DPI and toolbar layout unchanged after calibration.",
             "Use Adaptive Exact for best color fidelity; preset palettes are treated as estimated until verified.",
         ),

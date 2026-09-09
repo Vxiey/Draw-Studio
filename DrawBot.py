@@ -4554,7 +4554,8 @@ class DrawBotApp:
 
 
     def _strict_safety_required(self):
-        return self.game.get() == 'Microsoft Paint'
+        # Diagnostic gates remain available, but no profile requires them.
+        return False
 
     def _start_guard_ready(self, *, require_image=True):
         """Return basic setup readiness without moving or clicking the mouse."""
@@ -4624,7 +4625,8 @@ class DrawBotApp:
         if getattr(self,'closing',False):
             return
         unlocked = DrawBotApp._full_draw_unlocked(self)
-        start_text = '▶️  Start Drawing' if unlocked else '🔒  Start locked'
+        start_text = ('▶️  Prepare Paint & draw' if getattr(getattr(self,'game',None),'get',lambda:None)()=='Microsoft Paint' else
+                      ('▶️  Start Drawing' if unlocked else '🔒  Start locked'))
         unlock_text = '✓  Unlocked for 12s' if unlocked else '🔓  Unlock full drawing'
         for name in ('start', 'start_secondary'):
             widget = getattr(self, name, None)
@@ -5266,6 +5268,10 @@ class DrawBotApp:
         """Start is separate from unlock and refuses to run while locked."""
         if self.activity or self.closing:
             return
+        if self.game.get()=='Microsoft Paint':
+            if self.original is None:
+                self.status.set('Load an image first. Paint will be prepared automatically when you start.');return False
+            return self.auto_calibrate_paint_tools(start_after=True)
         ready, message = self._start_guard_ready(require_image=True)
         if not ready:
             self._disarm_full_draw('start preflight not ready')
@@ -5356,6 +5362,7 @@ class DrawBotApp:
             preflight_valid=target_lock_valid and DrawBotApp._safety_preflight_valid(self)
             dry_run_valid=preflight_valid and DrawBotApp._dry_run_valid(self)
             unlocked=(dry_run_valid if strict else basic_ready) and DrawBotApp._full_draw_unlocked(self)
+            if self.game.get()=='Microsoft Paint':unlocked=self.original is not None
             if hasattr(self,'start'):
                 self._safe_widget_configure(self.start,state='normal' if unlocked else 'disabled')
             if hasattr(self,'start_secondary'):
@@ -5381,6 +5388,7 @@ class DrawBotApp:
             DrawBotApp._refresh_target_lock_text(self)
             DrawBotApp._refresh_start_buttons_text(self)
             if self.original is None:self.next_step.set('Select an image or drag an image file here.')
+            elif self.game.get()=='Microsoft Paint':self.next_step.set('Press Prepare Paint & draw. Canvas, tools and RGB colors are calibrated automatically.')
             elif len(self.corners)!=2:self.next_step.set('Press Select drawing area and mark only the drawable canvas.')
             elif not palette_ready:self.next_step.set('Read the color palette for the selected profile, or use a supported mode that intentionally bypasses palette clicks.')
             elif not tool_ready:self.next_step.set('Calibrate Paint tools. Auto mode needs Pencil, or Brush + 100% opacity.')
@@ -5810,12 +5818,14 @@ class DrawBotApp:
                 }))
         return bool(self.begin_worker('one-click-verify',work))
 
-    def auto_calibrate_paint_tools(self, *, one_click_verify=False):
-        """Visually detect safe Paint toolbar controls without generating input."""
+    def auto_calibrate_paint_tools(self, *, one_click_verify=False, start_after=False):
+        """Prepare Paint and calibrate its palette/RGB controls before drawing."""
         if self.activity:return False
         if self.game.get()!='Microsoft Paint':
             self.status.set('Automatic Paint calibration is available only for the Microsoft Paint profile.');return False
         palette_path=Path(self.calibration_path)
+        request={'image':self.original} if start_after else None
+        self.paint_start_request=request
         def work():
             try:
                 from TargetCapture import probe_handle_isolated
@@ -5823,12 +5833,14 @@ class DrawBotApp:
                 from BrowserOneClick import _enumerate_windows
                 from ScreenGuard import WindowMonitor
                 from PIL import ImageGrab
-                candidate=choose_paint_window(_enumerate_windows())
+                from PaintPreparation import ensure_paint,prepare_controls
+                candidate=ensure_paint(_enumerate_windows,cancelled=self.stop.is_set,wait=self.stop.wait)
                 target=(int(candidate['handle']),tuple(candidate['rect']))
                 if not WindowMonitor().activate(target):
                     raise ValueError('Could not activate Paint. Bring it into view and retry.')
                 if self.stop.wait(.35):raise InterruptedError()
                 meta=probe_handle_isolated(int(candidate['handle']))
+                exact_controls=prepare_controls(int(candidate['handle']),cancelled=self.stop.is_set)
                 rect=tuple(meta['client_rect'])
                 shot=ImageGrab.grab(bbox=rect,all_screens=True)
                 if shot.size!=(rect[2]-rect[0],rect[3]-rect[1]):raise ValueError('Paint window changed size. Try again.')
@@ -5836,10 +5848,18 @@ class DrawBotApp:
                 if self.stop.is_set():raise InterruptedError()
                 fresh=probe_handle_isolated(int(candidate['handle']))
                 if tuple(fresh['client_rect'])!=rect:raise ValueError('Paint moved during calibration. Try again.')
+                from ExactColorTools import save as save_exact_colors
+                from CalibrationAnchors import make_anchor
+                save_exact_colors('microsoft-paint',exact_controls,anchor=make_anchor(rect))
                 result=save_setup(result,meta,palette_path)
+                result['exact_colors_ready']=True
+                result['start_request']=request
                 self.events.put(('paint_auto_calibration_complete',result))
-            except InterruptedError:raise
+            except InterruptedError:
+                self.paint_start_request=None
+                raise
             except Exception as error:
+                self.paint_start_request=None
                 if one_click_verify:
                     self.events.put(('one_click_setup_verification_complete',{
                         'passed':False,'profile_key':'microsoft-paint','mode':'paint','confidence':0.0,
@@ -5848,8 +5868,23 @@ class DrawBotApp:
                     }))
                     return
                 raise
-        self.status.set('Scanning Paint canvas, 20 palette colours and tools… No drawing clicks are sent.')
-        return bool(self.begin_worker('paint-auto-calibration',work))
+        self.status.set('Preparing Paint: pencil, 1 px, canvas, palette and RGB color controls…')
+        started=bool(self.begin_worker('paint-auto-calibration',work))
+        if not started:self.paint_start_request=None
+        return started
+
+    def _resume_prepared_paint(self,request):
+        if (request is None or getattr(self,'paint_start_request',None) is not request
+                or self.closing or self.stop.is_set() or self.game.get()!='Microsoft Paint'
+                or self.original is not request['image']):
+            if getattr(self,'paint_start_request',None) is request:self.paint_start_request=None
+            return False
+        if self.activity:
+            self.root.after(50,lambda:DrawBotApp._resume_prepared_paint(self,request))
+            return False
+        self.paint_start_request=None
+        return DrawBotApp.draw(self,user_initiated=True,paint_prepared=True)
+
 
     def calibrate_paint_tools(self):
         if self.activity:return
@@ -7887,7 +7922,7 @@ class DrawBotApp:
                 raise ValueError(f'Anchor Transform rebased the canvas, but the target lock could not be refreshed: {error}') from error
         return current
 
-    def draw(self,test=False,dry_run=False,user_initiated=False):
+    def draw(self,test=False,dry_run=False,user_initiated=False,paint_prepared=False):
         # Loading, dropping, profile switching and background callbacks must
         # never arm the mouse. Only explicit UI controls pass this flag.
         if not user_initiated:
@@ -7895,6 +7930,11 @@ class DrawBotApp:
             self.status.set('Drawing did not start. Use Unlock full drawing, then Start Drawing, or run Draw small test explicitly.')
             return
         if self.activity or self.closing:return
+        if (not test and not dry_run and not paint_prepared
+                and getattr(getattr(self,'game',None),'get',lambda:None)()=='Microsoft Paint'):
+            if self.original is None:
+                self.status.set('Load an image before starting Paint.');return False
+            return self.auto_calibrate_paint_tools(start_after=True)
         DrawBotApp._cancel_after_attr(self,'preview_after')
         DrawBotApp._cancel_after_attr(self,'preview_render_after')
         if not test and not dry_run:DrawBotApp._disarm_full_draw(self,'drawing started', update_text=True)
@@ -8221,6 +8261,7 @@ class DrawBotApp:
             self.status.set('Pausing after the current brush stroke. Wait until the status says Paused before moving the mouse.')
 
     def cancel(self):
+        self.paint_start_request=None
         # Emergency stop also revokes native mouse permission immediately.
         DrawBotApp._close_smart_drop_overlay(self,'cancel/stop pressed')
         self.smart_drop_pending_payload=None
@@ -8872,9 +8913,15 @@ class DrawBotApp:
             self._invalidate_target_lock('Paint auto calibration changed',disarm=True)
             self.small_test_passed=False
             self.save_settings()
-            self.status.set('Paint ready: canvas, 20 colours, Pencil and Fill calibrated. Set Pencil to 1 px in Paint and run Small test.')
-            if isinstance(getattr(self,'one_click_setup_verify_pending',None),dict):
-                DrawBotApp._queue_one_click_setup_verification(self,dict(value or {}))
+            self.custom_color_workflow.set('Adaptive exact (recommended)')
+            self.refresh_exact_color_status()
+            self.save_settings()
+            self.one_click_setup_verify_pending=None;self.one_click_setup_verify_payload=None
+            self.one_click_setup_text.set('Paint ready: canvas, pencil, 1 px, palette and RGB controls calibrated.')
+            self.status.set('Paint ready. Colors are calibrated automatically before each drawing; no test or preview is required.')
+            request=value.get('start_request')
+            if request is not None:
+                self.root.after(50,lambda:DrawBotApp._resume_prepared_paint(self,request))
         elif kind=='update_check_complete':
             payload=value if isinstance(value,dict) else {}
             action=getattr(self,'update_download_button',None)

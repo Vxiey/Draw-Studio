@@ -357,7 +357,7 @@ def build_ui(a, quality, speed):
     a.one_click_setup_label.pack(anchor='w',pady=(0,7))
     a.gartic_setup_button=btn(step3,'Auto setup Gartic — full canvas',a.auto_setup_gartic_full,height=35)
     a.gartic_setup_button.pack(fill='x',pady=(0,6))
-    a.paint_auto_button = btn(step3, '✨  Auto setup Paint', a.auto_calibrate_paint_tools, height=35)
+    a.paint_auto_button = btn(step3, '✨  Prepare Paint automatically', a.auto_calibrate_paint_tools, height=35)
     a.paint_auto_button.pack(fill='x'); a.paint_auto_button.configure(state='disabled')
     a.paint_tool_button = btn(step3, '🖌  Manual Paint calibration', a.calibrate_paint_tools, height=34)
     a.paint_tool_button.pack(fill='x', pady=(6,0)); a.paint_tool_button.configure(state='disabled')
@@ -605,7 +605,7 @@ def build_ui(a, quality, speed):
     tooltip(a.start_unlock_secondary,'Temporary confirmation step. CanvasGuard remains mandatory.')
     a.start_secondary = btn(step5, '🔒  Start locked', a.start_full_drawing, True, height=42, state='disabled')
     a.start_secondary.pack(fill='x')
-    label(step5, 'Paint failsafe: Small test → Lock setup → Safety preflight → Fast Dry run (≤12s) → Unlock → Start. Browser/game profiles use the shorter Unlock → Start flow; those extra diagnostics are optional.', muted=True,
+    label(step5, 'Paint: load an image, then Prepare Paint & draw. Canvas, pencil size and RGB colors are prepared automatically. Tests and previews are optional. Browser/game profiles use Unlock → Start.', muted=True,
           size=9, wraplength=270).pack(anchor='w', pady=(6, 0))
 
     # CENTER: preview workspace and Tools alternate view.
