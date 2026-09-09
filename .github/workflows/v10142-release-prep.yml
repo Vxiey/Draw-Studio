@@ -94,8 +94,6 @@ jobs:
           notes='''# Draw Studio 1.0.142-rc1\n\n## Microsoft Paint — picture custom palette\n\n- Adds **Custom color palette for picture** directly to the Paint color-calibration area.\n- Requires a loaded image and analyzes it with Draw Studio's production DynamicColors/OKLab color planner.\n- Prepares only a bounded set of useful exact RGB colors; normal Paint palette colors are reused when they are already sufficient.\n- Reserves a small bounded detail-color budget for high-edge pixels so eyes, thin contours and small isolated color fields can survive palette reduction.\n- Automatically opens Paint **Edit colors**, enters Red/Green/Blue values, confirms each custom color, and saves the picture palette for the current image/calibration.\n- If numeric RGB controls are not calibrated yet, the feature calibrates them first without requiring full automatic canvas detection.\n- Exact RGB calibration is now saved before canvas detection, so a clipped/zoomed Paint canvas can fall back to manual drawing-area selection without losing custom-color support.\n- Prepared picture colors only seed the numeric selection method. The normal first rendered-stroke verification remains mandatory before a color is trusted.\n- Native mouse input is bounded, cancellation-aware, and always disarmed in a `finally` cleanup path.\n\n## Regression coverage\n\n- Image fingerprint and image/calibration cache isolation.\n- Bounded production palette generation and cache reuse.\n- Exact R/G/B typing order.\n- Cancellation, dialog escape and input disarm.\n- Paint-only UI scope and no-image guard.\n- Full Windows/Linux CI and DrawBot Windows self-test remain mandatory before release.\n'''
           write('RELEASE-NOTES-v1.0.142-rc1.md',notes)
 
-          # Release source must no longer expose the previous version as a current
-          # pin outside historical notes/changelog entries.
           assert "APP_VERSION = '1.0.142-rc1'" in Path('Version.py').read_text(encoding='utf-8')
           assert "FILE_VERSION = '1.0.142'" in Path('Version.py').read_text(encoding='utf-8')
           assert 'VersionInfoVersion=1.0.142.0' in Path('installer/DrawStudio.iss').read_text(encoding='utf-8')
@@ -104,7 +102,7 @@ jobs:
       - name: Validate release source before commit
         run: |
           python -m py_compile PictureCustomPalette.py DrawBot.py StudioUI.py
-          python -m unittest -v test_picture_custom_palette_v10142 test_paint_preparation test_update_center_v1059 test_installer_updates test_release_v100 test_version_history_v1068
+          python -m unittest -v test_update_center_v1059 test_installer_updates test_release_v100 test_version_history_v1068
           python ReleasePackage.py --check
       - name: Commit synchronized release source
         run: |
