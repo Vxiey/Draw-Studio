@@ -71,14 +71,7 @@ def execution_metrics(
     cursor: Point | None = None,
     count_color_selection: bool = True,
 ) -> dict[str, Any]:
-    """Return complete path-sequence telemetry for the supplied plan.
-
-    The total includes HybridCostModel path execution (fixed boundaries, draw,
-    points and pen-up travel) plus one color-selection cost per non-empty color
-    group when requested. Fill/tool/verification counts are zero here because
-    this helper receives path groups only; callers with those operations can add
-    them explicitly without changing the geometry measurements.
-    """
+    """Return complete path-sequence telemetry for the supplied plan."""
     scale_x = float(getattr(cost_model, "scale_x", 1.0) or 1.0)
     scale_y = float(getattr(cost_model, "scale_y", 1.0) or 1.0)
 
@@ -117,6 +110,8 @@ def execution_metrics(
 
     color_seconds = color_changes * float(getattr(cost_model, "color_change_seconds", 0.0) or 0.0)
     total_seconds = path_seconds + color_seconds
+    risk_fn=getattr(cost_model,'risk_adjusted_seconds',None)
+    risk_adjusted=float(risk_fn(total_seconds)) if callable(risk_fn) else total_seconds
     return {
         "path_count": int(path_count),
         "path_boundaries": int(path_count),
@@ -130,4 +125,8 @@ def execution_metrics(
         "modeled_path_seconds": round(path_seconds, 6),
         "modeled_color_seconds": round(color_seconds, 6),
         "modeled_total_seconds": round(total_seconds, 6),
+        "modeled_risk_adjusted_seconds": round(risk_adjusted, 6),
+        "cost_model_version": int(getattr(cost_model,'model_version',1) or 1),
+        "cost_model_confidence": round(float(getattr(cost_model,'calibration_confidence',0.0) or 0.0),6),
+        "cost_model_uncertainty_multiplier": round(float(getattr(cost_model,'uncertainty_multiplier',1.0) or 1.0),6),
     }
