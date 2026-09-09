@@ -1,0 +1,36 @@
+name: Cleanup stale merged branches
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/cleanup-stale-branches.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete merged branches
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          branches=(
+            'v1.0.141-paint-custom-color'
+            'v1.0.141-rc1-release'
+            'v1.0.142-picture-custom-palette'
+            'v1.0.142-rc1-release'
+          )
+          for branch in "${branches[@]}"; do
+            if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${branch}" >/dev/null 2>&1; then
+              echo "Deleting ${branch}"
+              gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${branch}"
+            else
+              echo "Already absent: ${branch}"
+            fi
+          done
