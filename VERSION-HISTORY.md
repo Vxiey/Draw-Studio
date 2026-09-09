@@ -1,3 +1,4 @@
+v1.0.131-beta Sketch 2.0 + Auto Fill improves Paint sketch structure with color-boundary edges and adds a strict Sketch -> Color Fill -> Re-outline renderer that reuses calibrated custom RGB while leaving browser/Gartic execution unchanged.
 v1.0.130-rc2 Release Candidate Hardening II removes leftover one-shot integration files, adds permanent source-tree hygiene enforcement, adopts version-only current release-note naming, and strengthens release-manifest version/channel/hash/size validation while keeping the RC feature freeze.
 
 v1.0.129-rc1 Step 30: Release Candidate Hardening freezes the numbered feature roadmap, adds executable source/artifact release gates, 5,000-cycle lifecycle and profile-isolation soak checks, fixes Update Center repository/channel handling, validates Windows ZIP/installer/checksums/manifests, and requires a silent install/self-test/uninstall round trip before RC publication.

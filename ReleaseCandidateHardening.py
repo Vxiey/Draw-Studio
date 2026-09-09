@@ -132,10 +132,16 @@ def collect_source_gate_errors(root: Path, *, app_version: str, file_version: st
     _assert_contains(workflow, "Validate silent installer round-trip", "build-windows workflow", errors)
     _assert_contains(workflow, f"RELEASE-NOTES-v{app_version}.md", "build-windows workflow", errors)
 
-    if channel != "rc":
-        errors.append(f"Version.py: release candidate must use BUILD_CHANNEL='rc', got {channel!r}")
-    if not re.fullmatch(r"\d+\.\d+\.\d+-rc\d+", app_version):
-        errors.append(f"Version.py: APP_VERSION is not an rcN version: {app_version!r}")
+    if re.fullmatch(r"\d+\.\d+\.\d+-rc\d+", app_version):
+        expected_channel='rc'
+    elif re.fullmatch(r"\d+\.\d+\.\d+-beta", app_version):
+        expected_channel='beta'
+    elif re.fullmatch(r"\d+\.\d+\.\d+", app_version):
+        expected_channel='stable'
+    else:
+        expected_channel=None;errors.append(f"Version.py: APP_VERSION has unsupported release format: {app_version!r}")
+    if expected_channel is not None and channel != expected_channel:
+        errors.append(f"Version.py: APP_VERSION {app_version!r} requires BUILD_CHANNEL={expected_channel!r}, got {channel!r}")
 
     return errors
 

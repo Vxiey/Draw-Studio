@@ -76,6 +76,8 @@ def main():
         '--hidden-import', 'DetailZoomPass',
         '--hidden-import', 'QuickSketchFillContour',
         '--hidden-import', 'HybridRenderer3',
+        '--hidden-import', 'Sketch2Planner',
+        '--hidden-import', 'SketchFillRenderer',
         '--hidden-import', 'BenchmarkSuite',
         '--hidden-import', 'EndToEndAutoTuner',
         '--hidden-import', 'AutoTunerFeedback',
@@ -225,7 +227,7 @@ def main():
         'RELEASE-NOTES-Step22-Universal-Hardware-Auto-Benchmark.md', 'STEP-24-ADAPTIVE-DETAIL-ZOOM.md',
         'STEP-25-QUICK-SKETCH-FILL-CONTOUR.md', 'STEP-29-HYBRID-RENDERER-3.md',
         'RELEASE-NOTES-Step24-Step25-Detail-Zoom-Quick-Sketch.md', 'COLOR-ENGINE-NAMED-COLOR-INTELLIGENCE.md',
-        'RELEASE-NOTES-Step26-Color-Engine-Named-Color-Intelligence.md'
+        'RELEASE-NOTES-Step26-Color-Engine-Named-Color-Intelligence.md', 'RELEASE-NOTES-v1.0.131-beta.md'
     ]
     for name in optional_data:
         source = base / name

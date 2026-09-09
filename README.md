@@ -118,7 +118,7 @@ Current release candidate: **v1.0.130-rc2**
 
 Expected Windows artifacts:
 
-- `DrawStudio-1.0.130-rc2-Windows-x64.zip`
+- `DrawStudio-1.0.131-beta-Windows-x64.zip`
 - `DrawStudio-1.0.130-rc2-Windows-x64-Setup.exe`
 
 Extract the **entire ZIP** to a normal folder before starting the program, or use the installer build.
@@ -265,9 +265,19 @@ These extra color names are **not added to the drawing palette automatically**. 
 
 Current Windows release artifact names:
 
-- `DrawStudio-1.0.130-rc2-Windows-x64.zip`
+- `DrawStudio-1.0.131-beta-Windows-x64.zip`
 - `DrawStudio-1.0.130-rc2-Windows-x64-Setup.exe`
 - SHA-256 hashes are generated with the release artifacts
+
+### v1.0.131-beta — Sketch 2.0 + Auto Fill
+
+- **Sketch 2.0 for Microsoft Paint** combines luminance and color-boundary structure so important edges survive even when brightness is similar.
+- New **Sketch + Auto Fill** rendering style uses a strict **Sketch → Color Fill → Re-outline** execution order.
+- Paint color fill uses safe connected drawing runs after the sketch; the existing bucket-fill prelude is deliberately disabled for this mode so color can never start before the sketch.
+- Existing **Adaptive exact/custom RGB** selection is reused when Paint custom-color controls are calibrated.
+- Final re-outline restores the strongest structural contours after color fill.
+- Gartic Phone, Skribbl.io and other browser execution policies are unchanged.
+- Deterministic local image analysis only — no AI, ML or OCR.
 
 ### v1.0.130-rc2 — Release Candidate Hardening II
 

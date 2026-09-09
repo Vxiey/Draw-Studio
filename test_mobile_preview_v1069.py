@@ -8,8 +8,8 @@ from Version import APP_VERSION, FILE_VERSION
 
 class MobilePreviewTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.130-rc2')
-        self.assertEqual(FILE_VERSION,'1.0.130')
+        self.assertEqual(APP_VERSION,'1.0.131-beta')
+        self.assertEqual(FILE_VERSION,'1.0.131')
 
     def test_private_ipv4(self):
         self.assertTrue(_is_private_ipv4('192.168.1.20'))

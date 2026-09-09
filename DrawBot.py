@@ -47,6 +47,7 @@ from QuickSketchFillContour import (QUICK_SKETCH_RENDER_STYLE, QUICK_SKETCH_STYL
                                       validate_quick_sketch_style, validate_fill_preference)
 from HybridRenderer3 import (HYBRID_RENDER_STYLE, HYBRID_MODES, apply_hybrid_policy,
                              is_hybrid_renderer, validate_hybrid_mode)
+from SketchFillRenderer import (SKETCH_FILL_RENDER_STYLE, build_sketch_fill_plan, is_sketch_fill)
 from VisualVerification import (VISUAL_VERIFICATION_MODES, resolve_visual_verification,
                                 validate_visual_verification, planned_batch_points,
                                 planned_batch_boxes, compare_batch_snapshot, summarize_result)
@@ -641,6 +642,13 @@ def _plan_log_text(plan):
                     f" contours={int(quick_meta.get('visible_contour_segments',0) or 0)}"
                     f" micro_pruned={int(quick_meta.get('micro_strokes_pruned',0) or 0)}"
                     f" reduction={float(quick_meta.get('stroke_run_reduction_percent',0) or 0):.1f}%")
+    sketch_fill_meta=options.get('sketch_fill_meta') or {}
+    sketch_fill_bits=''
+    if sketch_fill_meta.get('enabled'):
+        sketch_fill_bits=(f" sketch_fill=on sketch={int(sketch_fill_meta.get('sketch_paths',0) or 0)}"
+                          f" fill={int(sketch_fill_meta.get('color_fill_paths',0) or 0)}"
+                          f" reoutline={int(sketch_fill_meta.get('reoutline_paths',0) or 0)}"
+                          f" fill_method={sketch_fill_meta.get('fill_method','?')}")
     region_meta=options.get('region_fill_meta') or {}
     region_bits=''
     if region_meta.get('enabled'):
@@ -654,7 +662,7 @@ def _plan_log_text(plan):
         if region_meta.get('pixel_accurate_protected'):
             region_bits+=' exact_pixel_protected=true'
     return (
-        f"source_strokes={source} execution_paths={execution} estimate={estimate:.1f}s" + (f" raw_model={raw_estimate:.1f}s" if abs(estimate-raw_estimate)>.05 else "") + f"{shape_bits}{target_bits}{attempt_bits}{optimizer_bits}{detail_bits}{pixel_bits}{color_bits}{quick_bits}{region_bits}{extra_fast_bits}{deadline_bits}{policy_bits}{real_speed_bits}{turbo_bits}{profiler_bits} "
+        f"source_strokes={source} execution_paths={execution} estimate={estimate:.1f}s" + (f" raw_model={raw_estimate:.1f}s" if abs(estimate-raw_estimate)>.05 else "") + f"{shape_bits}{target_bits}{attempt_bits}{optimizer_bits}{detail_bits}{pixel_bits}{color_bits}{quick_bits}{sketch_fill_bits}{region_bits}{extra_fast_bits}{deadline_bits}{policy_bits}{real_speed_bits}{turbo_bits}{profiler_bits} "
         f"effective_resolution={options.get('planning_resolution_effective', options.get('planning_resolution', 'Standard'))} "
         f"sample_limit={options.get('planner_sample_limit', '?')} "
         f"max_pixels={options.get('planner_max_pixels', '?')} "
@@ -706,6 +714,11 @@ def _finalize_auto_tuned_plan(plan, original, area, cancelled=lambda: False):
 def make_plan(original, area, options, cancelled=lambda: False):
     from PIL import Image, ImageEnhance, ImageDraw, ImageFilter, ImageOps
     from AutoDrawing import resolve_drawing
+    # v1.0.131: Sketch + Auto Fill owns an explicit Paint-only phase order.
+    # Route it before AutoDrawing so Auto cannot replace the user's selected
+    # renderer. The recursive colour sub-plan is marked _sketch_fill_inner.
+    if is_sketch_fill(options):
+        return build_sketch_fill_plan(original,area,options,make_plan,finish_plan,cancelled)
     # Step 29: Hybrid Renderer 3.0 resolves specialised deterministic policy
     # before the generic AutoDrawing selector. It only changes renderer/planner
     # fields; CanvasGuard, calibration and input authorisation remain separate.
@@ -882,10 +895,19 @@ def make_plan(original, area, options, cancelled=lambda: False):
         image,fitted=prepare_image(original,area,10,sample_limit=min(720,max(area)),max_pixels=518400,
                                    preview_detail_mode=preview_detail_mode,preview_detail_meta=preview_detail_meta,cancelled=cancelled)
         if preview_detail_meta:options['preview_detail_meta']=preview_detail_meta
-        image=contour_image(image,cancelled,detail=options.get('sketch_detail','Detailed'))
+        _sketch2_meta=None
+        if str(options.get('profile_key') or '').lower()=='microsoft-paint' or str(options.get('profile_name') or '')=='Microsoft Paint':
+            from Sketch2Planner import contour_image_v2
+            _detail=options.get('sketch_detail','Detailed');_detail='Balanced' if _detail=='Auto' else _detail
+            image,_sketch2_meta=contour_image_v2(image,cancelled,detail=_detail)
+        else:
+            # Browser/Gartic path intentionally stays on the established legacy
+            # contour raster and GarticSketchPaths route.
+            image=contour_image(image,cancelled,detail=options.get('sketch_detail','Detailed'))
         profiler_stop(options,'preprocessing',_prof_pre)
         ink=monochrome_strokes(image,True,cancelled)[0]
         plan_options=dict(options)
+        if _sketch2_meta is not None:plan_options['sketch2_meta']=dict(_sketch2_meta)
         plan_options.update(black_sketch=True,skip_white=True,background_fill='Off',fill_regions=[],
             fill_tool_actions=[],background_simplification='Off',adaptive_detail='Off',
             color_layers='Off',custom_color_workflow='Off',color_selectors=(),
@@ -1510,6 +1532,7 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
         except (TypeError,ValueError,AttributeError):edge_count=0
     _prof_shape = profiler_start(options, 'shape_extraction')
     pixel_prebuilt = options.get('_pixel_execution_groups')
+    sketch_fill_prebuilt = options.get('_sketch_fill_execution_groups')
     if pixel_prebuilt is not None:
         # v1.0.87 Block B: the component-aware Pixel Stroke Engine already
         # produced geometry-safe local paths. Do not feed them back through the
@@ -1537,6 +1560,14 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
             'optimizer_merged_paths':max(0,int(stroke_meta.get('source_horizontal_runs',0) or 0)-sum(len(g) for g in execution_groups)),
             'optimizer_travel_reduction':0.0,
         })
+    elif sketch_fill_prebuilt is not None:
+        execution_groups=[list(paths) for paths in sketch_fill_prebuilt]
+        path_meta=dict(continuous_path_stats(groups,execution_groups))
+        path_meta.update(options.get('sketch_fill_meta') or {})
+        path_meta['mode']='Sketch + Auto Fill'
+        path_meta['sketch_fill']=True
+        path_meta['stroke_optimizer_requested']='Off'
+        path_meta['stroke_optimizer_effective']='Sketch Fill phase scheduler'
     elif options.get('sketch_execution_groups') is not None:
         execution_groups=[list(paths) for paths in options['sketch_execution_groups']]
         path_meta=dict(continuous_path_stats(groups,execution_groups))
@@ -1611,8 +1642,9 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
 
     _prof_paths = profiler_start(options, 'path_optimization')
     if execution_groups is not None:
-        if pixel_prebuilt is not None:
-            # Geometry and component order were already optimized inside
+        if pixel_prebuilt is not None or sketch_fill_prebuilt is not None:
+            # Pixel Accurate and Sketch+Fill already own geometry/phase order.
+            # Keep every path; no generic cap/optimizer may reorder them.
             # PixelStrokeEngine. Keep every path; only attach target metadata so
             # logs stay compatible with the legacy planner.
             path_meta.update({
@@ -1663,7 +1695,7 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
     # same deadline-specific plan. Pixel Accurate already has its own exact
     # progressive budget and is deliberately left untouched here.
     deadline_sequence=None
-    if execution_groups is not None and pixel_prebuilt is None:
+    if execution_groups is not None and pixel_prebuilt is None and sketch_fill_prebuilt is None:
         try:
             from AdaptiveDeadlineRenderer import adapt_execution_plan
             execution_groups,deadline_sequence,deadline_meta,importance_map = adapt_execution_plan(
@@ -1691,8 +1723,20 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
 
     execution_sequence=[]
     if execution_groups is not None:
+        sketch_fill_sequence=options.get('_sketch_fill_execution_sequence') if sketch_fill_prebuilt is not None else None
         pixel_sequence=options.get('_pixel_execution_sequence') if pixel_prebuilt is not None else None
-        if pixel_sequence is not None:
+        if sketch_fill_sequence is not None:
+            execution_sequence=[dict(entry) for entry in sketch_fill_sequence]
+            _sf=options.get('sketch_fill_meta') or {}
+            path_meta.update({
+                'progressive_enabled':True,'progressive_sequence_paths':len(execution_sequence),
+                'progressive_sketch_paths':int(_sf.get('sketch_paths',0) or 0),
+                'progressive_color_fill_paths':int(_sf.get('color_fill_paths',0) or 0),
+                'progressive_reoutline_paths':int(_sf.get('reoutline_paths',0) or 0),
+                'progressive_phase_order':'Sketch -> Color Fill -> Re-outline',
+                'progressive_mode':'Sketch Fill','color_workflow':'Sketch then fill',
+            })
+        elif pixel_sequence is not None:
             execution_sequence=[dict(entry) for entry in pixel_sequence]
             stroke_meta=dict(options.get('pixel_stroke_meta') or {})
             path_meta.update({
@@ -1850,6 +1894,12 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
                     else:
                         path_moves_total+=precision_path_count(execution_transform.point(x1,y1),execution_transform.point(x2,y2),precision,estimate_step_px)
 
+    if options.get('sketch_fill_active') and execution_sequence:
+        try:
+            from SketchFillRenderer import render_sequence_preview
+            preview=render_sequence_preview(image.size,size,execution_sequence,palette_rgb,brush)
+        except Exception as _sf_preview_error:
+            log_event(f'Sketch Fill sequence preview fallback: {_sf_preview_error!r}')
     profiler_stop(options, 'preview_rendering', _prof_preview)
     _prof_estimate = profiler_start(options, 'execution_estimate')
     count=path_meta['execution_paths'];colors=sum(bool(g) for g in groups)
@@ -1934,6 +1984,12 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
     if isinstance(_quantized_preview,Image.Image):
         ui_previews['quantized_target']=_quantized_preview
     ui_previews['simulated_final']=preview
+    if options.get('sketch_fill_active') and execution_sequence:
+        try:
+            from SketchFillRenderer import build_phase_previews
+            ui_previews.update(build_phase_previews(image.size,size,execution_sequence,palette_rgb,brush))
+        except Exception as _sf_layers_error:
+            log_event(f'Sketch Fill phase previews skipped safely: {_sf_layers_error!r}')
     try:
         from DetailZoomPass import render_detail_zoom_preview
         _zoom_overlay=render_detail_zoom_preview(size,options.get('detail_zoom_meta') or {})
@@ -3264,6 +3320,7 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                 if _phase not in phases_present:phases_present.append(_phase)
             pixel_four_pass=any(p in phases_present for p in ('fill','mid_detail','fine_detail','cleanup'))
             deadline_pass=any(p in phases_present for p in ('major_coverage','structure','important_details','accuracy','correction'))
+            sketch_fill_pass=any(p in phases_present for p in ('sketch','color_fill','reoutline'))
             deadline_scheduler=None
             deadline_panic_reported=False
             deadline_catchup_reported=False
@@ -3287,6 +3344,11 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                     except (ValueError,IndexError):n=1
                     phase_names[p]=f'accuracy correction {n}'
                 phase_total=len(ordered_phases)
+            elif sketch_fill_pass:
+                _sf_order=[p for p in ('sketch','color_fill','reoutline') if p in phases_present]
+                phase_numbers={p:i+1 for i,p in enumerate(_sf_order)}
+                phase_names={'sketch':'Sketch 2.0 contours','color_fill':'color fill','reoutline':'final re-outline'}
+                phase_total=max(1,len(_sf_order))
             elif deadline_pass:
                 _deadline_order=['major_coverage','structure','important_details','accuracy','correction']
                 _deadline_present=[p for p in _deadline_order if p in phases_present]

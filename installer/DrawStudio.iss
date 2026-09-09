@@ -1,12 +1,12 @@
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.130-rc2"
+#define MyAppVersion "1.0.131-beta"
 #endif
 
 [Setup]
 AppId={{6A4AD303-4F16-4ED7-A9AF-5B912352D83E}
 AppName=Draw Studio
 AppVersion={#MyAppVersion}
-VersionInfoVersion=1.0.129.0
+VersionInfoVersion=1.0.131.0
 AppPublisher=Draw Studio
 DefaultDirName={localappdata}\Programs\Draw Studio
 DefaultGroupName=Draw Studio
