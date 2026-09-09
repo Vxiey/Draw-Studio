@@ -1,0 +1,77 @@
+name: v1.0.131 adaptive hybrid cost integration
+
+on:
+  push:
+    paths:
+      - '.github/hybrid-cost-integration-trigger'
+      - 'hybrid_cost_integrate_once.py'
+      - '.github/workflows/hybrid-cost-integration-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pip install -r requirements.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Apply adaptive hybrid patch
+        shell: pwsh
+        run: |
+          python hybrid_cost_integrate_once.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compile and focused tests
+        shell: pwsh
+        run: |
+          python -m py_compile HybridCostModel.py HybridBenchmark.py PixelStrokeEngine.py SubjectFocus.py RegionFillEngine.py DrawBot.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest -v test_hybrid_cost_engine_v10131.py test_pixel_stroke_engine_v1087.py test_pixel_accuracy_engine_v1088.py test_step7_extra_fast2_v10131.py test_region_fill_v10117.py test_gartic_phone_turbo_v1065.py test_gartic_sketch_v1098.py test_stroke_delivery_v1062.py test_step9_profile_calibration_isolation_v10133.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Six-case benchmark smoke
+        shell: pwsh
+        run: |
+          @'
+          from DrawBot import make_plan
+          from HybridBenchmark import run
+          from Colors import allColors
+          opts=dict(detail=7,delay=.006,lines=True,skip_white=True,contrast=1,outline=False,brush_px=1,max_seconds=150,time_budget_active=True,time_budget_seconds=150,time_budget_mode='Custom',speed='Balanced',precision='High',drawing_mode='Smart paths (recommended)',smart_paths=True,draw_quality='High likeness',quality='High detail',profile_key='microsoft-paint',profile_name='Microsoft Paint',gpu_mode='CPU',gpu_vram='Auto',gpu_performance='Balanced',cpu_workers='1',cpu_workers_resolved=1,ram_budget_mb=512,planning_resolution='Standard',color_rendering='Perceptual match',color_fidelity='Faithful',color_grouping='Accurate',color_layers='Off',custom_color_workflow='calibrated-palette',use_region_fill_engine=False,background_fill='Off',background_simplification='Off',stroke_optimizer='Travel only',progressive_rendering='Off',adaptive_detail='Off',subject_focus='Off',paint_tool='Pencil',effective_paint_tool='Pencil',tool_strategy='Pencil',palette_positions=[])
+          result=run(make_plan,opts,area=(240,180))
+          assert result['case_count']==6
+          assert result['actual_draw_times_measured'] is False
+          print('HYBRID_BENCHMARK_CASES=6')
+          for row in result['cases']:
+              print(row['case'],row['legacy']['planning_seconds'],row['hybrid']['planning_seconds'],row['legacy']['estimated_draw_seconds'],row['hybrid']['estimated_draw_seconds'],row['operation_delta'])
+          '@ | Set-Content benchmark_smoke.py -Encoding UTF8
+          python benchmark_smoke.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Full regression and self-test
+        shell: pwsh
+        run: |
+          python -m unittest discover -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python DrawBot.py --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Commit validated adaptive hybrid source
+        shell: pwsh
+        run: |
+          Remove-Item benchmark_smoke.py -ErrorAction SilentlyContinue
+          git config user.name "Draw Studio CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add HybridCostModel.py HybridBenchmark.py PixelStrokeEngine.py SubjectFocus.py RegionFillEngine.py DrawBot.py build_exe.py test_hybrid_cost_engine_v10131.py
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) { Write-Host 'No validated source changes to commit'; exit 0 }
+          git commit -m "Add calibrated adaptive hybrid region cost engine"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin HEAD:main
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
