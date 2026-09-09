@@ -972,7 +972,7 @@ def make_plan(original, area, options, cancelled=lambda: False):
         from SubjectFocus import focused_stroke_plan
         pixel_map,stroke_plan=focused_stroke_plan(
             pixel_map,image,len(allColors),options.get('subject_focus','Off'),options.get('subject_region'),lines=bool(options.get('lines',True)),
-            cpu_workers=int(options.get('cpu_workers_resolved',1) or 1),cancelled=cancelled)
+            cpu_workers=int(options.get('cpu_workers_resolved',1) or 1),options=options,cancelled=cancelled)
         from AdaptiveBrushEngine import assign_adaptive_brushes
         adaptive_brush=assign_adaptive_brushes(
             stroke_plan['execution_sequence'],profile_key=str(options.get('profile_key') or ''),

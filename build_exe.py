@@ -150,6 +150,8 @@ def main():
         '--hidden-import', 'PixelAccuratePlanner',
         '--hidden-import', 'ShadowDetailEngine',
         '--hidden-import', 'PixelStrokeEngine',
+        '--hidden-import', 'HybridCostModel',
+        '--hidden-import', 'HybridBenchmark',
         '--hidden-import', 'PixelAccuracyEngine',
         '--hidden-import', 'AdaptiveBrushEngine',
         '--hidden-import', 'PixelAccuracyGpu',

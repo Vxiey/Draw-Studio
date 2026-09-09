@@ -436,33 +436,52 @@ def _individual_run_paths(runs: Sequence[Segment]) -> list[Path]:
     return out
 
 
-def build_component_paths(comp: Component, component_map: np.ndarray, *, cancelled=lambda: False) -> tuple[list[Path], dict]:
-    """Build local H/V paths and verify every connector against component pixels."""
-    comp.orientation = _choose_orientation(comp)
-    source_runs = comp.horizontal_runs if comp.orientation == "horizontal" else comp.vertical_runs
-    if comp.orientation == "horizontal":
-        paths = _merge_horizontal_runs_lossless(source_runs, cancelled=cancelled)
+def _candidate_paths(comp: Component, orientation: str, component_map: np.ndarray, *, cancelled=lambda: False):
+    source_runs=comp.horizontal_runs if orientation=="horizontal" else comp.vertical_runs
+    if orientation=="horizontal":
+        paths=_merge_horizontal_runs_lossless(source_runs,cancelled=cancelled)
     else:
-        transposed = _transpose_segments(source_runs)
-        transposed_paths = _merge_horizontal_runs_lossless(transposed, cancelled=cancelled)
-        paths = _transpose_paths(transposed_paths)
+        paths=_transpose_paths(_merge_horizontal_runs_lossless(_transpose_segments(source_runs),cancelled=cancelled))
+    safe=all(_path_inside_component(path,component_map,comp.component_id) for path in paths)
+    exact=bool(safe and _paths_exact_component_coverage(paths,component_map,comp))
+    return paths,source_runs,exact
 
-    unsafe = [path for path in paths if not _path_inside_component(path, component_map, comp.component_id)]
-    exact_coverage = (not unsafe) and _paths_exact_component_coverage(paths, component_map, comp)
+
+def build_component_paths(comp: Component, component_map: np.ndarray, *, cost_model=None, cancelled=lambda: False) -> tuple[list[Path], dict]:
+    """Build safe H/V candidates and choose by calibrated time when available."""
+    legacy_orientation=_choose_orientation(comp)
+    candidate_meta={}
+    if cost_model is None:
+        comp.orientation=legacy_orientation
+        paths,source_runs,exact_coverage=_candidate_paths(comp,comp.orientation,component_map,cancelled=cancelled)
+    else:
+        choices=[]
+        for orientation in ("horizontal","vertical"):
+            paths0,runs0,exact0=_candidate_paths(comp,orientation,component_map,cancelled=cancelled)
+            cost=float(cost_model.paths_seconds(paths0)) if exact0 else float("inf")
+            candidate_meta[orientation]={"safe":bool(exact0),"paths":len(paths0),"estimated_seconds":None if not math.isfinite(cost) else round(cost,6)}
+            if exact0:choices.append((cost,orientation,paths0,runs0))
+        if choices:
+            choices.sort(key=lambda item:(item[0],0 if item[1]==legacy_orientation else 1,item[1]))
+            # Protected very-thin structures keep the legacy long-axis choice if
+            # its real predicted cost is within 6%; this avoids fragmentation for
+            # a negligible timing win.
+            best=choices[0]
+            legacy=next((x for x in choices if x[1]==legacy_orientation),None)
+            if comp.protected_pixels and min(comp.width,comp.height)<=3 and legacy and legacy[0]<=best[0]*1.06:
+                best=legacy
+            _cost,comp.orientation,paths,source_runs=best;exact_coverage=True
+        else:
+            comp.orientation=legacy_orientation
+            paths,source_runs,exact_coverage=_candidate_paths(comp,comp.orientation,component_map,cancelled=cancelled)
     if not exact_coverage:
-        # Safety and accuracy over compression: if a connector leaves the exact
-        # region *or* a merge/compression accidentally skips a source pixel, fall
-        # back to individual lossless runs for this component only.
-        paths = _individual_run_paths(source_runs)
-        comp.safe_merge_fallbacks += 1
-    paths = order_paths(paths, "Balanced", allow_reverse=True)
-    comp.paths = list(paths)
-    return comp.paths, {
-        "orientation": comp.orientation,
-        "source_runs": len(source_runs),
-        "execution_paths": len(comp.paths),
-        "safe_verified": bool(exact_coverage),
-        "fallback": not bool(exact_coverage),
+        paths=_individual_run_paths(source_runs);comp.safe_merge_fallbacks+=1
+    paths=order_paths(paths,"Balanced",allow_reverse=True);comp.paths=list(paths)
+    return comp.paths,{
+        "orientation":comp.orientation,"source_runs":len(source_runs),"execution_paths":len(comp.paths),
+        "safe_verified":bool(exact_coverage),"fallback":not bool(exact_coverage),
+        "selection":"calibrated-time" if cost_model is not None else "legacy-run-count",
+        "candidates":candidate_meta,
     }
 
 
@@ -521,7 +540,7 @@ def _component_entry_point(comp: Component) -> Point:
     return (comp.bbox[0], comp.bbox[1])
 
 
-def schedule_components(components: Sequence[Component], palette_count: int, *, cancelled=lambda: False) -> tuple[list[list[Path]], list[dict], dict]:
+def schedule_components(components: Sequence[Component], palette_count: int, *, cost_model=None, cancelled=lambda: False) -> tuple[list[list[Path]], list[dict], dict]:
     """CPU bounded component scheduler: phase first, then quality/travel/color cost."""
     execution_groups: list[list[Path]] = [[] for _ in range(int(palette_count))]
     sequence: list[dict] = []
@@ -541,10 +560,18 @@ def schedule_components(components: Sequence[Component], palette_count: int, *, 
             for i in range(window_n):
                 comp = remaining[i]
                 start = _component_entry_point(comp)
-                travel = 0.0 if cursor is None else math.hypot(start[0] - cursor[0], start[1] - cursor[1])
-                color_penalty = 0.0 if current_color in (None, comp.color_index) else 18.0
-                priority_credit = min(30.0, _priority(comp) * .025)
-                cost = travel + color_penalty - priority_credit + i * 1e-6
+                if cost_model is None:
+                    travel = 0.0 if cursor is None else math.hypot(start[0] - cursor[0], start[1] - cursor[1])
+                    color_penalty = 0.0 if current_color in (None, comp.color_index) else 18.0
+                    priority_credit = min(30.0, _priority(comp) * .025)
+                    cost = travel + color_penalty - priority_credit + i * 1e-6
+                else:
+                    seconds=float(cost_model.paths_seconds(comp.paths,cursor=cursor))
+                    if current_color not in (None,comp.color_index):seconds+=float(cost_model.color_change_seconds)
+                    # Keep the multi-pass contract, but within each phase choose
+                    # the component with highest visual value per millisecond.
+                    value=max(.001,float(_priority(comp)))
+                    cost=(seconds/max(.001,value))+i*1e-9
                 if cost < best_cost:
                     best_i, best_cost = i, cost
             comp = remaining.pop(best_i)
@@ -585,13 +612,24 @@ def schedule_components(components: Sequence[Component], palette_count: int, *, 
         "phase_path_counts": phase_counts,
         "phase_component_counts": component_counts,
         "scheduled_paths": len(sequence),
+        "cost_aware": bool(cost_model is not None),
+        "cost_model": cost_model.as_dict() if cost_model is not None else None,
+        "estimated_execution_seconds": round(sum(float(cost_model.path_seconds(e["path"])) for e in sequence),4) if cost_model is not None else None,
+        "scheduled_color_switches": sum(1 for a,b in zip(sequence,sequence[1:]) if a["color_index"]!=b["color_index"]),
     }
 
 
 def build_pixel_stroke_plan(pixel_map: PixelMap, palette_count: int, *, lines: bool = True,
-                            cpu_workers: int = 1, cancelled=lambda: False) -> dict:
+                            cpu_workers: int = 1, options=None, cancelled=lambda: False) -> dict:
     """Build Block B component paths while preserving every drawable PixelMap pixel."""
     groups = groups_from_pixel_map(pixel_map, palette_count, lines=lines, cancelled=cancelled)
+    cost_model=None
+    if isinstance(options,dict) and str(options.get("adaptive_hybrid_cost","Auto")) != "Off":
+        try:
+            from HybridCostModel import build_cost_model
+            cost_model=build_cost_model(options)
+        except Exception:
+            cost_model=None
     if not lines:
         # Dot mode is already exactly lossless and has no meaningful local run
         # orientation. Keep a deterministic four-pass-free fallback.
@@ -617,7 +655,7 @@ def build_pixel_stroke_plan(pixel_map: PixelMap, palette_count: int, *, lines: b
     workers=max(1,int(cpu_workers or 1));parallel_paths=workers>1 and len(components)>=16
     if parallel_paths:
         def _build(comp):
-            return comp.component_id,build_component_paths(comp,component_map,cancelled=cancelled)
+            return comp.component_id,build_component_paths(comp,component_map,cost_model=cost_model,cancelled=cancelled)
         with ThreadPoolExecutor(max_workers=min(workers,16)) as pool:
             results=list(pool.map(_build,components))
         if cancelled():raise InterruptedError()
@@ -626,11 +664,11 @@ def build_pixel_stroke_plan(pixel_map: PixelMap, palette_count: int, *, lines: b
         results=[]
         for comp in components:
             if cancelled():raise InterruptedError()
-            results.append((comp.component_id,build_component_paths(comp,component_map,cancelled=cancelled)))
+            results.append((comp.component_id,build_component_paths(comp,component_map,cost_model=cost_model,cancelled=cancelled)))
     for comp in components:
         orientation_counts[comp.orientation]+=1;safe_fallbacks+=comp.safe_merge_fallbacks
 
-    execution_groups, sequence, scheduler_meta = schedule_components(components, palette_count, cancelled=cancelled)
+    execution_groups, sequence, scheduler_meta = schedule_components(components, palette_count, cost_model=cost_model, cancelled=cancelled)
     phase_counts = scheduler_meta["phase_path_counts"]
     metadata = {
         "engine": "Pixel Stroke Engine Block B",

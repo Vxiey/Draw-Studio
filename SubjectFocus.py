@@ -63,11 +63,11 @@ def subject_mask(image, region=None, cancelled=lambda: False):
         raise ValueError('No clear subject found. Click Mark subject or use a transparent PNG.')
     return mask, 'Estimated from uniform border; check Coverage preview'
 
-def focused_stroke_plan(pixel_map, image, palette_count, mode, region=None, *, lines=True, cpu_workers=1, cancelled=lambda: False):
+def focused_stroke_plan(pixel_map, image, palette_count, mode, region=None, *, lines=True, cpu_workers=1, options=None, cancelled=lambda: False):
     from PixelStrokeEngine import build_pixel_stroke_plan
     from PixelAccuracyEngine import execution_groups_from_sequence
     if mode not in MODES: raise ValueError('Unknown subject focus mode')
-    kwargs = dict(lines=lines, cpu_workers=cpu_workers, cancelled=cancelled)
+    kwargs = dict(lines=lines, cpu_workers=cpu_workers, options=options, cancelled=cancelled)
     if mode == 'Off':
         return pixel_map, build_pixel_stroke_plan(pixel_map, palette_count, **kwargs)
     mask, method = subject_mask(image, region, cancelled)
