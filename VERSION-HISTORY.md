@@ -1,3 +1,8 @@
+# v1.0.141-rc1
+
+- Fix Microsoft Paint automatic Edit colors discovery/activation on modern Windows 11 Paint.
+- Automatically calibrate numeric RGB fields so image colors can be typed, verified and cached persistently.
+
 # v1.0.140-rc1
 
 - Merge the v1.0.134–v1.0.140 drawing-engine correctness, travel, semantic-barrier and Cost Model v2 work.

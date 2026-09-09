@@ -16,6 +16,6 @@ Increment `APP_VERSION`/`FILE_VERSION`, synchronize release metadata/tests, and 
 
 Published versions are not overwritten. Draft upload retries must target the same commit. Release tags must match `APP_VERSION`.
 
-The first updater-enabled release was `1.0.133-rc2`; `1.0.140-rc1` strengthens installed-build in-place update and automatic relaunch behavior.
+The first updater-enabled release was `1.0.133-rc2`; `1.0.141-rc1` strengthens installed-build in-place update and automatic relaunch behavior.
 
 References: [GitHub release asset digests](https://github.blog/changelog/2025-06-03-releases-now-expose-digests-for-release-assets/) and [Inno Setup command-line parameters](https://jrsoftware.org/ishelp/topic_setupcmdline.htm).

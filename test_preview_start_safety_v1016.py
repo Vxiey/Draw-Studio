@@ -29,8 +29,8 @@ class Button:
 
 class PreviewStartSafetyV1018Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.140-rc1')
-        self.assertEqual(FILE_VERSION,'1.0.140')
+        self.assertEqual(APP_VERSION,'1.0.141-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.141')
 
     def make_app(self, *, palette=True, tool=True, armed=False):
         return SimpleNamespace(
