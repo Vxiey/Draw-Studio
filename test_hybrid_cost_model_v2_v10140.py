@@ -60,6 +60,18 @@ class HybridCostModelV2Tests(unittest.TestCase):
         self.assertGreater(clean.calibration_confidence, noisy.calibration_confidence)
         self.assertLess(clean.uncertainty_multiplier, noisy.uncertainty_multiplier)
 
+    def test_typed_point_measurement_remains_atomic_lower_bound(self):
+        measured = 2.0
+        model = build_cost_model(opts(_hybrid_cost_calibration_override=calibration(
+            samples=3,
+            ratio=1.0,
+            mape=None,
+            runtime={'dot': {'average_seconds': measured}},
+        )))
+        self.assertLess(model.calibration_confidence, 1.0)
+        self.assertGreaterEqual(model.point_seconds, measured)
+        self.assertGreaterEqual(model.path_seconds(((0, 0),)), measured)
+
     def test_single_noisy_operation_sample_does_not_replace_defaults(self):
         cold = build_cost_model(opts(_hybrid_cost_calibration_override=calibration()))
         measured = 3.0
