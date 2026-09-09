@@ -1,3 +1,12 @@
+# v1.0.143-rc1
+
+- Fix Microsoft Paint auto calibration when the blank document canvas extends beyond the visible window.
+- Accept a large verified blank visible canvas viewport instead of requiring every document edge to be on-screen.
+- Keep strict rejection for genuinely small, covered or ambiguous drawing areas.
+- Inset clipped client edges more aggressively so automatic drawing stays away from window boundaries and scroll/clipping edges.
+- Preserve full-canvas behavior and existing palette/tool verification when all Paint canvas borders are visible.
+- Add regression coverage for left/right/bottom clipped Paint documents and keep Windows/Linux CI plus DrawBot self-test as release gates.
+
 # v1.0.142-rc1
 
 - Add **Custom color palette for picture** to the Microsoft Paint color-calibration workflow.

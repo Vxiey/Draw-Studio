@@ -45,8 +45,8 @@ def anchor_options():
 
 class AnchorTransformV1050Tests(unittest.TestCase):
     def test_version_bumped(self):
-        self.assertEqual(APP_VERSION,'1.0.142-rc1')
-        self.assertEqual(FILE_VERSION,'1.0.142')
+        self.assertEqual(APP_VERSION,'1.0.143-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.143')
 
     def test_rebase_translation_uses_anchor_evidence(self):
         area, transform = rebase_canvas_area((100,200,500,300), (8,31,1008,731), (28,41,1028,741), anchor_options())

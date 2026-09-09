@@ -20,8 +20,8 @@ class BrowserRuntimePaletteGuardTests(unittest.TestCase):
         self.assertEqual(runtime_palette_guard_colors('other',self.positions,self.colors),expected)
 
     def test_release_version(self):
-        self.assertEqual(APP_VERSION,'1.0.142-rc1')
-        self.assertEqual(FILE_VERSION,'1.0.142')
+        self.assertEqual(APP_VERSION,'1.0.143-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.143')
 
 
 if __name__ == '__main__':
