@@ -1,0 +1,319 @@
+name: Prepare v1.0.140-rc1 self-update release branch
+
+on:
+  push:
+    branches:
+      - v1.0.140-rc1-self-update
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply release and self-update migration
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          OLD_APP='1.0.133-rc3'
+          NEW_APP='1.0.140-rc1'
+          OLD_FILE='1.0.133'
+          NEW_FILE='1.0.140'
+          root=Path('.')
+
+          (root/'Version.py').write_text(
+              "APP_NAME = 'Draw Studio'\n"
+              "APP_VERSION = '1.0.140-rc1'\n"
+              "FILE_VERSION = '1.0.140'\n"
+              "BUILD_CHANNEL = 'rc'\n",
+              encoding='utf-8')
+
+          path=root/'version_info.txt'
+          text=path.read_text(encoding='utf-8')
+          text=text.replace('(1,0,133,0)','(1,0,140,0)').replace("'1.0.133'","'1.0.140'")
+          path.write_text(text,encoding='utf-8')
+
+          path=root/'installer'/'DrawStudio.iss'
+          text=path.read_text(encoding='utf-8')
+          text=text.replace('#define MyAppVersion "1.0.133-rc3"','#define MyAppVersion "1.0.140-rc1"')
+          text=text.replace('VersionInfoVersion=1.0.133.0','VersionInfoVersion=1.0.140.0')
+          old='[Run]\nFilename: "{app}\\DrawStudio.exe"; Description: "Launch Draw Studio"; Flags: nowait postinstall skipifsilent\n'
+          new='''[Run]
+          Filename: "{app}\\DrawStudio.exe"; Description: "Launch Draw Studio"; Flags: nowait postinstall; Check: ShouldLaunchDrawStudio
+
+          [Code]
+          function HasCommandLineParam(const Value: String): Boolean;
+          var
+            I: Integer;
+          begin
+            Result := False;
+            for I := 1 to ParamCount do
+            begin
+              if CompareText(ParamStr(I), Value) = 0 then
+              begin
+                Result := True;
+                Exit;
+              end;
+            end;
+          end;
+
+          function ShouldLaunchDrawStudio(): Boolean;
+          begin
+            Result := (not WizardSilent) or HasCommandLineParam('/RELAUNCHDRAWSTUDIO');
+          end;
+          '''
+          if old not in text:
+              raise SystemExit('installer [Run] pattern changed')
+          path.write_text(text.replace(old,new),encoding='utf-8')
+
+          path=root/'.github'/'workflows'/'build-windows.yml'
+          text=path.read_text(encoding='utf-8')
+          trigger="      - '.github/release-build-trigger'"
+          if "      - 'Version.py'" not in text:
+              if trigger not in text:
+                  raise SystemExit('release trigger pattern changed')
+              text=text.replace(trigger,"      - 'Version.py'\n"+trigger)
+          path.write_text(text,encoding='utf-8')
+
+          path=root/'UpdateCenter.py'
+          text=path.read_text(encoding='utf-8')
+          old='''def launch_installer(path, asset, *, executable=None, launcher=None, cancelled=lambda:False):
+              \"\"\"Recheck staged bytes and open the normal installer, never a shell command.\"\"\"
+              import hashlib,os,subprocess,sys
+              from pathlib import Path
+              if os.name!='nt':raise UpdateCheckError('Automatic installation requires Windows.')
+              target=Path(path)
+              digest=hashlib.sha256()
+              with target.open('rb') as stream:
+                  if stream.read(2)!=b'MZ':raise UpdateCheckError('Invalid installer.')
+                  stream.seek(0)
+                  for block in iter(lambda:stream.read(1024*1024),b''):
+                      if cancelled():raise InterruptedError('Update cancelled.')
+                      digest.update(block)
+              if target.stat().st_size!=asset['size'] or digest.hexdigest()!=asset['sha256']:
+                  raise UpdateCheckError('Installer changed after download; check for updates again.')
+              args=[str(target),'/SP-','/NORESTART']
+              current=Path(executable or sys.executable)
+              # Installed builds update in place. Portable/source builds use the normal
+              # installer destination rather than overwriting a checkout or random folder.
+              if current.name.lower()=='drawstudio.exe' and (current.parent/'unins000.exe').is_file():
+                  args.append('/DIR='+str(current.parent))
+              if cancelled():raise InterruptedError('Update cancelled.')
+              return (launcher or subprocess.Popen)(args)
+          '''
+          # Dedent the embedded source block exactly as it exists in the file.
+          import textwrap
+          old=textwrap.dedent(old)
+          new=textwrap.dedent('''
+          def installer_launch_args(path, *, executable=None):
+              \"\"\"Build updater arguments without touching the OS, for deterministic tests.
+
+              Installed builds update silently in place and request an explicit relaunch
+              after Setup replaces the application files. Portable/source builds keep
+              the normal interactive installer flow and are never overwritten in place.
+              \"\"\"
+              import sys
+              from pathlib import Path
+              target=Path(path)
+              current=Path(executable or sys.executable)
+              args=[str(target),'/SP-','/NORESTART']
+              installed=(current.name.lower()=='drawstudio.exe' and any(current.parent.glob('unins*.exe')))
+              if installed:
+                  args.extend([
+                      '/VERYSILENT',
+                      '/SUPPRESSMSGBOXES',
+                      '/CLOSEAPPLICATIONS',
+                      '/RELAUNCHDRAWSTUDIO',
+                      '/DIR='+str(current.parent),
+                  ])
+              return args
+
+
+          def launch_installer(path, asset, *, executable=None, launcher=None, cancelled=lambda:False):
+              \"\"\"Recheck staged bytes and launch the verified Windows updater.\"\"\"
+              import hashlib,os,subprocess
+              from pathlib import Path
+              if os.name!='nt':raise UpdateCheckError('Automatic installation requires Windows.')
+              target=Path(path)
+              digest=hashlib.sha256()
+              with target.open('rb') as stream:
+                  if stream.read(2)!=b'MZ':raise UpdateCheckError('Invalid installer.')
+                  stream.seek(0)
+                  for block in iter(lambda:stream.read(1024*1024),b''):
+                      if cancelled():raise InterruptedError('Update cancelled.')
+                      digest.update(block)
+              if target.stat().st_size!=asset['size'] or digest.hexdigest()!=asset['sha256']:
+                  raise UpdateCheckError('Installer changed after download; check for updates again.')
+              args=installer_launch_args(target,executable=executable)
+              if cancelled():raise InterruptedError('Update cancelled.')
+              return (launcher or subprocess.Popen)(args)
+          ''').lstrip()
+          if old not in text:
+              raise SystemExit('UpdateCenter launch pattern changed')
+          path.write_text(text.replace(old,new),encoding='utf-8')
+
+          # Synchronize legacy metadata pins across the full regression suite.
+          version_tests=[]
+          for path in sorted(root.glob('test_*.py')):
+              text=path.read_text(encoding='utf-8')
+              if OLD_APP in text:
+                  version_tests.append(path.name)
+                  text=text.replace(OLD_APP,NEW_APP).replace(OLD_FILE,NEW_FILE)
+                  path.write_text(text,encoding='utf-8')
+          if len(version_tests) < 60:
+              raise SystemExit(f'expected broad version-pin migration, found {len(version_tests)} tests')
+
+          path=root/'test_release_v100.py'
+          text=path.read_text(encoding='utf-8')
+          needle="        self.assertIn('gh release create',text); self.assertIn('--notes-file',text)\n"
+          extra="        self.assertIn(\"- 'Version.py'\",text); self.assertIn(\"- '.github/release-build-trigger'\",text)\n"
+          if extra not in text:
+              if needle not in text: raise SystemExit('release workflow regression pattern changed')
+              text=text.replace(needle,needle+extra)
+          path.write_text(text,encoding='utf-8')
+
+          path=root/'test_update_center_v1059.py'
+          text=path.read_text(encoding='utf-8')
+          if 'test_published_rc3_detects_v10140_rc1_as_update' not in text:
+              marker="\n\nif __name__=='__main__':\n"
+              case='''
+              
+                  def test_published_rc3_detects_v10140_rc1_as_update(self):
+                      release={
+                          'tag_name':'v1.0.140-rc1','draft':False,'prerelease':True,
+                          'html_url':'https://github.com/Vxiey/Draw-Studio/releases/tag/v1.0.140-rc1',
+                          'name':'Draw Studio v1.0.140-rc1','assets':[],
+                      }
+                      from unittest.mock import patch
+                      with patch('UpdateCenter.APP_VERSION','1.0.133-rc3'), patch('UpdateCenter.BUILD_CHANNEL','rc'):
+                          result=check_for_updates(request_get=lambda *a,**k:_Response([release]))
+                      self.assertTrue(result['update_available'])
+                      self.assertEqual(result['latest_version'],'1.0.140-rc1')
+              '''
+              case=textwrap.dedent(case).rstrip()+"\n"
+              if marker not in text: raise SystemExit('update-center test marker changed')
+              text=text.replace(marker,"\n"+case+marker)
+          path.write_text(text,encoding='utf-8')
+
+          path=root/'test_installer_updates.py'
+          text=path.read_text(encoding='utf-8')
+          text=text.replace('from UpdateCenter import installer_asset,download_installer,UpdateCheckError',
+                            'from UpdateCenter import installer_asset,download_installer,installer_launch_args,UpdateCheckError')
+          marker="    @unittest.skipUnless(__import__('os').name=='nt','Windows installer handoff')\n"
+          if 'test_installed_build_uses_silent_in_place_relaunch' not in text:
+              cases='''
+                  def test_installed_build_uses_silent_in_place_relaunch(self):
+                      with tempfile.TemporaryDirectory() as tmp:
+                          root=Path(tmp);setup=root/'setup.exe';setup.write_bytes(DATA)
+                          executable=root/'DrawStudio.exe';(root/'unins000.exe').write_bytes(b'MZ')
+                          args=installer_launch_args(setup,executable=executable)
+                          self.assertIn('/DIR='+str(root),args)
+                          for flag in ('/VERYSILENT','/SUPPRESSMSGBOXES','/CLOSEAPPLICATIONS','/RELAUNCHDRAWSTUDIO','/NORESTART'):
+                              self.assertIn(flag,args)
+                          self.assertNotIn('/FORCECLOSEAPPLICATIONS',args)
+
+                  def test_portable_build_never_overwrites_itself_or_forces_silent_mode(self):
+                      with tempfile.TemporaryDirectory() as tmp:
+                          root=Path(tmp);setup=root/'setup.exe';executable=root/'DrawStudio.exe'
+                          args=installer_launch_args(setup,executable=executable)
+                          self.assertFalse(any(arg.startswith('/DIR=') for arg in args))
+                          self.assertNotIn('/VERYSILENT',args)
+                          self.assertNotIn('/RELAUNCHDRAWSTUDIO',args)
+
+              '''
+              cases=textwrap.dedent(cases)
+              # Restore class indentation after dedent.
+              cases=''.join(('    '+line if line.strip() else line) for line in cases.splitlines(True))
+              if marker not in text: raise SystemExit('installer test marker changed')
+              text=text.replace(marker,cases+marker)
+          line="            self.assertIn('/NORESTART',calls[0])\n"
+          extra="            self.assertIn('/VERYSILENT',calls[0])\n            self.assertIn('/RELAUNCHDRAWSTUDIO',calls[0])\n"
+          if extra not in text:
+              if line not in text: raise SystemExit('installer handoff assertion pattern changed')
+              text=text.replace(line,line+extra)
+          path.write_text(text,encoding='utf-8')
+
+          path=root/'VERSION-HISTORY.md'
+          text=path.read_text(encoding='utf-8')
+          if not text.startswith('# v1.0.140-rc1'):
+              text='''# v1.0.140-rc1
+
+          - Merge the v1.0.134–v1.0.140 drawing-engine correctness, travel, semantic-barrier and Cost Model v2 work.
+          - Installed Windows builds can download a verified GitHub Release installer, update the same installation in place, and relaunch Draw Studio automatically.
+          - Version bumps on `main` trigger the verified Windows release workflow so Update Center can discover newly published installers.
+          - Keep SHA-256, size, redirect-host and PE-header verification before any downloaded installer is started.
+
+          '''.replace('          ','')+text
+          path.write_text(text,encoding='utf-8')
+
+          path=root/'README.md'
+          text=path.read_text(encoding='utf-8')
+          text=text.replace('## Download — v1.0.133-rc3','## Download — v1.0.140-rc1')
+          text=text.replace('/v1.0.133-rc3/DrawStudio-1.0.133-rc3-','/v1.0.140-rc1/DrawStudio-1.0.140-rc1-')
+          text=text.replace('(RELEASE-NOTES-v1.0.133-rc3.md)','(RELEASE-NOTES-v1.0.140-rc1.md)')
+          text=text.replace('From **v1.0.133-rc3**, press **Check updates / install** while the app is idle.',
+                            'Installed Windows builds can press **Check updates / install** while the app is idle. A newer verified release is installed over the same Draw Studio installation and the app relaunches automatically after Setup completes.')
+          path.write_text(text,encoding='utf-8')
+
+          path=root/'README-INDEX.md'
+          text=path.read_text(encoding='utf-8')
+          text=text.replace('[Current release: v1.0.133-rc3](RELEASE-NOTES-v1.0.133-rc3.md)',
+                            '[Current release: v1.0.140-rc1](RELEASE-NOTES-v1.0.140-rc1.md)')
+          path.write_text(text,encoding='utf-8')
+
+          notes=root/'RELEASE-NOTES-v1.0.140-rc1.md'
+          notes.write_text('''# Draw Studio 1.0.140-rc1
+
+          This release integrates the drawing-engine correctness and performance work completed in v1.0.134 through v1.0.140 and restores the Windows release/update chain so installed builds can discover and install newer versions.
+
+          ## Drawing engine
+
+          - Canonical raster-identity regression oracle and generated property coverage.
+          - Ordered execution/travel telemetry and travel-aware Extra Fast candidate selection.
+          - Geometry-safe bounded 2-opt with strict pen-up travel non-regression.
+          - Portrait outline/tone semantic barriers that survive target-path caps.
+          - Hybrid Cost Model v2 with confidence-weighted calibration, MAPE-aware uncertainty and compatible atomic point timing.
+
+          ## Windows self-update
+
+          - Update Center accepts only the exact versioned Windows installer from this repository.
+          - Downloaded installers are size-checked, SHA-256 verified and PE-header checked before launch.
+          - Installed Draw Studio builds update the existing installation in place using the fixed application AppId.
+          - In-app updates use a very-silent installer handoff, preserve controlled application shutdown, and relaunch Draw Studio after installation completes.
+          - Portable/source runs never overwrite themselves in place; they use the normal installer flow.
+          - A `Version.py` change merged to `main` automatically triggers the verified Windows release workflow.
+
+          ## Release validation
+
+          The release workflow runs source hygiene, release hardening, full Windows regressions, `DrawBot.py --self-test`, package validation, and a silent install/self-test/uninstall round-trip before publishing assets.
+
+          This RC remains unsigned unless code signing is explicitly enabled.
+          '''.replace('          ',''),encoding='utf-8')
+
+          # The preparation workflow must never reach main or the release package.
+          Path('.github/workflows/self-update-release-prep.yml').unlink()
+          print(f'updated {len(version_tests)} version-pinned regression files')
+          PY
+      - name: Validate prepared source
+        shell: bash
+        run: |
+          python -m py_compile Version.py UpdateCenter.py test_update_center_v1059.py test_installer_updates.py test_release_v100.py
+          python -m unittest -v test_update_center_v1059.py test_installer_updates.py test_release_v100.py test_version_metadata.py test_version_history_v1068.py
+          python ReleasePackage.py --check
+      - name: Commit prepared branch
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Release v1.0.140-rc1 with verified Windows self-update"
+          git push origin HEAD:v1.0.140-rc1-self-update
