@@ -130,7 +130,32 @@ def collect_source_gate_errors(root: Path, *, app_version: str, file_version: st
     _assert_contains(build_release, "validate_windows_release", "build_release", errors)
     _assert_contains(workflow, "ReleaseCandidateHardening.py --source-gate", "build-windows workflow", errors)
     _assert_contains(workflow, "Validate silent installer round-trip", "build-windows workflow", errors)
-    _assert_contains(workflow, f"RELEASE-NOTES-v{app_version}.md", "build-windows workflow", errors)
+    release_notes_name = f"RELEASE-NOTES-v{app_version}.md"
+    release_notes = root / release_notes_name
+    if not release_notes.is_file():
+        errors.append(f"release notes: missing {release_notes_name!r}")
+    else:
+        try:
+            if not release_notes.read_text(encoding="utf-8").strip():
+                errors.append(f"release notes: {release_notes_name!r} is empty")
+        except OSError:
+            errors.append(f"release notes: unable to read {release_notes_name!r}")
+
+    # The workflow may either pin the current release-note file explicitly or
+    # derive it from Version.APP_VERSION. The dynamic form avoids a release-gate
+    # regression every time an rc/beta version advances. Keep the wiring strict:
+    # the workflow must still pass the resolved path to gh via --notes-file.
+    _assert_contains(workflow, "--notes-file $notes", "build-windows workflow", errors)
+    static_notes = release_notes_name in workflow
+    dynamic_notes = (
+        'RELEASE-NOTES-v$version.md' in workflow
+        and 'from Version import APP_VERSION; print(APP_VERSION)' in workflow
+    )
+    if not (static_notes or dynamic_notes):
+        errors.append(
+            "build-windows workflow: release-notes path is not tied to APP_VERSION "
+            f"({release_notes_name!r})"
+        )
 
     if re.fullmatch(r"\d+\.\d+\.\d+-rc\d+", app_version):
         expected_channel='rc'
