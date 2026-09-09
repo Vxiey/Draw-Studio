@@ -2,10 +2,18 @@
 
 These tests intentionally use the independent RasterIdentity oracle rather than
 Pillow so planner correctness is checked against exact integer pixels.
+Install ``requirements-dev.txt`` to execute the 2,000 generated examples. The
+module skips cleanly in runtime/release environments that intentionally install
+only application dependencies.
 """
 from __future__ import annotations
 
-from hypothesis import HealthCheck, given, settings, strategies as st
+import unittest
+
+try:
+    from hypothesis import HealthCheck, given, settings, strategies as st
+except ImportError as error:  # pragma: no cover - exercised by runtime-only envs
+    raise unittest.SkipTest("Install requirements-dev.txt to run raster property tests") from error
 
 from ContinuousPaths import build_execution_paths
 from ExtraFast2 import build_fast_paths
