@@ -8,6 +8,7 @@
 - [In-app updates](docs/IN-APP-UPDATES.md)
 - [Windows installer, portable ZIP and source layout](docs/RELEASE-STRUCTURE.md)
 - [Version history](VERSION-HISTORY.md)
+- [Release naming policy](docs/RELEASE-NAMING.md)
 
 ## Rendering and previous changes
 
@@ -22,5 +23,5 @@
 - [Release checklist](RELEASE-CHECKLIST.md)
 - [Optional code-signing preparation](docs/WINDOWS-CODE-SIGNING.md) — not activated; published rc3 is unsigned.
 
-Older Step documents describe the behavior at the time they were written.
+Older version documents describe the behavior at the time they were written.
 For current setup and update instructions, use the README and guides above.
