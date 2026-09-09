@@ -1,0 +1,241 @@
+"""Calibrated execution-cost model for Draw Studio v1.0.132-beta.
+
+The model estimates wall-clock *input* cost, not image-processing cost.  It
+reuses StrokeDelivery's profile-specific native spacing and DrawTimeCalibration's
+profile-local measurements.  No mouse input is sent here.
+
+Costs deliberately include cursor travel, press/release settle, sampled drag
+moves, palette/tool/brush changes and verification.  Learned values are used
+only when the exact profile/tool/brush/color-workflow calibration contains them;
+otherwise conservative deterministic defaults remain authoritative.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, asdict
+import math
+from typing import Any, Iterable, Sequence
+
+from DrawTimeCalibration import correction_for
+from SpeedOptimizer import normalize_speed, phase_delay
+from StrokeDelivery import resolve_stroke_delivery
+
+Point = tuple[int, int]
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+    return out if math.isfinite(out) else float(default)
+
+
+def _path_length(path: Sequence[Point], sx: float = 1.0, sy: float = 1.0) -> float:
+    if len(path) < 2:
+        return 0.0
+    total = 0.0
+    for a, b in zip(path, path[1:]):
+        total += math.hypot((float(b[0])-float(a[0]))*sx,
+                            (float(b[1])-float(a[1]))*sy)
+    return total
+
+
+def _operation_type(path: Sequence[Point], scaled_length: float) -> str:
+    if len(path) <= 1:
+        return "dot"
+    closed = len(path) >= 4 and path[0] == path[-1]
+    if closed:
+        return "outline"
+    return "short_stroke" if scaled_length <= 28.0 else "long_stroke"
+
+
+@dataclass(frozen=True)
+class CostBreakdown:
+    total_seconds: float
+    drag_seconds: float = 0.0
+    travel_seconds: float = 0.0
+    press_release_seconds: float = 0.0
+    palette_seconds: float = 0.0
+    tool_seconds: float = 0.0
+    brush_seconds: float = 0.0
+    fill_seconds: float = 0.0
+    verification_seconds: float = 0.0
+    target_processing_seconds: float = 0.0
+    operations: int = 0
+    moves: int = 0
+    palette_switches: int = 0
+    tool_switches: int = 0
+    brush_switches: int = 0
+    source: str = "deterministic profile model"
+
+    def as_dict(self) -> dict[str, Any]:
+        out = asdict(self)
+        for key, value in tuple(out.items()):
+            if isinstance(value, float):
+                out[key] = round(value, 6)
+        return out
+
+
+class ExecutionCostModel:
+    """Stateful candidate/sequence cost estimator in target-canvas pixels."""
+
+    def __init__(self, options: dict[str, Any], source_size: tuple[int, int],
+                 fitted_size: tuple[int, int]):
+        self.options = dict(options or {})
+        self.source_size = (max(1, int(source_size[0])), max(1, int(source_size[1])))
+        self.fitted_size = (max(1, int(fitted_size[0])), max(1, int(fitted_size[1])))
+        self.sx = self.fitted_size[0] / self.source_size[0]
+        self.sy = self.fitted_size[1] / self.source_size[1]
+        self.delivery = resolve_stroke_delivery(self.options, dry_run=False)
+        self.speed = normalize_speed(self.options.get("speed", "Balanced"))
+        self.delay = max(0.0, _safe_float(self.options.get("delay"), 0.0))
+        self.path_wait = max(float(self.delivery.min_path_delay),
+                             float(phase_delay(self.delay, self.speed, "path")))
+        self.travel_wait = max(.0005, float(phase_delay(self.delay, self.speed, "travel")))
+        self.boundary_wait = max(.0005, float(phase_delay(self.delay, self.speed, "boundary")))
+        self.calibration = correction_for(self.options)
+        self.runtime = dict(self.calibration.get("operation_runtime") or {})
+        self.samples = max(0, int(self.calibration.get("samples") or 0))
+        learned_ratio = max(.55, min(4.0, _safe_float(self.calibration.get("ratio"), 1.0)))
+        self.multiplier = learned_ratio if self.samples >= 3 else (
+            max(1.08, learned_ratio) if self.samples == 2 else
+            max(1.16, learned_ratio) if self.samples == 1 else 1.0
+        )
+        self.source = ("measured local calibration" if self.samples >= 3 else
+                       f"learning local calibration ({self.samples}/3)" if self.samples else
+                       "deterministic profile model")
+
+    def _learned_average(self, kind: str, fallback: float) -> float:
+        item = self.runtime.get(str(kind))
+        if not isinstance(item, dict):
+            return fallback
+        avg = _safe_float(item.get("average_seconds"), 0.0)
+        return avg if avg > 0.0 else fallback
+
+    def path_cost(self, path: Sequence[Point], *, cursor: Point | None = None,
+                  brush_px: int | None = None) -> CostBreakdown:
+        path = tuple((int(p[0]), int(p[1])) for p in (path or ()))
+        if not path:
+            return CostBreakdown(0.0, source=self.source)
+        brush = max(1, int(brush_px or self.options.get("brush_px") or 1))
+        length = _path_length(path, self.sx, self.sy)
+        start = path[0]
+        travel_px = 0.0
+        if cursor is not None:
+            travel_px = math.hypot((start[0]-cursor[0])*self.sx,
+                                   (start[1]-cursor[1])*self.sy)
+        travel = self.travel_wait + min(.10, travel_px * .000045)
+        press_release = float(self.delivery.press_settle + self.delivery.release_settle)
+        if len(path) <= 1:
+            base = travel + press_release + max(.012, self.boundary_wait)
+            total = self._learned_average("dot", base) * self.multiplier
+            return CostBreakdown(total, travel_seconds=travel*self.multiplier,
+                                 press_release_seconds=press_release*self.multiplier,
+                                 target_processing_seconds=max(.001, self.boundary_wait)*self.multiplier,
+                                 operations=1, moves=1, source=self.source)
+
+        moves = 0
+        for a, b in zip(path, path[1:]):
+            seg = math.hypot((b[0]-a[0])*self.sx, (b[1]-a[1])*self.sy)
+            if seg > 0:
+                moves += max(1, int(math.ceil(seg / max(.5, float(self.delivery.step_px)))))
+        drag = moves * self.path_wait
+        target = self.boundary_wait + .0015
+        base = travel + press_release + drag + target
+        kind = _operation_type(path, length)
+        learned = self._learned_average(kind, base)
+        total = learned if learned != base else base * self.multiplier
+        scale = total / max(.000001, base)
+        return CostBreakdown(
+            total, drag_seconds=drag*scale, travel_seconds=travel*scale,
+            press_release_seconds=press_release*scale,
+            target_processing_seconds=target*scale, operations=1, moves=moves,
+            source=self.source)
+
+    def switch_cost(self, kind: str) -> float:
+        kind = str(kind)
+        defaults = {
+            "palette_change": float(self.delivery.palette_click_delay),
+            "tool_change": float(self.delivery.ui_control_delay),
+            "brush_change": max(.06, float(self.delivery.ui_control_delay) * .75),
+            "fill": max(.12, float(self.delivery.ui_control_delay) + .04),
+            "verification": max(.08, float(self.delivery.palette_click_delay) * .45),
+        }
+        base = defaults.get(kind, .0)
+        learned = self._learned_average(kind, base)
+        return learned if learned != base else base * self.multiplier
+
+    def sequence_cost(self, sequence: Iterable[dict[str, Any]], *,
+                      initial_cursor: Point | None = None,
+                      initial_color: int | None = None,
+                      initial_brush: int | None = None) -> CostBreakdown:
+        cursor = initial_cursor
+        color = initial_color
+        brush = initial_brush
+        totals = {
+            "drag": 0.0, "travel": 0.0, "press": 0.0, "palette": 0.0,
+            "tool": 0.0, "brush": 0.0, "fill": 0.0, "verification": 0.0,
+            "target": 0.0, "ops": 0, "moves": 0, "palette_n": 0,
+            "tool_n": 0, "brush_n": 0,
+        }
+        for raw in sequence or ():
+            entry = dict(raw)
+            operation = str(entry.get("operation_type") or "stroke")
+            if operation == "fill":
+                c = self.switch_cost("fill")
+                totals["fill"] += c; totals["ops"] += 1
+                continue
+            new_color = int(entry.get("color_index", color if color is not None else 0))
+            new_brush = max(1, int(entry.get("brush_px") or self.options.get("brush_px") or 1))
+            if color is not None and new_color != color and not self.options.get("paint_current_color"):
+                totals["palette"] += self.switch_cost("palette_change"); totals["palette_n"] += 1
+            elif color is None and not self.options.get("paint_current_color"):
+                totals["palette"] += self.switch_cost("palette_change"); totals["palette_n"] += 1
+            if brush is not None and new_brush != brush:
+                totals["brush"] += self.switch_cost("brush_change"); totals["brush_n"] += 1
+            piece = self.path_cost(entry.get("path") or (), cursor=cursor, brush_px=new_brush)
+            totals["drag"] += piece.drag_seconds
+            totals["travel"] += piece.travel_seconds
+            totals["press"] += piece.press_release_seconds
+            totals["target"] += piece.target_processing_seconds
+            totals["ops"] += piece.operations
+            totals["moves"] += piece.moves
+            path = entry.get("path") or ()
+            if path:
+                cursor = tuple(map(int, path[-1]))
+            color = new_color
+            brush = new_brush
+        total = sum(totals[k] for k in ("drag","travel","press","palette","tool","brush","fill","verification","target"))
+        return CostBreakdown(
+            total_seconds=total, drag_seconds=totals["drag"],
+            travel_seconds=totals["travel"], press_release_seconds=totals["press"],
+            palette_seconds=totals["palette"], tool_seconds=totals["tool"],
+            brush_seconds=totals["brush"], fill_seconds=totals["fill"],
+            verification_seconds=totals["verification"],
+            target_processing_seconds=totals["target"], operations=totals["ops"],
+            moves=totals["moves"], palette_switches=totals["palette_n"],
+            tool_switches=totals["tool_n"], brush_switches=totals["brush_n"],
+            source=self.source)
+
+    def fixed_overhead(self, *, active_colors: int = 0, fill_actions: int = 0,
+                       include_countdown: bool = True) -> CostBreakdown:
+        palette_n = 0 if self.options.get("paint_current_color") else max(0, int(active_colors))
+        tool_n = len(self.options.get("tool_actions") or ())
+        verification_n = (palette_n if self.options.get("adaptive_color_verification") else 0)
+        palette = palette_n * self.switch_cost("palette_change")
+        tool = tool_n * self.switch_cost("tool_change")
+        fill = max(0, int(fill_actions)) * self.switch_cost("fill")
+        verification = verification_n * self.switch_cost("verification")
+        countdown = 3.0 if include_countdown else 0.0
+        focus = 0.0 if self.options.get("paint_profile") or str(self.options.get("profile_key")) == "microsoft-paint" else .35
+        total = countdown + focus + palette + tool + fill + verification
+        return CostBreakdown(
+            total_seconds=total, palette_seconds=palette, tool_seconds=tool,
+            fill_seconds=fill, verification_seconds=verification,
+            target_processing_seconds=countdown+focus, operations=palette_n+tool_n+fill_actions+verification_n,
+            palette_switches=palette_n, tool_switches=tool_n, source=self.source)
+
+
+def build_cost_model(options: dict[str, Any], source_size: tuple[int, int],
+                     fitted_size: tuple[int, int]) -> ExecutionCostModel:
+    return ExecutionCostModel(options, source_size, fitted_size)
