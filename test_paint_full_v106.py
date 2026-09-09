@@ -17,6 +17,33 @@ class PaintFullTests(unittest.TestCase):
         self.assertEqual(len(set(r['rgbs'])),20)
         self.assertEqual(r['tools']['Fill'],(-1612,128))
         self.assertEqual(r['canvas_box'],(-1843,267,-77,1034))
+        self.assertEqual(r['canvas_visibility'],'full')
+        self.assertEqual(r['canvas_clipped_edges'],[])
+
+    def test_clipped_canvas_uses_safe_visible_viewport(self):
+        im=self.screenshot()
+        ImageDraw.Draw(im).rectangle((0,225,1919,1047),fill='white')
+        r=detect_setup(im)
+        self.assertEqual(r['canvas_visibility'],'viewport-clipped')
+        self.assertEqual(set(r['canvas_clipped_edges']),{'left','right','bottom'})
+        l,t,rr,b=r['canvas_box']
+        self.assertGreater(l,0)
+        self.assertGreater(t,225)
+        self.assertLess(rr,im.width)
+        self.assertLess(b,im.height)
+        self.assertGreater(rr-l,im.width*.90)
+        self.assertGreater(b-t,im.height*.70)
+        self.assertGreaterEqual(r['confidence'],.85)
+
+    def test_right_bottom_clipped_canvas_is_accepted(self):
+        im=self.screenshot()
+        ImageDraw.Draw(im).rectangle((75,225,1919,1047),fill='white')
+        r=detect_setup(im)
+        self.assertEqual(r['canvas_visibility'],'viewport-clipped')
+        self.assertEqual(set(r['canvas_clipped_edges']),{'right','bottom'})
+        self.assertGreater(r['canvas_box'][0],75)
+        self.assertLess(r['canvas_box'][2],im.width)
+        self.assertLess(r['canvas_box'][3],im.height)
 
     def test_scaled_reference(self):
         im=self.screenshot()
