@@ -27,6 +27,38 @@ Segment = tuple[int, int, int, int]
 Path = tuple[Point, ...]
 
 
+class ExecutionGroups(list):
+    """List-compatible execution groups carrying optional semantic barriers.
+
+    Existing callers still see a normal list. Metadata is intentionally attached
+    only at the execution layer so source groups remain untouched.
+    """
+    def __init__(self, groups=(), *, phase_hints=None, protected_prefix_counts=None, semantic_meta=None):
+        super().__init__(groups)
+        self.phase_hints = phase_hints
+        self.protected_prefix_counts = protected_prefix_counts
+        self.semantic_meta = dict(semantic_meta or {})
+
+
+def execution_groups_with_portrait_semantics(groups, portrait_edge_count):
+    """Attach a hard outline->tone barrier to portrait execution paths."""
+    if portrait_edge_count is None or not groups:
+        return groups
+    try:
+        prefix=max(0,min(len(groups[0]),int(portrait_edge_count)))
+    except (TypeError,ValueError,OverflowError):
+        prefix=0
+    hints=[[] for _ in groups]
+    hints[0]=['portrait-outline']*prefix + ['portrait-tone']*(len(groups[0])-prefix)
+    prefixes=[prefix]+[0]*max(0,len(groups)-1)
+    return ExecutionGroups(
+        groups, phase_hints=hints, protected_prefix_counts=prefixes,
+        semantic_meta={
+            'portrait_semantic_barrier':True,
+            'portrait_outline_paths_before_cap':prefix,
+        })
+
+
 @dataclass
 class _ActivePath:
     points: list[Point]
@@ -196,7 +228,7 @@ def build_execution_paths(groups: Sequence[Sequence[Segment]], *, enabled: bool,
             result.append(edges + tones)
         else:
             result.append(_horizontal_paths(group, cancelled, max_rows_per_path=max_rows_per_path, max_points_per_path=max_points_per_path))
-    return result
+    return execution_groups_with_portrait_semantics(result, portrait_edge_count)
 
 
 def path_segment_count(path: Sequence[Point]) -> int:
@@ -245,9 +277,20 @@ def order_paths(paths: Sequence[Path], speed: str, *, allow_reverse: bool = True
 def stats(groups: Sequence[Sequence[Segment]], execution_groups: Sequence[Sequence[Path]] | None) -> dict:
     raw = sum(len(g) for g in groups)
     execution = raw if execution_groups is None else sum(len(g) for g in execution_groups)
-    return {
+    out = {
         "source_strokes": raw,
         "execution_paths": execution,
         "joined_strokes": max(0, raw-execution),
         "compression_ratio": (0.0 if raw <= 0 else max(0.0, min(1.0, 1.0-execution/raw))),
     }
+    if execution_groups is not None:
+        phase_hints=getattr(execution_groups,'phase_hints',None)
+        if phase_hints is not None:
+            out['path_phase_hints']=[list(group) for group in phase_hints]
+        prefixes=getattr(execution_groups,'protected_prefix_counts',None)
+        if prefixes is not None:
+            out['protected_prefix_counts']=[int(value) for value in prefixes]
+        semantic=getattr(execution_groups,'semantic_meta',None)
+        if isinstance(semantic,dict):
+            out.update(semantic)
+    return out
