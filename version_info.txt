@@ -5,11 +5,11 @@ VSVersionInfo(
     StringFileInfo([StringTable('040904B0', [
       StringStruct('CompanyName', 'Draw Studio'),
       StringStruct('FileDescription', 'Draw Studio beta'),
-      StringStruct('FileVersion', '1.0.141'),
+      StringStruct('FileVersion', '1.0.142'),
       StringStruct('InternalName', 'DrawStudio'),
       StringStruct('OriginalFilename', 'DrawStudio.exe'),
       StringStruct('ProductName', 'Draw Studio'),
-      StringStruct('ProductVersion', '1.0.141')
+      StringStruct('ProductVersion', '1.0.142')
     ])]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]

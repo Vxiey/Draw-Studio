@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.141-rc1"
+#define MyAppVersion "1.0.142-rc1"
 #endif
 
 [Setup]
@@ -10,7 +10,7 @@ SignedUninstaller=yes
 AppId={{6A4AD303-4F16-4ED7-A9AF-5B912352D83E}
 AppName=Draw Studio
 AppVersion={#MyAppVersion}
-VersionInfoVersion=1.0.140.0
+VersionInfoVersion=1.0.142.0
 AppPublisher=Draw Studio
 DefaultDirName={localappdata}\Programs\Draw Studio
 DefaultGroupName=Draw Studio

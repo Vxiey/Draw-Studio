@@ -17,8 +17,8 @@ class _Response:
 
 class UpdateCenterTests(unittest.TestCase):
     def test_version_metadata(self):
-        self.assertEqual(APP_VERSION,'1.0.141-rc1')
-        self.assertEqual(FILE_VERSION,'1.0.141')
+        self.assertEqual(APP_VERSION,'1.0.142-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.142')
 
     def test_version_parser_orders_beta_and_stable(self):
         self.assertTrue(is_newer_version('1.0.59', '1.0.59-beta'))
@@ -55,15 +55,15 @@ class UpdateCenterTests(unittest.TestCase):
 
     def test_published_rc3_detects_v10140_rc1_as_update(self):
         release={
-            'tag_name':'v1.0.141-rc1','draft':False,'prerelease':True,
-            'html_url':'https://github.com/Vxiey/Draw-Studio/releases/tag/v1.0.141-rc1',
-            'name':'Draw Studio v1.0.141-rc1','assets':[],
+            'tag_name':'v1.0.142-rc1','draft':False,'prerelease':True,
+            'html_url':'https://github.com/Vxiey/Draw-Studio/releases/tag/v1.0.142-rc1',
+            'name':'Draw Studio v1.0.142-rc1','assets':[],
         }
         from unittest.mock import patch
         with patch('UpdateCenter.APP_VERSION','1.0.133-rc3'), patch('UpdateCenter.BUILD_CHANNEL','rc'):
             result=check_for_updates(request_get=lambda *a,**k:_Response([release]))
         self.assertTrue(result['update_available'])
-        self.assertEqual(result['latest_version'],'1.0.141-rc1')
+        self.assertEqual(result['latest_version'],'1.0.142-rc1')
 
 
 if __name__=='__main__':
