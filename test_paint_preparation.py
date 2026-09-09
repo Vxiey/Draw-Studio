@@ -2,7 +2,8 @@ import threading
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
-from PaintPreparation import rgb_controls,prepare_controls,ensure_paint,find_control
+from PaintPreparation import (_INVOKE_ACTION, rgb_controls, prepare_controls, ensure_paint,
+                              find_control, find_custom_color_opener)
 from DrawBot import DrawBotApp
 
 
@@ -38,6 +39,22 @@ class PaintPreparationTests(unittest.TestCase):
     def test_keyboard_shortcut_suffix(self):
         self.assertEqual(find_control([node('Redigera färger (Ctrl+E)')],('redigera färger',))['name'],'Redigera färger (Ctrl+E)')
 
+    def test_modern_paint_custom_color_aliases_and_control_types(self):
+        for name,kind in (('Edit colors','Button'),('Edit color','Button'),('More colors','MenuItem'),('Custom color','Custom'),('Redigera färger','Button')):
+            chosen=find_custom_color_opener([node(name,kind,rect=(80,10,120,40))])
+            self.assertEqual(chosen['name'],name)
+
+    def test_custom_color_opener_rejects_text_only_or_ambiguous_matches(self):
+        with self.assertRaises(ValueError):find_custom_color_opener([node('Edit colors','Text')])
+        with self.assertRaises(ValueError):find_custom_color_opener([node('Edit colors'),node('More colors')])
+
+    def test_invoke_fallback_never_blindly_requests_selection_pattern(self):
+        self.assertIn('TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern',_INVOKE_ACTION)
+        self.assertIn('TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern',_INVOKE_ACTION)
+        self.assertIn('LegacyIAccessiblePattern',_INVOKE_ACTION)
+        self.assertIn("SendWait('{ENTER}')",_INVOKE_ACTION)
+        self.assertNotIn('catch [System.InvalidOperationException] {$e.GetCurrentPattern',_INVOKE_ACTION)
+
     def test_prepare_captures_controls_then_cancels_dialog(self):
         main=[node('Penna'),node('Storlek','Slider',(40,40,60,200)),node('Redigera färger',rect=(80,10,100,30))]
         state={'dialog':False};actions=[]
@@ -51,6 +68,21 @@ class PaintPreparationTests(unittest.TestCase):
         self.assertEqual(out['OpenCustomColor'],(90,20))
         self.assertEqual(out['GreenField'],(160,155))
         self.assertEqual(actions,[('invoke','Penna'),('size','Storlek'),('invoke','Redigera färger'),('invoke','Avbryt')])
+        self.assertFalse(state['dialog'])
+
+    def test_prepare_accepts_current_english_edit_colors_button(self):
+        main=[node('Pencil'),node('Size','Slider',(40,40,60,200)),node('Edit colors',rect=(80,10,120,40))]
+        state={'dialog':False};actions=[]
+        def backend(handle,**kw):
+            if kw.get('action'):
+                name=kw['element']['name'];actions.append((kw['action'],name))
+                if name=='Edit colors':state['dialog']=True
+                if name=='Cancel':state['dialog']=False
+            return dialog('en') if state['dialog'] else main
+        out=prepare_controls(42,backend=backend)
+        self.assertEqual(out['OpenCustomColor'],(100,25))
+        self.assertEqual(out['RedField'],(160,115))
+        self.assertIn(('invoke','Edit colors'),actions)
         self.assertFalse(state['dialog'])
 
     def test_existing_window_does_not_launch_or_clear(self):
@@ -102,7 +134,8 @@ class WindowsScriptSyntaxTests(unittest.TestCase):
     def test_embedded_script_parses_without_running_paint(self):
         import base64,os,subprocess
         from PaintPreparation import _SCRIPT
-        payload=base64.b64encode(_SCRIPT.replace('HANDLE','42').replace('ACTION','').encode('utf-8')).decode()
+        source=_SCRIPT.replace('HANDLE','42').replace('ACTION',_INVOKE_ACTION)
+        payload=base64.b64encode(source.encode('utf-8')).decode()
         script="$s=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"+payload+"'));$tokens=$null;$errors=$null;[void][System.Management.Automation.Language.Parser]::ParseInput($s,[ref]$tokens,[ref]$errors);if($errors.Count){throw ($errors | Out-String)}"
         path=os.path.join(os.environ['SystemRoot'],'System32','WindowsPowerShell','v1.0','powershell.exe')
         result=subprocess.run([path,'-NoProfile','-NonInteractive','-EncodedCommand',base64.b64encode(script.encode('utf-16-le')).decode()],capture_output=True,timeout=20)

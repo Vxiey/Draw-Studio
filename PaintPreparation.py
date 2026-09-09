@@ -29,6 +29,59 @@ ACTION
 ConvertTo-Json -InputObject @($rows) -Depth 5 -Compress
 '''
 
+_INVOKE_ACTION = r'''
+$activated=$false
+$pattern=$null
+if($e.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern,[ref]$pattern)) {
+    ([System.Windows.Automation.InvokePattern]$pattern).Invoke(); $activated=$true
+}
+if(!$activated) {
+    $pattern=$null
+    if($e.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern,[ref]$pattern)) {
+        ([System.Windows.Automation.SelectionItemPattern]$pattern).Select(); $activated=$true
+    }
+}
+if(!$activated) {
+    $pattern=$null
+    if($e.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern,[ref]$pattern)) {
+        ([System.Windows.Automation.TogglePattern]$pattern).Toggle(); $activated=$true
+    }
+}
+if(!$activated) {
+    $pattern=$null
+    if($e.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern,[ref]$pattern)) {
+        $expand=[System.Windows.Automation.ExpandCollapsePattern]$pattern
+        if($expand.Current.ExpandCollapseState -ne [System.Windows.Automation.ExpandCollapseState]::Expanded) {$expand.Expand()}
+        $activated=$true
+    }
+}
+if(!$activated) {
+    $pattern=$null
+    if($e.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern,[ref]$pattern)) {
+        ([System.Windows.Automation.LegacyIAccessiblePattern]$pattern).DoDefaultAction(); $activated=$true
+    }
+}
+if(!$activated) {
+    # Modern Paint/XAML controls sometimes expose a valid named Button without
+    # InvokePattern or SelectionItemPattern. Focus + Enter is a bounded fallback
+    # on that already re-resolved UI element; it never guesses a canvas position.
+    try {
+        $e.SetFocus()
+        Start-Sleep -Milliseconds 60
+        Add-Type -AssemblyName System.Windows.Forms
+        [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+        $activated=$true
+    } catch {}
+}
+if(!$activated){throw 'Paint control could not be activated with supported UI Automation patterns or focused Enter.'}
+'''
+
+_CUSTOM_COLOR_NAMES = (
+    'edit colors','edit colours','edit color','edit colour',
+    'custom color','custom colour','more colors','more colours',
+    'redigera färger','anpassad färg','fler färger',
+)
+
 
 def automation(handle, *, element=None, action=None, cancelled=lambda:False):
     if os.name!='nt':raise OSError('Automatic Paint preparation requires Windows.')
@@ -44,16 +97,15 @@ if($matches.Count -ne 1){throw 'Paint controls moved or are ambiguous. Retry pre
 $e=$all.Item([int]$matches[0].id)
 '''
         if action=='invoke':
-            command+=r'''
-try{$e.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()}
-catch [System.InvalidOperationException] {$e.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()}
-'''
+            command+=_INVOKE_ACTION
         elif action=='size':
             command+=r'''
-$p=$e.GetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern)
+$pattern=$null
+if(!$e.TryGetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern,[ref]$pattern)) {throw 'Paint size control does not expose RangeValuePattern.'}
+$p=[System.Windows.Automation.RangeValuePattern]$pattern
 if($p.Current.Minimum -gt 1 -or $p.Current.Maximum -lt 1){throw 'Paint size does not expose a 1 px value.'}
 $p.SetValue(1)
-if($p.Current.Value -ne 1){throw 'Paint did not accept 1 px.'}
+if([Math]::Abs($p.Current.Value-1) -gt 0.001){throw 'Paint did not accept 1 px.'}
 '''
         else:raise ValueError('Unsupported Paint control action.')
     script=_SCRIPT.replace('HANDLE',str(int(handle))).replace('ACTION',command)
@@ -74,13 +126,30 @@ if($p.Current.Value -ne 1){throw 'Paint did not accept 1 px.'}
         if process.poll() is None:process.kill();process.communicate()
 
 
+def _normalized_name(node):
+    text=str(node.get('label') or node.get('name') or '').strip().casefold()
+    return re.sub(r'\s*\([^)]*\)\s*$','',text).rstrip(':').strip()
+
+
 def find_control(nodes, names, *, kind=None):
+    names=tuple(str(name).casefold() for name in names)
     def matches(n):
-        text=str(n.get('label') or n.get('name') or '').strip().casefold()
-        text=re.sub(r'\s*\([^)]*\)\s*$','',text).rstrip(':').strip()
-        return text in names and (kind is None or str(n.get('kind','')).endswith(kind))
+        return _normalized_name(n) in names and (kind is None or str(n.get('kind','')).endswith(kind))
     hits=[n for n in nodes if matches(n)]
     if len(hits)!=1:raise ValueError('Paint control not uniquely identified: '+', '.join(names))
+    return hits[0]
+
+
+def find_custom_color_opener(nodes):
+    """Find Paint's Edit colors control across classic and current XAML variants."""
+    names=set(_CUSTOM_COLOR_NAMES)
+    hits=[]
+    for node in nodes:
+        kind=str(node.get('kind',''))
+        if _normalized_name(node) in names and any(kind.endswith(suffix) for suffix in ('Button','MenuItem','Custom')):
+            hits.append(node)
+    if len(hits)!=1:
+        raise ValueError('Paint Edit colors / custom color control was not uniquely identified.')
     return hits[0]
 
 
@@ -131,7 +200,7 @@ def ensure_paint(enumerate_windows, *, cancelled=lambda:False, launch=None, wait
 
 
 def prepare_controls(handle, *, cancelled=lambda:False, backend=automation):
-    """Select pencil/1 px and capture fresh RGB controls; dismiss with Cancel."""
+    """Select Pencil/1 px, open Edit colors, capture numeric RGB controls, then dismiss with Cancel."""
     def scan():return backend(handle,cancelled=cancelled)
     def invoke(node):return backend(handle,element=node,action='invoke',cancelled=cancelled)
     nodes=scan()
@@ -146,7 +215,7 @@ def prepare_controls(handle, *, cancelled=lambda:False, backend=automation):
     size=find_control(nodes,('size','brush size','pencil size','storlek','penselstorlek','pennstorlek','thickness','tjocklek'),kind='Slider')
     backend(handle,element=size,action='size',cancelled=cancelled)
     nodes=scan()
-    opener=find_control(nodes,('edit colors','edit colours','redigera färger'),kind='Button')
+    opener=find_custom_color_opener(nodes)
     invoke(opener)
     # Poll the UI tree, not a fixed dialog coordinate or a canvas test stroke.
     deadline=time.monotonic()+5
@@ -157,7 +226,7 @@ def prepare_controls(handle, *, cancelled=lambda:False, backend=automation):
             cancel=find_control(nodes,('cancel','avbryt'),kind='Button')
             break
         except ValueError:
-            if time.monotonic()>deadline:raise ValueError('Paint color dialog could not be calibrated. Close the dialog and retry in RGB mode.')
+            if time.monotonic()>deadline:raise ValueError('Paint Edit colors opened, but numeric RGB controls could not be calibrated. Keep the dialog in RGB mode and retry.')
     invoke(cancel)
     controls['OpenCustomColor']=center(opener)
     return controls
