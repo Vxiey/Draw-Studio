@@ -38,6 +38,8 @@ jobs:
         run: |
           python sketch2_integrate_once.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python sketch2_testfix_once.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Compile and focused tests
         shell: pwsh
@@ -61,7 +63,7 @@ jobs:
           git config user.name "Draw Studio CI"
           git config user.email "actions@users.noreply.github.com"
           git add -A
-          git reset -- sketch2_integrate_once.py .github/workflows/sketch2-integration.yml .github/sketch2-integration-trigger
+          git reset -- sketch2_integrate_once.py sketch2_testfix_once.py .github/workflows/sketch2-integration.yml .github/sketch2-integration-trigger
           git diff --cached --quiet
           if ($LASTEXITCODE -eq 0) { throw 'v1.0.131 patch produced no product changes' }
           git commit -m "Add Sketch 2.0 and Paint Sketch Auto Fill"
