@@ -3,7 +3,7 @@
 ## Start here
 
 - [README and downloads](README.md)
-- [Current release: v1.0.133-rc2](RELEASE-NOTES-v1.0.133-rc2.md)
+- [Current release: v1.0.133-rc3](RELEASE-NOTES-v1.0.133-rc3.md)
 - [Automatic Paint setup and RGB calibration](docs/PAINT-AUTOMATIC-PREPARATION.md)
 - [In-app updates](docs/IN-APP-UPDATES.md)
 - [Windows installer, portable ZIP and source layout](docs/RELEASE-STRUCTURE.md)
@@ -20,7 +20,7 @@
 
 - [Release publishing](docs/PUBLISHING.md)
 - [Release checklist](RELEASE-CHECKLIST.md)
-- [Optional code-signing preparation](docs/WINDOWS-CODE-SIGNING.md) — not activated; published rc2 is unsigned.
+- [Optional code-signing preparation](docs/WINDOWS-CODE-SIGNING.md) — not activated; published rc3 is unsigned.
 
 Older Step documents describe the behavior at the time they were written.
 For current setup and update instructions, use the README and guides above.

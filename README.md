@@ -6,16 +6,16 @@ Draw Studio is a Windows desktop app that recreates images with mouse paths,
 color matching, outlines and fills. It uses local image processing, not AI image
 generation. Each target profile keeps its own calibration and drawing settings.
 
-## Download — v1.0.133-rc2
+## Download — v1.0.133-rc3
 
 | Download | How to use it |
 | --- | --- |
-| [Windows installer — recommended](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.133-rc2/DrawStudio-1.0.133-rc2-Windows-x64-Setup.exe) | Run Setup, then open Draw Studio. No separate Python installation needed. |
-| [Portable Windows ZIP](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.133-rc2/DrawStudio-1.0.133-rc2-Windows-x64.zip) | Extract the entire ZIP, open the DrawStudio folder and run DrawStudio.exe. Keep its supporting files together. |
-| [SHA-256 checksums](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.133-rc2/DrawStudio-1.0.133-rc2-SHA256.txt) | Verify the downloaded files. |
+| [Windows installer — recommended](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.133-rc3/DrawStudio-1.0.133-rc3-Windows-x64-Setup.exe) | Run Setup, then open Draw Studio. No separate Python installation needed. |
+| [Portable Windows ZIP](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.133-rc3/DrawStudio-1.0.133-rc3-Windows-x64.zip) | Extract the entire ZIP, open the DrawStudio folder and run DrawStudio.exe. Keep its supporting files together. |
+| [SHA-256 checksums](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.133-rc3/DrawStudio-1.0.133-rc3-SHA256.txt) | Verify the downloaded files. |
 
 [All releases](https://github.com/Vxiey/Draw-Studio/releases) ·
-[Release notes](RELEASE-NOTES-v1.0.133-rc2.md) ·
+[Release notes](RELEASE-NOTES-v1.0.133-rc3.md) ·
 [Documentation](README-INDEX.md)
 
 Requires **Windows 10/11, 64-bit**. Run Draw Studio and the target app at the same
@@ -72,7 +72,7 @@ scaling and browser zoom unchanged after calibration.
 
 ## Updates
 
-From **v1.0.133-rc2**, press **Check updates / install** while the app is idle.
+From **v1.0.133-rc3**, press **Check updates / install** while the app is idle.
 It finds a newer eligible GitHub Release, downloads its Windows installer,
 verifies the published SHA-256 digest and size, and opens the installer.
 Settings are saved and Draw Studio closes after the installer starts.
@@ -81,7 +81,7 @@ Installed builds keep their installation folder. Portable/source builds use
 the normal installer destination. Updates use complete installers; they do not
 apply individual source-code patches. There are no background update checks.
 
-Install rc2 once using the download above if you have an older build. RC builds
+Install rc3 once using the download above if you have an older build. RC builds
 accept newer RC/stable releases; stable builds do not automatically switch to
 prereleases. [Update details](docs/IN-APP-UPDATES.md)
 
@@ -113,7 +113,7 @@ For example, a vertical block went from 280 paths to 3. Actual drawing speed in 
   Actions artifacts. The current version must be older than the release.
 - **Download verification fails:** retry Check updates. A failed download does
   not replace the installed app.
-- **Windows blocks the app:** rc2 is unsigned; Smart App Control compatibility
+- **Windows blocks the app:** rc3 is unsigned; Smart App Control compatibility
   is not established. The project does not require disabling Windows protection.
 
 ## Run from source
@@ -146,7 +146,7 @@ python build_release.py --installer
 
 You can also use `Build-Release.bat` for the local Windows build.
 
-The rc2 Windows workflow passed tests, packaging and a silent install/self-test/
+The rc3 Windows workflow passed tests, packaging and a silent install/self-test/
 uninstall round trip. Real drawing speed, GPU behavior and compatibility with
 every target layout require separate live testing.
 

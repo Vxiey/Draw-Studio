@@ -26,7 +26,7 @@ from RuntimePaths import atomic_write_text, data_dir
 from ProfileStorage import profile_layout_cache_file
 
 CACHE_FILE = data_dir() / 'layout-fingerprints-v2.json'
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 MAX_PER_PROFILE = 8
 MAX_TOTAL = 32
 

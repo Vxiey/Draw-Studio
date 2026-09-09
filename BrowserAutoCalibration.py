@@ -274,7 +274,22 @@ def _canvas(profile_key: str, image, palette_local_positions):
         from GarticEngineV2 import detect_gartic_canvas
         result = detect_gartic_canvas(image)
         if result.found and result.box:
-            return tuple(map(int, result.box)), float(result.confidence)
+            # White connected components can include paper decoration. Apply the
+            # execution edge check now, before planning, and only shrink.
+            from EdgeDetection import verify_canvas_edges
+            l, t, r, b = map(int, result.box)
+            for _ in range(3):
+                edges = verify_canvas_edges(image, (l, t, r-l, b-t))
+                if edges.ok:
+                    return (l, t, r, b), float(result.confidence)
+                for side in edges.failed_sides:
+                    if side.side == 'left': l += side.offset_px
+                    elif side.side == 'right': r += side.offset_px
+                    elif side.side == 'top': t += side.offset_px
+                    elif side.side == 'bottom': b += side.offset_px
+                if r-l < 200 or b-t < 120:
+                    break
+            return None, 0.0
         return None, float(result.confidence)
     if profile_key in ('skribbl', 'skribbl-fast'):
         box, confidence = _largest_light_component(image, step=3, min_ratio=.12)

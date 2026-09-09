@@ -50,7 +50,7 @@ See [in-app updates](IN-APP-UPDATES.md).
 
 ## Signing status
 
-Code signing is not activated. The published rc2 files remain unsigned. Optional
+Code signing is not activated. The published rc3 files remain unsigned. Optional
 local signing support exists for a future provisioned certificate, but do not
 claim signed binaries or Smart App Control compatibility without verification.
 Documentation-only changes on main do not replace immutable release downloads.

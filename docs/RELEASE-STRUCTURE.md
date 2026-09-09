@@ -24,6 +24,6 @@ on Windows, or download the installer/portable release instead.
 
 Each release includes `DrawStudio-<version>-SHA256.txt` and a manifest with file
 sizes, version metadata and checksums. Hash verification checks file integrity;
-it does not provide a trusted publisher signature. Published rc2 is unsigned.
+it does not provide a trusted publisher signature. Published rc3 is unsigned.
 
-[Downloads](https://github.com/Vxiey/Draw-Studio/releases/tag/v1.0.133-rc2)
+[Downloads](https://github.com/Vxiey/Draw-Studio/releases/tag/v1.0.133-rc3)

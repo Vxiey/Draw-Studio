@@ -58,6 +58,6 @@ class StabilityRCTests(unittest.TestCase):
     def test_old_cache_version_fails_closed_without_crash(self):
         with TemporaryDirectory() as td:
             p=Path(td)/'cache.json';p.write_text('{"version":1,"entries":[{"bad":true}]}',encoding='utf-8')
-            result=load_cache(p);self.assertEqual(result['version'],2);self.assertEqual(result['entries'],[])
+            result=load_cache(p);self.assertEqual(result['version'],3);self.assertEqual(result['entries'],[])
 
 if __name__=='__main__':unittest.main()
