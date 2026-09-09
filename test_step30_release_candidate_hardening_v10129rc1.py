@@ -39,10 +39,13 @@ class Step30ReleaseCandidateHardeningTests(unittest.TestCase):
             'AppId={{6A4AD303-4F16-4ED7-A9AF-5B912352D83E}\nPrivilegesRequired=lowest\n', encoding='utf-8')
         (root/'UpdateCenter.py').write_text(f'GITHUB_REPOSITORY = "{updater_repo}"\n', encoding='utf-8')
         (root/'build_release.py').write_text('run_source_release_gate\nvalidate_windows_release\n', encoding='utf-8')
+        (root/'RELEASE-NOTES-v1.0.131-beta.md').write_text('Release notes\n', encoding='utf-8')
         (root/'.github/workflows/build-windows.yml').write_text(
             'ReleaseCandidateHardening.py --source-gate\n'
             'Validate silent installer round-trip\n'
-            'RELEASE-NOTES-v1.0.131-beta.md\n', encoding='utf-8')
+            '$version = python -c "from Version import APP_VERSION; print(APP_VERSION)"\n'
+            '$notes = "RELEASE-NOTES-v$version.md"\n'
+            'gh release create --notes-file $notes\n', encoding='utf-8')
 
     def test_source_gate_detects_stale_update_repository(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -62,6 +65,23 @@ class Step30ReleaseCandidateHardeningTests(unittest.TestCase):
             errors=collect_source_gate_errors(root, app_version='1.0.131-beta', file_version='1.0.131', channel='beta')
             self.assertEqual(errors, [])
 
+    def test_source_gate_detects_missing_release_notes_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); self._fake_root(root)
+            (root/'RELEASE-NOTES-v1.0.131-beta.md').unlink()
+            errors=collect_source_gate_errors(root, app_version='1.0.131-beta', file_version='1.0.131', channel='beta')
+            self.assertTrue(any("release notes: missing" in e for e in errors))
+
+    def test_source_gate_accepts_static_release_notes_wiring(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); self._fake_root(root)
+            (root/'.github/workflows/build-windows.yml').write_text(
+                'ReleaseCandidateHardening.py --source-gate\n'
+                'Validate silent installer round-trip\n'
+                '$notes = "RELEASE-NOTES-v1.0.131-beta.md"\n'
+                'gh release create --notes-file $notes\n', encoding='utf-8')
+            errors=collect_source_gate_errors(root, app_version='1.0.131-beta', file_version='1.0.131', channel='beta')
+            self.assertEqual(errors, [])
 
     def test_source_hygiene_detects_one_shot_files(self):
         with tempfile.TemporaryDirectory() as tmp:
