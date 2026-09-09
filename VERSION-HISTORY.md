@@ -1,3 +1,5 @@
+v1.0.133-rc2: In-app updates download and verify versioned Windows installers, then launch the normal installer. GitHub release publishing follows successful Windows tests and installer validation. Includes automatic Paint RGB preparation and Extra Fast improvements.
+
 v1.0.133-rc1: 100 maintenance improvements across preview, color cache, budgets, resume, profiles, precision, scheduling and UI diagnostics. See docs/100-UPPDATERINGAR-v1.0.133-rc1.md. Windows/GPU validation pending.
 
 # v1.0.132-rc1 — final engine integration

@@ -3835,14 +3835,14 @@ class DrawBotApp:
         self.benchmark_suite_text = tk.StringVar(value='Benchmark suite has not been run on this profile.')
         self.runtime_safety_summary = tk.StringVar(value='No runtime safety report yet. Run Fast Dry run or Start drawing.')
         self.runtime_safety_detail = tk.StringVar(value='Local-only safety reports are saved after each execution.')
-        self.update_summary = tk.StringVar(value='Updates are checked only when you press Check for updates.')
-        self.update_detail = tk.StringVar(value=f'Current: {APP_VERSION} · No background update checks or automatic downloads.')
+        self.update_summary = tk.StringVar(value='Check for updates finds and downloads a newer release, then opens its installer.')
+        self.update_detail = tk.StringVar(value=f'Current: {APP_VERSION} · Updates start only when you press Check for updates.')
         self.auto_tune_summary = tk.StringVar(value='Universal Hardware Auto Benchmark has not been run on this machine yet.')
         self.auto_tune_detail = tk.StringVar(value='Benchmarks CPU/RAM plus NVIDIA, AMD and Intel GPU backends locally. CPU fallback is always available.')
         self.hardware_benchmark_running = False
         self.mobile_preview_status = tk.StringVar(value='Mobile Preview is off · local network only.')
         self.mobile_preview_url = tk.StringVar(value='')
-        self.latest_release_url = 'https://github.com/yesverynice12/Draw-Studio/releases'
+        self.latest_release_url = 'https://github.com/Vxiey/Draw-Studio/releases'
         self.preview_mode = tk.StringVar(value='Manual')
         self.preview_detail_level = tk.StringVar(value='Detailed')
         self.tool_strategy = tk.StringVar(value='Auto')
@@ -8261,6 +8261,7 @@ class DrawBotApp:
             self.status.set('Pausing after the current brush stroke. Wait until the status says Paused before moving the mouse.')
 
     def cancel(self):
+        self.update_request=None
         self.paint_start_request=None
         # Emergency stop also revokes native mouse permission immediately.
         DrawBotApp._close_smart_drop_overlay(self,'cancel/stop pressed')
@@ -8383,24 +8384,57 @@ class DrawBotApp:
         except OSError as error:self.status.set(f'Could not open safety report: {error}')
 
     def check_for_updates(self):
-        if self.activity:
+        if self.activity or self.closing:
             self.status.set('Stop the current operation before checking for updates.');return
         if hasattr(self,'show_tools'):self.show_tools()
+        request=object();self.update_request=request
         self.update_summary.set('Checking GitHub Releases…')
-        self.update_detail.set('Manual check in progress. Nothing is downloaded or installed.')
+        self.update_detail.set('A newer Windows release will be downloaded, verified and opened in the installer.')
         self.status.set('Checking Draw Studio releases on GitHub…')
         def work():
-            from UpdateCenter import check_for_updates
-            try:result=check_for_updates()
-            except Exception as error:result={'error':str(error),'message':'Could not check for updates. Try again.'}
+            from UpdateCenter import check_for_updates,download_installer
+            try:
+                result=check_for_updates()
+                if result.get('update_available'):
+                    asset=result.get('installer')
+                    if asset:
+                        previous=[-1]
+                        def progress(done,total):
+                            percent=round(done*100/total)
+                            if percent!=previous[0]:
+                                previous[0]=percent
+                                self.events.put(('update_progress',f'Downloading {asset["version"]}: {percent}%'))
+                        result['installer_path']=download_installer(asset,cancelled=self.stop.is_set,progress=progress)
+                    else:result['message']='A newer release exists, but its verified Windows installer is not available yet. Try again later or open Releases.'
+                result['request']=request
+            except InterruptedError:raise
+            except Exception as error:result={'error':str(error),'message':'Update failed. Nothing was installed. Try again.'}
             self.events.put(('update_check_complete',result))
-        self.begin_worker('update-check',work)
+        return self.begin_worker('update-check',work)
+
+    def _install_checked_update(self,payload):
+        if (self.closing or self.stop.is_set() or getattr(self,'update_request',None) is not payload.get('request')):
+            return False
+        if self.activity:
+            self.root.after(100,lambda:DrawBotApp._install_checked_update(self,payload));return False
+        self.update_request=None
+        try:self.save_settings()
+        except Exception as error:
+            self.update_summary.set(f'Could not save settings before update: {error}')
+            return False
+        self.update_summary.set('Verifying installer and starting the update…')
+        def work():
+            from UpdateCenter import launch_installer
+            if self.stop.is_set():raise InterruptedError()
+            launch_installer(payload['installer_path'],payload['installer'],cancelled=self.stop.is_set)
+            self.events.put(('update_installer_started',True))
+        return self.begin_worker('update-install',work)
 
     def open_latest_release_page(self):
         import webbrowser
-        url=str(getattr(self,'latest_release_url','') or 'https://github.com/yesverynice12/Draw-Studio/releases')
-        if not url.startswith('https://github.com/yesverynice12/Draw-Studio/'):
-            url='https://github.com/yesverynice12/Draw-Studio/releases'
+        url=str(getattr(self,'latest_release_url','') or 'https://github.com/Vxiey/Draw-Studio/releases')
+        if not url.startswith('https://github.com/Vxiey/Draw-Studio/'):
+            url='https://github.com/Vxiey/Draw-Studio/releases'
         try:
             opened=webbrowser.open(url,new=2)
             if not opened:self.status.set(f'Releases: {url}')
@@ -8922,24 +8956,32 @@ class DrawBotApp:
             request=value.get('start_request')
             if request is not None:
                 self.root.after(50,lambda:DrawBotApp._resume_prepared_paint(self,request))
+        elif kind=='update_progress':
+            self.update_summary.set(str(value))
+        elif kind=='update_installer_started':
+            self.status.set('Installer started. Closing Draw Studio to complete the update.')
+            self.close()
         elif kind=='update_check_complete':
             payload=value if isinstance(value,dict) else {}
             action=getattr(self,'update_download_button',None)
             if action is not None:
-                action.configure(text=(f"Download version {payload.get('latest_version')}" if payload.get('update_available') else 'Open GitHub Releases'))
+                action.configure(text='Open GitHub Releases')
             if payload.get('error'):
                 self.update_summary.set('Could not check for updates. Try again.')
                 self.update_detail.set(str(payload['error']))
                 self.status.set('Update check failed. Check your connection and try again.')
                 return
-            self.latest_release_url=str(payload.get('release_url') or 'https://github.com/yesverynice12/Draw-Studio/releases')
+            self.latest_release_url=str(payload.get('release_url') or 'https://github.com/Vxiey/Draw-Studio/releases')
             self.update_summary.set(str(payload.get('message') or 'Update check completed.'))
             latest=str(payload.get('latest_version') or 'No release found')
             release_name=str(payload.get('release_name') or '').strip()
             extra=f' · {release_name}' if release_name and release_name not in latest else ''
-            self.update_detail.set(f'Current: {APP_VERSION} · Latest: {latest}{extra} · Manual GitHub check only.')
-            if payload.get('update_available'):
-                self.status.set(f'Draw Studio {latest} is available. Open GitHub Release to download it.')
+            self.update_detail.set(f'Current: {APP_VERSION} · Latest: {latest}{extra} · Updates from official GitHub Releases.')
+            if payload.get('installer_path'):
+                self.update_summary.set(f'Version {latest} downloaded and SHA-256 verified. Opening installer…')
+                self.root.after(100,lambda:DrawBotApp._install_checked_update(self,payload))
+            elif payload.get('update_available'):
+                self.status.set(str(payload.get('message') or f'Draw Studio {latest} is available.'))
             else:
                 self.status.set(str(payload.get('message') or 'Update check completed.'))
         elif kind=='hardware_profile_check':

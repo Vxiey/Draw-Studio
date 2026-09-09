@@ -119,17 +119,34 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish GitHub Release for tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish verified versioned release
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$env:GITHUB_REF_NAME" `
-            release/DrawStudio-*-Windows-x64.zip `
-            release/DrawStudio-*-Windows-x64-Setup.exe `
-            release/DrawStudio-*-SHA256.txt `
-            release/DrawStudio-*-manifest.json `
-            --prerelease `
-            --title "Draw Studio $env:GITHUB_REF_NAME" `
-            --notes-file RELEASE-NOTES-v1.0.133-rc1.md
+          $version = python -c "from Version import APP_VERSION; print(APP_VERSION)"
+          $tag = "v$version"
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne $tag) { throw 'Tag does not match build version' }
+          $existing = gh release view $tag --json isDraft,targetCommitish 2>$null
+          $resumeDraft = $false
+          if ($LASTEXITCODE -eq 0) {
+            $release = $existing | ConvertFrom-Json
+            if (-not $release.isDraft) {
+              Write-Host 'This version is already published. Increment APP_VERSION to publish an update.'
+              exit 0
+            }
+            if ($release.targetCommitish -ne $env:GITHUB_SHA) { throw 'Draft belongs to a different commit; use a new version.' }
+            $resumeDraft = $true
+          }
+          $notes = 'RELEASE-NOTES-v1.0.133-rc2.md'
+          $flags = @()
+          if ($version -match '-') { $flags += '--prerelease' }
+          if (-not $resumeDraft) {
+            gh release create $tag --target $env:GITHUB_SHA --draft --title "Draw Studio $tag" --notes-file $notes @flags
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create release draft' }
+          }
+          gh release upload $tag --clobber release/DrawStudio-*-Windows-x64.zip release/DrawStudio-*-Windows-x64-Setup.exe release/DrawStudio-*-SHA256.txt release/DrawStudio-*-manifest.json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not upload verified release assets' }
+          gh release edit $tag --draft=false
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish release' }

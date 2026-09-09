@@ -710,10 +710,10 @@ def build_ui(a, quality, speed):
     label(update_card, var=a.update_summary, size=10, wraplength=690).pack(anchor='w', padx=14, pady=(2, 2))
     label(update_card, var=a.update_detail, muted=True, size=9, wraplength=690).pack(anchor='w', padx=14, pady=(0, 8))
     update_actions=frame(update_card); update_actions.pack(fill='x', padx=14, pady=(0, 12))
-    check_update_btn=btn(update_actions, 'Check for updates', a.check_for_updates, width=138, height=32); check_update_btn.pack(side='left')
+    check_update_btn=btn(update_actions, 'Check updates / install', a.check_for_updates, width=138, height=32); check_update_btn.pack(side='left')
     release_page_btn=btn(update_actions, 'Open GitHub Releases', a.open_latest_release_page, width=156, height=32); release_page_btn.pack(side='left', padx=6)
     a.update_download_button=release_page_btn
-    tooltip(check_update_btn,'Contacts only the public Draw Studio GitHub Releases API after this explicit click. No telemetry, auto-download or auto-install.')
+    tooltip(check_update_btn,'Contacts only the public Draw Studio GitHub Releases API after this explicit click. Downloads and verifies a newer Windows installer, then starts the update. Save your work first.')
     tooltip(release_page_btn,'Opens the official Draw Studio GitHub Releases page in your browser.')
 
     tuner_card = frame(tools_scroll, PANEL_ALT)
