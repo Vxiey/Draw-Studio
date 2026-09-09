@@ -3,6 +3,10 @@
 #endif
 
 [Setup]
+#ifdef SignRelease
+SignTool=drawstudio
+SignedUninstaller=yes
+#endif
 AppId={{6A4AD303-4F16-4ED7-A9AF-5B912352D83E}
 AppName=Draw Studio
 AppVersion={#MyAppVersion}

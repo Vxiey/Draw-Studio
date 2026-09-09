@@ -64,7 +64,7 @@ def _clean_current_release_outputs() -> None:
             path.unlink()
 
 
-def _write_manifest(artifacts: list[dict]) -> Path:
+def _write_manifest(artifacts: list[dict], *, signed=False) -> Path:
     path=RELEASE / f"DrawStudio-{APP_VERSION}-manifest.json"
     payload={
         "schema":1,
@@ -73,7 +73,7 @@ def _write_manifest(artifacts: list[dict]) -> Path:
         "file_version":FILE_VERSION,
         "channel":BUILD_CHANNEL,
         "architecture":"windows-x64",
-        "unsigned":True,
+        "unsigned":not signed,
         "artifacts":artifacts,
     }
     path.write_text(json.dumps(payload,indent=2,sort_keys=True)+"\n",encoding="utf-8")
@@ -82,10 +82,16 @@ def _write_manifest(artifacts: list[dict]) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--signed", action="store_true", help="Require provisioned Authenticode signing; fail on any signing error")
     parser.add_argument("--installer", action="store_true", help="Also build the Inno Setup installer")
     parser.add_argument("--skip-tests", action="store_true", help="Skip duplicate tests only when CI already ran the complete gate")
     parser.add_argument("--gpu", action="store_true", help="Bundle optional NVIDIA CUDA/CuPy acceleration")
     args = parser.parse_args()
+    signing=None
+    if args.signed:
+        from CodeSigning import signing_configuration,validate_certificate
+        signing=signing_configuration()
+        validate_certificate(signing)
     if sys.platform != "win32":
         raise SystemExit("Release EXEs must be built on Windows. Use the GitHub Actions release workflow or Build-Release.bat.")
     github_ref=os.environ.get('GITHUB_REF_NAME','').strip()
@@ -110,6 +116,10 @@ def main() -> int:
         raise SystemExit("Release build did not produce a valid DrawStudio.exe.")
     run([str(exe), "--self-test"], cwd=DIST)
 
+    if signing:
+        from CodeSigning import sign_distribution
+        sign_distribution(DIST,signing)
+
     suffix = "-CUDA" if args.gpu else ""
     zip_path = RELEASE / f"DrawStudio-{APP_VERSION}-Windows-x64{suffix}.zip"
     zip_onedir(zip_path)
@@ -122,17 +132,24 @@ def main() -> int:
         iscc = find_iscc()
         if iscc is None:
             raise SystemExit("Inno Setup 6 was not found. Install it or run without --installer.")
-        run([str(iscc), f"/DMyAppVersion={APP_VERSION}", str(BASE / "installer" / "DrawStudio.iss")])
+        signing_args=[]
+        if signing:
+            from CodeSigning import inno_arguments
+            signing_args=inno_arguments(signing)
+        run([str(iscc), f"/DMyAppVersion={APP_VERSION}", *signing_args, str(BASE / "installer" / "DrawStudio.iss")])
         setup = RELEASE / f"DrawStudio-{APP_VERSION}-Windows-x64-Setup.exe"
         if not setup.is_file() or setup.read_bytes()[:2] != b"MZ":
             raise SystemExit("Installer build did not produce the expected Setup.exe.")
+        if signing:
+            from CodeSigning import verify
+            if not verify(setup,signing):raise SystemExit("Installer signature verification failed.")
         digest=sha256(setup)
         hash_rows.append(f"{digest}  {setup.name}")
         artifacts.append({"name":setup.name,"type":"inno-setup","sha256":digest,"bytes":setup.stat().st_size})
 
     checksum = RELEASE / f"DrawStudio-{APP_VERSION}-SHA256.txt"
     checksum.write_text("\n".join(hash_rows) + "\n", encoding="utf-8")
-    manifest=_write_manifest(artifacts)
+    manifest=_write_manifest(artifacts,signed=bool(signing))
 
     validate_windows_release(RELEASE,app_version=APP_VERSION,require_installer=args.installer)
     print("RC Windows artifact gate: PASS")
@@ -141,7 +158,7 @@ def main() -> int:
         print(" ", row)
     print(" ", checksum)
     print(" ", manifest)
-    print("\nThe EXE and installer remain unsigned until an Authenticode certificate is configured.")
+    print("\nAuthenticode signatures verified." if signing else "\nUnsigned build: a trusted signing certificate is not configured.")
     return 0
 
 
