@@ -2,7 +2,7 @@
 
 ## Release candidate
 
-This is a Draw Studio release-candidate build. The numbered feature roadmap is frozen while RC validation is in progress.
+This is a Draw Studio release-candidate build. The versioned feature roadmap is frozen while RC validation is in progress.
 
 ## Download
 
@@ -14,7 +14,7 @@ Verify downloaded artifacts against the accompanying `SHA256.txt` file before us
 
 Before publication, the release workflow must pass:
 
-- Step 30 source release gate
+- release source gate
 - complete regression discovery
 - Draw Studio self-test
 - PyInstaller build validation
