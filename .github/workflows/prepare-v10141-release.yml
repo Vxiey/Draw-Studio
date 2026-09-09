@@ -69,12 +69,13 @@ jobs:
                              '- Automatically calibrate numeric RGB fields so image colors can be typed, verified and cached persistently.\n\n')
                       history.write_text(entry+text,encoding='utf-8')
 
-          # The old release notes/history remain historical and are intentionally
-          # not rewritten. Report any remaining current-version pins elsewhere.
+          # The old release notes/history and this disposable migration workflow
+          # are intentionally not rewritten. Report current-version pins elsewhere.
           allowed={
               Path(f'RELEASE-NOTES-v{old_app}.md'),
               Path('VERSION-HISTORY.md'),
               Path('docs/VERSION-HISTORY.md'),
+              Path('.github/workflows/prepare-v10141-release.yml'),
           }
           remaining=[]
           for path in root.rglob('*'):
