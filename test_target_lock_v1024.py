@@ -23,8 +23,8 @@ class Root:
 
 class TargetLockV1024Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.131-beta')
-        self.assertEqual(FILE_VERSION,'1.0.131')
+        self.assertEqual(APP_VERSION,'1.0.133-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.133')
 
     def make_app(self):
         image=SimpleNamespace(size=(64, 64))

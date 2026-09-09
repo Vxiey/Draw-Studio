@@ -55,7 +55,10 @@ LEGACY_TOTALS = {
 
 def automatic_reserve(total_seconds: float) -> float:
     """Smooth reserve used by Custom/legacy deadline presets."""
-    total = max(5.0, float(total_seconds))
+    total = float(total_seconds)
+    if not math.isfinite(total) or total <= 0:
+        raise ValueError("Time budget must be finite and positive.")
+    total = max(5.0, total)
     if total <= 30:
         return max(3.0, total * .115)
     if total <= 80:
@@ -94,12 +97,12 @@ def resolve_budget(mode: str, manual_seconds: float | int = 180,
     deadline-aware manual timer. This preserves old saved settings while giving
     the new renderer an unambiguous opt-in custom target.
     """
-    mode = str(mode or "Manual")
+    mode = str(mode or "Manual").strip()
     try:
         manual = float(manual_seconds)
     except (TypeError, ValueError):
         manual = 180.0
-    if not math.isfinite(manual) or not 5 <= manual <= 3600:
+    if mode in ("Manual", "Custom") and (not math.isfinite(manual) or not 5 <= manual <= 3600):
         raise ValueError("Time limit must be 5–3600 seconds.")
 
     if mode in ("Unlimited", "Unlimited / Accuracy"):
@@ -121,7 +124,7 @@ def resolve_budget(mode: str, manual_seconds: float | int = 180,
     if preset is not None:
         total = float(preset.total_seconds or manual)
         default_reserve = preset.default_reserve_seconds
-        resolved_reserve = default_reserve if str(reserve or "Auto").strip().lower() == "auto" else _custom_reserve(reserve, total)
+        resolved_reserve = default_reserve if str("Auto" if reserve is None else reserve).strip().lower() == "auto" else _custom_reserve(reserve, total)
         usable = max(1.0, total - resolved_reserve)
         return {
             "mode": mode, "active": True, "unlimited": False,
@@ -158,10 +161,18 @@ def resolve_budget(mode: str, manual_seconds: float | int = 180,
 
 
 def classify_budget(estimated_seconds: float, budget_seconds: float | None) -> str:
-    if budget_seconds is None:
-        return "SAFE"
-    budget = max(.001, float(budget_seconds))
-    ratio = max(0.0, float(estimated_seconds or 0.0)) / budget
+    try:
+        estimate = float(estimated_seconds)
+        if not math.isfinite(estimate) or estimate < 0:
+            return "PANIC"
+        if budget_seconds is None:
+            return "SAFE"
+        budget = float(budget_seconds)
+        if not math.isfinite(budget) or budget <= 0:
+            return "PANIC"
+    except (TypeError, ValueError, OverflowError):
+        return "PANIC"
+    ratio = estimate / budget
     if ratio <= .88:
         return "SAFE"
     if ratio <= 1.0:

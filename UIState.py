@@ -25,13 +25,16 @@ class WorkspaceState:
 
 
 def _looks_like_error(status: str) -> bool:
-    text = (status or "").strip().lower()
+    text = str(status or "").strip().lower()
     if not text:
         return False
     markers = (
         "operation failed", "preflight stopped", "could not", "crash",
         "did not get the expected color", "unexpectedly", "access violation",
         "invalid plan", "failed:", "error:", "stopped:",
+        "timeout", "timed out", "out of memory", "permission denied",
+        "no space left", "disk full", "start locked", "cannot identify image",
+        "no module named", "read-only file system",
     )
     # Normal user cancellation/stopping should not turn the workspace red.
     if text in {"stopped.", "stopping…", "stopping...", "cancelled."}:
@@ -75,11 +78,11 @@ def compute_workspace_state(*, image_loaded: bool, target_name: str,
                       "Full route was simulated without clicks." if dry_run_passed else ("Required for Microsoft Paint." if strict_safety else "Optional route diagnostic.")),
         ChecklistItem("gpu", "GPU ready / CPU fallback active", "ready", gpu_text or "CPU fallback available."),
     )
-    if _looks_like_error(status):
-        return WorkspaceState("Error", "error", False, False, items)
     if activity:
         return WorkspaceState("Drawing" if activity == "draw" else "Working", "working", False, False, items)
-    can_test = image_loaded and area_ready and paint_tools_ready and palette_ready
+    if _looks_like_error(status):
+        return WorkspaceState("Error", "error", False, False, items)
+    can_test = target_selected and image_loaded and area_ready and paint_tools_ready and palette_ready
     ready = can_test and ((test_passed and target_locked and preflight_passed and dry_run_passed) if strict_safety else True)
     if ready:
         return WorkspaceState("Ready to draw", "ready", True, True, items)
@@ -92,7 +95,7 @@ def compute_workspace_state(*, image_loaded: bool, target_name: str,
 
 def classify_error(status: str) -> dict[str, str] | None:
     """Translate common technical failures into short actionable UI copy."""
-    text = (status or "").strip()
+    text = str(status or "").strip()
     low = text.lower()
     if not _looks_like_error(text):
         return None
@@ -120,17 +123,27 @@ def classify_error(status: str) -> dict[str, str] | None:
             "message": text,
             "action": "Open Setup wizard to see the missing step. Paint uses Small test → Lock setup → Safety preflight → Fast Dry run → Unlock → Start.",
         }
-    if "calibrat" in low or "palette" in low or "color" in low:
-        return {
-            "title": "Calibration needs attention",
-            "message": text,
-            "action": "Re-run the relevant tool or color calibration, then use Draw a small test.",
-        }
     if "gpu" in low or "cuda" in low or "vram" in low:
         return {
             "title": "GPU acceleration issue",
             "message": text,
             "action": "Switch GPU acceleration to Auto or CPU, or lower the VRAM budget, then retry.",
+        }
+    remedies = (
+        (("disk full", "no space left"), "Storage is full", "Free space on the drive containing Draw Studio data, then save again."),
+        (("permission denied", "read-only file system"), "File cannot be written", "Choose a writable folder and check whether another program has locked the file."),
+        (("cannot identify image",), "Image could not be opened", "Try opening the image in an image editor and exporting it as PNG."),
+        (("no module named",), "A required component is missing", "Run Start.bat --update from the complete extracted source package."),
+        (("out of memory",), "Not enough memory", "Reduce the drawing area or preview detail and close other memory-heavy applications."),
+    )
+    for markers, title, action in remedies:
+        if any(marker in low for marker in markers):
+            return {"title": title, "message": text, "action": action}
+    if "calibrat" in low or "palette" in low or "color" in low:
+        return {
+            "title": "Calibration needs attention",
+            "message": text,
+            "action": "Re-run the relevant tool or color calibration, then use Draw a small test.",
         }
     return {
         "title": "Draw Studio could not complete that action",

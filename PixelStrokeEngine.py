@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import math
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Sequence
 
@@ -139,15 +140,13 @@ def _row_runs(pixel_map: PixelMap, cancelled=lambda: False) -> tuple[list[_Run],
             raise InterruptedError()
         row_ids: list[int] = []
         current_by_color: dict[int, list[int]] = {}
-        x = 0
-        while x < w:
-            if not bool(mask[y, x]):
-                x += 1
+        values = np.where(mask[y], idx[y], -1)
+        boundaries = np.r_[0, np.flatnonzero(values[1:] != values[:-1]) + 1, w]
+        for start, end in zip(boundaries[:-1], boundaries[1:]):
+            color = int(values[start]) if start < w else -1
+            if color < 0:
                 continue
-            color = int(idx[y, x]); x0 = x; x += 1
-            while x < w and bool(mask[y, x]) and int(idx[y, x]) == color:
-                x += 1
-            x1 = x - 1
+            x0, x1 = int(start), int(end) - 1
             rid = uf.add()
             runs.append(_Run(rid, y, x0, x1, color))
             row_ids.append(rid)
@@ -179,13 +178,11 @@ def _vertical_run_chunk(component_map: np.ndarray, x0: int, x1: int, cancelled=l
     h,_w=component_map.shape;out=[]
     for x in range(int(x0),int(x1)):
         if cancelled():raise InterruptedError()
-        y=0
-        while y<h:
-            cid=int(component_map[y,x])
-            if cid<0:y+=1;continue
-            y0=y;y+=1
-            while y<h and int(component_map[y,x])==cid:y+=1
-            out.append((cid,(x,y0,x,y-1)))
+        values=component_map[:,x]
+        boundaries=np.r_[0,np.flatnonzero(values[1:] != values[:-1])+1,h]
+        for start,end in zip(boundaries[:-1],boundaries[1:]):
+            cid=int(values[start]) if start<h else -1
+            if cid>=0:out.append((cid,(x,int(start),x,int(end)-1)))
     return out
 
 
@@ -406,11 +403,12 @@ def _path_inside_component(path: Path, component_map: np.ndarray, cid: int) -> b
 
 
 
-def _paths_exact_component_coverage(paths: Sequence[Path], component_map: np.ndarray, comp: Component) -> bool:
+def _paths_exact_component_coverage(paths: Sequence[Path], component_map: np.ndarray, comp: Component, *, cancelled=lambda: False) -> bool:
     x0, y0, x1, y1 = comp.bbox
     target = component_map[y0:y1 + 1, x0:x1 + 1] == comp.component_id
     covered = np.zeros(target.shape, dtype=np.bool_)
     for path in paths:
+        if cancelled():raise InterruptedError()
         if not path:
             continue
         if len(path) == 1:
@@ -442,12 +440,49 @@ def _candidate_paths(comp: Component, orientation: str, component_map: np.ndarra
         paths=_merge_horizontal_runs_lossless(source_runs,cancelled=cancelled)
     else:
         paths=_transpose_paths(_merge_horizontal_runs_lossless(_transpose_segments(source_runs),cancelled=cancelled))
-    safe=all(_path_inside_component(path,component_map,comp.component_id) for path in paths)
-    exact=bool(safe and _paths_exact_component_coverage(paths,component_map,comp))
+    # Coverage verification already checks every segment stays inside the component.
+    exact=_paths_exact_component_coverage(paths,component_map,comp,cancelled=cancelled)
     return paths,source_runs,exact
 
 
-def build_component_paths(comp: Component, component_map: np.ndarray, *, cost_model=None, cancelled=lambda: False) -> tuple[list[Path], dict]:
+def _bounded_axis_paths(paths, cost_model, max_seconds, *, cancelled=lambda: False):
+    """Split exact axis-aligned geometry into short mouse-up boundaries.
+
+    Only active deadline plans use this. Shared endpoints preserve coverage;
+    paths are never joined across a hole or moved outside their component.
+    """
+    if cost_model is None or max_seconds is None:
+        return paths
+    out=[]
+    fixed=max(cost_model.path_fixed_seconds,cost_model.learned_path_floor_seconds)
+    available=max(cost_model.draw_seconds_per_px*max(cost_model.scale_x,cost_model.scale_y),
+                  float(max_seconds)-fixed)
+    for path in paths:
+        if cancelled():raise InterruptedError()
+        if len(path)<2:
+            out.append(path);continue
+        current=[path[0]];used=0.0
+        for end in path[1:]:
+            x,y=current[-1];ex,ey=end
+            if x!=ex and y!=ey:
+                raise ValueError('Deadline splitting requires exact axis-aligned paths.')
+            scale=cost_model.scale_x if y==ey else cost_model.scale_y
+            per_pixel=max(1e-12,cost_model.draw_seconds_per_px*scale)
+            left=abs(ex-x)+abs(ey-y)
+            while left:
+                if cancelled():raise InterruptedError()
+                steps=int((available-used+1e-12)/per_pixel)
+                if steps<1 and len(current)>1:
+                    out.append(tuple(current));current=[current[-1]];used=0.0;continue
+                take=min(left,max(1,steps))
+                x+=take*(1 if ex>x else -1 if ex<x else 0)
+                y+=take*(1 if ey>y else -1 if ey<y else 0)
+                current.append((x,y));used+=take*per_pixel;left-=take
+        if current:out.append(tuple(current))
+    return out
+
+
+def build_component_paths(comp: Component, component_map: np.ndarray, *, cost_model=None, max_path_seconds=None, cancelled=lambda: False) -> tuple[list[Path], dict]:
     """Build safe H/V candidates and choose by calibrated time when available."""
     legacy_orientation=_choose_orientation(comp)
     candidate_meta={}
@@ -458,6 +493,11 @@ def build_component_paths(comp: Component, component_map: np.ndarray, *, cost_mo
         choices=[]
         for orientation in ("horizontal","vertical"):
             paths0,runs0,exact0=_candidate_paths(comp,orientation,component_map,cancelled=cancelled)
+            if exact0:
+                paths0=_bounded_axis_paths(paths0,cost_model,max_path_seconds,cancelled=cancelled)
+                ordered=order_paths(paths0,"Balanced",allow_reverse=True)
+                if cost_model.paths_seconds(ordered) <= cost_model.paths_seconds(paths0):
+                    paths0=ordered
             cost=float(cost_model.paths_seconds(paths0)) if exact0 else float("inf")
             candidate_meta[orientation]={"safe":bool(exact0),"paths":len(paths0),"estimated_seconds":None if not math.isfinite(cost) else round(cost,6)}
             if exact0:choices.append((cost,orientation,paths0,runs0))
@@ -476,7 +516,9 @@ def build_component_paths(comp: Component, component_map: np.ndarray, *, cost_mo
             paths,source_runs,exact_coverage=_candidate_paths(comp,comp.orientation,component_map,cancelled=cancelled)
     if not exact_coverage:
         paths=_individual_run_paths(source_runs);comp.safe_merge_fallbacks+=1
-    paths=order_paths(paths,"Balanced",allow_reverse=True);comp.paths=list(paths)
+    if cost_model is None:
+        paths=order_paths(paths,"Balanced",allow_reverse=True)
+    comp.paths=list(paths)
     return comp.paths,{
         "orientation":comp.orientation,"source_runs":len(source_runs),"execution_paths":len(comp.paths),
         "safe_verified":bool(exact_coverage),"fallback":not bool(exact_coverage),
@@ -549,6 +591,11 @@ def schedule_components(components: Sequence[Component], palette_count: int, *, 
     cursor: Point | None = None
     current_color: int | None = None
     serial = 0
+    # Geometry is immutable while scheduling. Only entry travel and colour cost
+    # change; do not walk every point again for all 72 candidates at each step.
+    intrinsic = ({c.component_id: float(cost_model.paths_seconds(c.paths))
+                  for c in components if c.paths} if cost_model is not None else {})
+    estimated_total = 0.0
 
     for phase in PHASES:
         remaining = sorted((c for c in components if c.phase == phase and c.paths), key=lambda c: (-_priority(c), c.component_id))
@@ -566,7 +613,9 @@ def schedule_components(components: Sequence[Component], palette_count: int, *, 
                     priority_credit = min(30.0, _priority(comp) * .025)
                     cost = travel + color_penalty - priority_credit + i * 1e-6
                 else:
-                    seconds=float(cost_model.paths_seconds(comp.paths,cursor=cursor))
+                    seconds=intrinsic[comp.component_id]
+                    if cursor is not None:
+                        seconds+=cost_model.travel_seconds(cursor,start)
                     if current_color not in (None,comp.color_index):seconds+=float(cost_model.color_change_seconds)
                     # Keep the multi-pass contract, but within each phase choose
                     # the component with highest visual value per millisecond.
@@ -576,7 +625,11 @@ def schedule_components(components: Sequence[Component], palette_count: int, *, 
                     best_i, best_cost = i, cost
             comp = remaining.pop(best_i)
             component_counts[phase] += 1
+            if cost_model is not None and current_color != comp.color_index:
+                estimated_total += cost_model.color_change_seconds
             for path in comp.paths:
+                if cost_model is not None:
+                    estimated_total += cost_model.path_seconds(path,cursor=cursor)
                 execution_groups[comp.color_index].append(path)
                 sequence.append({
                     "color_index": int(comp.color_index),
@@ -614,7 +667,7 @@ def schedule_components(components: Sequence[Component], palette_count: int, *, 
         "scheduled_paths": len(sequence),
         "cost_aware": bool(cost_model is not None),
         "cost_model": cost_model.as_dict() if cost_model is not None else None,
-        "estimated_execution_seconds": round(sum(float(cost_model.path_seconds(e["path"])) for e in sequence),4) if cost_model is not None else None,
+        "estimated_execution_seconds": round(estimated_total,4) if cost_model is not None else None,
         "scheduled_color_switches": sum(1 for a,b in zip(sequence,sequence[1:]) if a["color_index"]!=b["color_index"]),
     }
 
@@ -622,7 +675,9 @@ def schedule_components(components: Sequence[Component], palette_count: int, *, 
 def build_pixel_stroke_plan(pixel_map: PixelMap, palette_count: int, *, lines: bool = True,
                             cpu_workers: int = 1, options=None, cancelled=lambda: False) -> dict:
     """Build Block B component paths while preserving every drawable PixelMap pixel."""
+    started=time.perf_counter()
     groups = groups_from_pixel_map(pixel_map, palette_count, lines=lines, cancelled=cancelled)
+    groups_done=time.perf_counter()
     cost_model=None
     if isinstance(options,dict) and str(options.get("adaptive_hybrid_cost","Auto")) != "Off":
         try:
@@ -642,6 +697,7 @@ def build_pixel_stroke_plan(pixel_map: PixelMap, palette_count: int, *, lines: b
                 "metadata": {"engine": "Pixel Stroke Engine Block B", "component_count": 0, "scheduled_paths": len(sequence), "dot_mode": True}}
 
     components, component_map, component_meta = connected_components(pixel_map, cpu_workers=cpu_workers, cancelled=cancelled)
+    components_done=time.perf_counter()
     total_drawable = int(np.count_nonzero(pixel_map.drawable_mask))
     orientation_counts = {"horizontal": 0, "vertical": 0}
     safe_fallbacks = 0
@@ -652,26 +708,41 @@ def build_pixel_stroke_plan(pixel_map: PixelMap, palette_count: int, *, lines: b
         comp.phase=classify_component(comp,total_drawable)
         role_counts[comp.render_role] = role_counts.get(comp.render_role, 0) + 1
         if comp.protected_pixels:protected_components+=1
+    max_path_seconds=None
+    if cost_model is not None and options.get('time_budget_active') and not options.get('unlimited_time'):
+        budget=float(options.get('deadline_render_budget_seconds') or options.get('max_seconds') or 180)
+        max_path_seconds=max(.25,min(1.0,budget*.025))
     workers=max(1,int(cpu_workers or 1));parallel_paths=workers>1 and len(components)>=16
     if parallel_paths:
         def _build(comp):
-            return comp.component_id,build_component_paths(comp,component_map,cost_model=cost_model,cancelled=cancelled)
+            return comp.component_id,build_component_paths(comp,component_map,cost_model=cost_model,max_path_seconds=max_path_seconds,cancelled=cancelled)
         with ThreadPoolExecutor(max_workers=min(workers,16)) as pool:
-            results=list(pool.map(_build,components))
-        if cancelled():raise InterruptedError()
-        results.sort(key=lambda item:item[0])
+            batch_size=min(workers,16)*2
+            for start in range(0,len(components),batch_size):
+                if cancelled():raise InterruptedError()
+                # Consume immediately; comp.paths owns the result.
+                for _ in pool.map(_build,components[start:start+batch_size]):
+                    if cancelled():raise InterruptedError()
     else:
-        results=[]
         for comp in components:
             if cancelled():raise InterruptedError()
-            results.append((comp.component_id,build_component_paths(comp,component_map,cost_model=cost_model,cancelled=cancelled)))
+            build_component_paths(comp,component_map,cost_model=cost_model,max_path_seconds=max_path_seconds,cancelled=cancelled)
     for comp in components:
         orientation_counts[comp.orientation]+=1;safe_fallbacks+=comp.safe_merge_fallbacks
 
+    paths_done=time.perf_counter()
     execution_groups, sequence, scheduler_meta = schedule_components(components, palette_count, cost_model=cost_model, cancelled=cancelled)
+    scheduled_done=time.perf_counter()
     phase_counts = scheduler_meta["phase_path_counts"]
     metadata = {
         "engine": "Pixel Stroke Engine Block B",
+        "planning_stage_seconds": {
+            "source_runs": groups_done-started,
+            "components": components_done-groups_done,
+            "candidate_paths": paths_done-components_done,
+            "scheduling": scheduled_done-paths_done,
+        },
+        "deadline_path_target_seconds": max_path_seconds,
         "lossless_source": True,
         "connected_regions": True,
         "local_orientation": True,

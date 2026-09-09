@@ -1,0 +1,45 @@
+{
+  "version": "1.0.132-rc1",
+  "unittest": {
+    "tests": 1256,
+    "seconds": 65.068,
+    "result": "PASS",
+    "command": "python -m unittest discover"
+  },
+  "self_test": {
+    "command": "python DrawBot.py --self-test",
+    "exit_code": 0
+  },
+  "source_gate": {
+    "channel": "rc",
+    "checks": [
+      "version-metadata",
+      "installer-metadata",
+      "update-repository",
+      "workflow-gates",
+      "source-one-shot-hygiene",
+      "lifecycle-soak",
+      "profile-isolation-soak"
+    ],
+    "file_version": "1.0.132",
+    "passed": true,
+    "repository": "Vxiey/Draw-Studio",
+    "schema": 1,
+    "soak_cycles": 5000,
+    "version": "1.0.132-rc1"
+  },
+  "python_source_parse": {
+    "files": 373,
+    "result": "PASS"
+  },
+  "windows_gui_verified": false,
+  "windows_exe_built": false,
+  "physical_gpu_verified": false,
+  "github_updated": false,
+  "baseline_tests": {
+    "tests": 1241,
+    "failures": 1,
+    "failure": "legacy Auto Fill Off still planned a region fill; fixed"
+  },
+  "limitations": "See ENGINE-VALIDATION-v1.0.132-rc1.md for implementation scope and pending Windows checks."
+}

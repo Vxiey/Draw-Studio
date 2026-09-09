@@ -311,17 +311,17 @@ def groups_from_pixel_map(pixel_map: PixelMap, palette_count: int, *, lines: boo
     for y in range(pixel_map.height):
         if cancelled():
             raise InterruptedError()
-        previous = None; start = None
-        for x in range(pixel_map.width + 1):
-            color = int(idx[y, x]) if x < pixel_map.width and bool(mask[y, x]) else None
-            if not lines:
-                if color is not None:
-                    groups[color].append((x, y, x, y))
-            elif color != previous:
-                if previous is not None:
-                    groups[previous].append((int(start), y, x - 1, y))
-                previous = color
-                start = x if color is not None else None
+        row = np.where(mask[y], idx[y], -1)
+        if not lines:
+            for x in np.flatnonzero(mask[y]):
+                groups[int(row[x])].append((int(x), y, int(x), y))
+            continue
+        # Row-sized temporaries; no Python work for every background pixel.
+        boundaries = np.r_[0, np.flatnonzero(row[1:] != row[:-1]) + 1, row.size]
+        for start, end in zip(boundaries[:-1], boundaries[1:]):
+            color = int(row[start]) if start < row.size else -1
+            if color >= 0:
+                groups[color].append((int(start), y, int(end) - 1, y))
     return groups
 
 

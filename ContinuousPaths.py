@@ -52,7 +52,8 @@ def _compress(points: Sequence[Point]) -> Path:
             ax, ay = cleaned[-3]
             bx, by = cleaned[-2]
             cx, cy = cleaned[-1]
-            if (bx-ax) * (cy-by) == (by-ay) * (cx-bx):
+            if ((bx-ax) * (cy-by) == (by-ay) * (cx-bx)
+                    and (bx-ax) * (cx-bx) + (by-ay) * (cy-by) >= 0):
                 cleaned.pop(-2)
             else:
                 break

@@ -32,7 +32,7 @@ def data_dir() -> Path:
     remains portable during beta testing. Frozen builds use LOCALAPPDATA.
     """
     if is_frozen():
-        root = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "DrawBotStudio"
+        root = Path((os.environ.get("LOCALAPPDATA") or str(Path.home()))) / "DrawBotStudio"
     else:
         root = source_dir()
     root.mkdir(parents=True, exist_ok=True)
@@ -59,6 +59,7 @@ def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None
             dir=path.parent,
             delete=False,
         ) as stream:
+            temporary = Path(stream.name)
             stream.write(str(text))
             stream.flush()
             try:

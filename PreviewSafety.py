@@ -9,6 +9,7 @@ adaptive/outline edge-follow paths.  No AI/ML/OCR is used.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from copy import deepcopy
 from typing import Iterable, Sequence
 
 from PIL import Image, ImageDraw
@@ -29,7 +30,7 @@ class PreviewSafetyPlan:
     meta: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
-        return dict(self.meta)
+        return deepcopy(self.meta)
 
 
 def _preview_polygon_options(options: dict, fitted: Sequence[int | float]) -> tuple[object | None, str | None, tuple]:
@@ -46,7 +47,12 @@ def _preview_polygon_options(options: dict, fitted: Sequence[int | float]) -> tu
 
     # Absolute/screen polygons can appear when a future detector writes screen
     # geometry.  Convert via target_area -> local normalized -> current fitted.
-    target_area = options.get('_target_area') or options.get('target_area')
+    target_area = options.get('_target_screen_area') or options.get('target_area') or options.get('_target_area')
+    corners = options.get('corners')
+    if (not isinstance(target_area, (list, tuple)) or len(target_area) != 4) and isinstance(corners, (list, tuple)) and len(corners) == 2:
+        x0, y0 = corners[0]
+        x1, y1 = corners[1]
+        target_area = (min(x0, x1), min(y0, y1), abs(x1-x0), abs(y1-y0))
     preview_area = options.get('_preview_area') or fitted_area
     try:
         if polygon and target_area and str(space or '').strip().lower() in ('screen', 'absolute'):
@@ -196,13 +202,21 @@ def canvas_to_preview(point: Sequence[int | float], fitted: Sequence[int | float
     return (float(point[0]) * pw / fw, float(point[1]) * ph / fh)
 
 
-def draw_safe_paths(draw: ImageDraw.ImageDraw, safety_plan: PreviewSafetyPlan, fitted, preview_size, palette_rgb, brush: int) -> tuple[int, int]:
+def draw_safe_paths(draw: ImageDraw.ImageDraw, safety_plan: PreviewSafetyPlan, fitted, preview_size, palette_rgb, brush: int, cancelled=lambda: False) -> tuple[int, int]:
     path_count = 0
     dot_count = 0
     for index, paths in enumerate(safety_plan.groups):
         color = palette_rgb[index] if index < len(palette_rgb) else (0, 0, 0)
         for path in paths:
-            mapped = [canvas_to_preview(p, fitted, preview_size) for p in path]
+            if cancelled():
+                raise InterruptedError()
+            if not path:
+                continue
+            mapped = []
+            for number, p in enumerate(path):
+                if number % 512 == 0 and cancelled():
+                    raise InterruptedError()
+                mapped.append(canvas_to_preview(p, fitted, preview_size))
             if len(mapped) == 1:
                 x, y = mapped[0]
                 radius = max(1, brush) / 2
@@ -255,14 +269,15 @@ def render_preview_safety_map(source: Image.Image, preview_size, safety_plan: Pr
         if r * 0.299 + g * 0.587 + b * 0.114 < 95:
             r = min(255, r + 95); g = min(255, g + 95); b = min(255, b + 95)
         visible_palette.append((r, g, b))
-    draw_safe_paths(draw, safety_plan, fitted_size, preview_size, tuple(visible_palette), max(1, min(4, int(brush))))
+    draw_safe_paths(draw, safety_plan, fitted_size, preview_size, tuple(visible_palette), max(1, min(4, int(brush))), cancelled=cancelled)
 
     skipped = int(safety_plan.meta.get('skipped_total', 0) or 0)
     adapted = int(safety_plan.meta.get('adapted_total', 0) or 0)
     text = f"Safety preview: {safety_plan.mode} · draw {int(safety_plan.meta.get('drawable_subpaths', 0))} · skip {skipped} · edge-follow {adapted}"
-    draw.rectangle((8, 8, min(w - 8, 8 + len(text) * 6 + 14), 30), fill=(15, 20, 29))
-    draw.text((14, 13), text, fill=(230, 237, 245))
-    if safety_plan.meta.get('stopped'):
+    if w >= 32 and h >= 32:
+        draw.rectangle((8, 8, min(w - 8, 8 + len(text) * 6 + 14), 30), fill=(15, 20, 29))
+        draw.text((14, 13), text, fill=(230, 237, 245))
+    if safety_plan.meta.get('stopped') and w >= 32 and h >= 59:
         warn = 'Plan has source points outside the selected canvas polygon; real drawing will stop before input.'
         draw.rectangle((8, 34, min(w - 8, 8 + len(warn) * 6 + 14), 57), fill=(52, 24, 24))
         draw.text((14, 39), warn, fill=(255, 210, 210))

@@ -9,6 +9,7 @@ Draw Studio setup/safety gates pass again.
 from __future__ import annotations
 
 import json
+import math
 import re
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -85,6 +86,8 @@ def _json_guard(value, *, depth=0, counter=None):
     counter[0] += 1
     if counter[0] > MAX_JSON_ITEMS or depth > MAX_JSON_DEPTH:
         raise ProfilePortabilityError("Profile data is too large or deeply nested.")
+    if type(value) is float and not math.isfinite(value):
+        raise ProfilePortabilityError("Profile numbers must be finite.")
     if value is None or type(value) in (bool, int, float, str):
         if isinstance(value, str) and len(value) > 200000:
             raise ProfilePortabilityError("Profile contains an oversized text value.")
@@ -109,14 +112,33 @@ def _profile_identity(name: str):
     return name, key
 
 
+def _unique_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ProfilePortabilityError(f"Profile contains duplicate JSON key: {key[:80]}")
+        result[key] = value
+    return result
+
+
+def _decode_profile(raw):
+    try:
+        result = json.loads(raw.decode('utf-8-sig'), object_pairs_hook=_unique_json_object)
+        _json_guard(result)
+        return result
+    except RecursionError as error:
+        raise ProfilePortabilityError("Profile data is too deeply nested.") from error
+
+
 def _read_json(path: Path):
     try:
         if not Path(path).is_file():
             return None
-        raw = Path(path).read_bytes()
+        with Path(path).open('rb') as stream:
+            raw = stream.read(MAX_PROFILE_BYTES + 1)
         if len(raw) > MAX_PROFILE_BYTES:
             raise ProfilePortabilityError(f"{Path(path).name} is too large to export safely.")
-        value = json.loads(raw.decode("utf-8"))
+        value = _decode_profile(raw)
     except UnicodeDecodeError as error:
         raise ProfilePortabilityError(f"{Path(path).name} is not UTF-8 JSON.") from error
     except json.JSONDecodeError as error:
@@ -177,6 +199,8 @@ def split_settings(settings: dict):
 def flatten_settings(package_settings: dict, canvas: dict | None = None) -> dict:
     if not isinstance(package_settings, dict):
         raise ProfilePortabilityError("Profile settings section is invalid.")
+    if set(package_settings) - {"renderer", "resources", "ui"}:
+        raise ProfilePortabilityError("Profile contains an unknown settings section.")
     clean = {}
     for section in ("renderer", "resources", "ui"):
         values = package_settings.get(section, {})
@@ -210,6 +234,8 @@ def _validate_canvas(canvas: dict):
                 raise ProfilePortabilityError("Canvas coordinates are invalid.")
             if any(abs(v) > 1000000 for v in point):
                 raise ProfilePortabilityError("Canvas coordinates are outside the supported range.")
+    if corners is not None and (corners[0][0] == corners[1][0] or corners[0][1] == corners[1][1]):
+        raise ProfilePortabilityError("Canvas must have non-zero width and height.")
     anchors = canvas.get("canvas_anchor_detection")
     if anchors is not None and not isinstance(anchors, dict):
         raise ProfilePortabilityError("Canvas anchor metadata is invalid.")
@@ -258,6 +284,7 @@ def migrate_package(data: dict) -> dict:
 
 
 def validate_package(data: dict) -> dict:
+    _json_guard(data)
     data = migrate_package(data)
     if data.get("format") != FORMAT_ID or data.get("schema_version") != SCHEMA_VERSION:
         raise ProfilePortabilityError("This is not a supported Draw Studio .drawprofile file.")
@@ -277,6 +304,9 @@ def validate_package(data: dict) -> dict:
     if existing is not None and not str(existing[0]).startswith("custom-") and key != str(existing[0]):
         raise ProfilePortabilityError("Built-in profile name does not match its Draw Studio target key.")
 
+    for section in ("canvas", "settings", "calibration", "safety"):
+        if section in data and not isinstance(data[section], dict):
+            raise ProfilePortabilityError(f"Profile {section} section must be an object.")
     canvas = deepcopy(data.get("canvas") or {})
     _validate_canvas(canvas)
     clean_settings = flatten_settings(data.get("settings") or {}, canvas)
@@ -372,7 +402,11 @@ def read_profile_file(path: Path) -> dict:
     if path.stat().st_size > MAX_PROFILE_BYTES:
         raise ProfilePortabilityError("The profile file is larger than 8 MB.")
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        with path.open('rb') as stream:
+            raw = stream.read(MAX_PROFILE_BYTES + 1)
+        if len(raw) > MAX_PROFILE_BYTES:
+            raise ProfilePortabilityError('The profile file is larger than 8 MB.')
+        data = _decode_profile(raw)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ProfilePortabilityError("The selected file is not valid UTF-8 JSON.") from error
     return validate_package(data)
@@ -445,14 +479,15 @@ def apply_package_to_paths(package: dict, destination_key: str, *, root: Path | 
 
 
 def unique_copy_name(base_name: str, existing=None) -> str:
-    existing = set(PROFILES if existing is None else existing)
-    stem = f"{base_name} (Imported)"
-    if stem not in existing and len(stem) <= 50:
+    existing = {str(name).casefold() for name in (PROFILES if existing is None else existing)}
+    base_name = str(base_name).strip() or "Profile"
+    stem = f"{base_name[:39]} (Imported)"
+    if stem.casefold() not in existing:
         return stem
     for index in range(2, 1000):
         suffix = f" (Imported {index})"
         candidate = base_name[: max(1, 50 - len(suffix))] + suffix
-        if candidate not in existing:
+        if candidate.casefold() not in existing:
             return candidate
     raise ProfilePortabilityError("Could not create a unique imported profile name.")
 
@@ -495,6 +530,8 @@ def _reload_profile(app, name: str):
 
 
 def import_package_into_app(app, package: dict, *, action: str = "replace", copy_name: str | None = None):
+    if getattr(app, "activity", None):
+        raise ProfilePortabilityError("Wait for the current Draw Studio task to finish before importing a profile.")
     package = validate_package(package)
     source_name = package["profile"]["name"]
     if action not in ("replace", "copy"):
@@ -503,8 +540,8 @@ def import_package_into_app(app, package: dict, *, action: str = "replace", copy
     try:
         if hasattr(app, "save_settings"):
             app.save_settings()
-    except Exception:
-        pass
+    except Exception as error:
+        raise ProfilePortabilityError(f"Could not save the current profile before import: {error}") from error
 
     if action == "replace":
         if source_name not in PROFILES:

@@ -10,9 +10,9 @@ from Version import APP_VERSION, BUILD_CHANNEL, FILE_VERSION
 
 class ReleaseTests(unittest.TestCase):
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION,'1.0.131-beta')
-        self.assertEqual(FILE_VERSION,'1.0.131')
-        self.assertEqual(BUILD_CHANNEL,'beta')
+        self.assertEqual(APP_VERSION,'1.0.133-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.133')
+        self.assertEqual(BUILD_CHANNEL,'rc')
 
     def test_first_run_state_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,3 +1,17 @@
+v1.0.133-rc1: 100 maintenance improvements across preview, color cache, budgets, resume, profiles, precision, scheduling and UI diagnostics. See docs/100-UPPDATERINGAR-v1.0.133-rc1.md. Windows/GPU validation pending.
+
+# v1.0.132-rc1 — final engine integration
+
+- Faster exact run extraction and bounded component scheduling.
+- Preserve collinear reversals; retain path coverage through deadline splitting.
+- Account for canvas scale, cursor travel and color selections in hybrid costs.
+- Exclude pauses from runtime speed learning; expose a labeled timing envelope.
+- Reject non-improving or brush-unsafe corrections.
+- Fingerprint geometry and target/tool context before render recovery.
+- Release/disarm input before writing diagnostics.
+- Normal startup no longer installs optional GPU packages.
+- Source candidate only: Windows/EXE and physical GPU validation still pending.
+
 v1.0.131-beta Sketch 2.0 + Auto Fill improves Paint sketch structure with color-boundary edges and adds a strict Sketch -> Color Fill -> Re-outline renderer that reuses calibrated custom RGB while leaving browser/Gartic execution unchanged.
 v1.0.130-rc2 Release Candidate Hardening II removes leftover one-shot integration files, adds permanent source-tree hygiene enforcement, adopts version-only current release-note naming, and strengthens release-manifest version/channel/hash/size validation while keeping the RC feature freeze.
 

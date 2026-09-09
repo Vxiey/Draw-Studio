@@ -132,4 +132,4 @@ jobs:
             release/DrawStudio-*-manifest.json `
             --prerelease `
             --title "Draw Studio $env:GITHUB_REF_NAME" `
-            --notes-file RELEASE-NOTES-v1.0.131-beta.md
+            --notes-file RELEASE-NOTES-v1.0.133-rc1.md

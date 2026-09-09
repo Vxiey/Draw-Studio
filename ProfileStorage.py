@@ -15,7 +15,10 @@ from RuntimePaths import data_dir
 
 def safe_profile_key(profile_key: str | None) -> str:
     text = str(profile_key or "generic").strip().lower().replace(" ", "-")
-    safe = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in text)[:80]
+    safe = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in text)
+    if safe != text or len(safe) > 80:
+        suffix = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+        safe = safe[:67] + "-" + suffix
     return safe or "generic"
 
 
@@ -78,14 +81,18 @@ def calibration_context_fingerprint(profile_key: str | None, *, workflow: str = 
     digest = hashlib.sha256()
     digest.update(f"profile:{key}\nworkflow:{str(workflow)}\n".encode("utf-8"))
     for item in extras:
-        digest.update(f"extra:{item}\n".encode("utf-8"))
+        encoded = str(item).encode("utf-8")
+        digest.update(b"extra:" + str(len(encoded)).encode("ascii") + b":" + encoded)
     for path in _profile_context_files(key, palette_path):
         digest.update(f"file:{path.name}:".encode("utf-8"))
         try:
-            payload = path.read_bytes()
+            file_digest = hashlib.sha256()
+            with path.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(65536), b""):
+                    file_digest.update(chunk)
         except OSError:
             digest.update(b"<missing>\n")
         else:
-            digest.update(hashlib.sha256(payload).digest())
+            digest.update(file_digest.digest())
             digest.update(b"\n")
     return digest.hexdigest()[:24]

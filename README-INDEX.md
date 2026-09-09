@@ -43,3 +43,9 @@ Step docs:
 
 - `STEP-30-RELEASE-CANDIDATE-HARDENING.md` — RC release gates, installer/update validation and feature freeze
 - `RELEASE-NOTES-v1.0.130-rc2-Step30.md` — v1.0.130-rc2 release notes
+
+## v1.0.133-rc1 maintenance candidate
+
+- [Release notes](RELEASE-NOTES-v1.0.133-rc1.md)
+- [100 numbered improvements](docs/100-UPPDATERINGAR-v1.0.133-rc1.md)
+- [Validation and limits](docs/VALIDATION-v1.0.133-rc1.md)

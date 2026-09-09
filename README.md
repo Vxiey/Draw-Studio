@@ -17,6 +17,29 @@ It is built for people who want better-looking drawings without drawing everythi
 >
 > **No AI image generation is used.** Draw Studio analyzes the source image and recreates it through normal mouse drawing, colors, strokes, fills and supported drawing tools.
 
+
+## v1.0.133-rc1 — 100 maintenance improvements
+
+This candidate adds 100 documented fixes across color caching, preview, timing,
+resume validation, profiles, precision, runtime scheduling and workspace messages.
+See [release notes](RELEASE-NOTES-v1.0.133-rc1.md), the
+[numbered change list](docs/100-UPPDATERINGAR-v1.0.133-rc1.md) and
+[validation](docs/VALIDATION-v1.0.133-rc1.md).
+Extract to a new folder and run `Start.bat` on Windows. This is a source candidate;
+Windows input, GPU and EXE checks are still required before GitHub publication.
+
+## v1.0.132-rc1 — engine integration
+
+This source candidate improves exact path planning, deadline handling, correction
+quality guards and recovery validation. See [release notes](RELEASE-NOTES-v1.0.132-rc1.md)
+and [measured results and limitations](docs/ENGINE-VALIDATION-v1.0.132-rc1.md).
+Windows execution and EXE packaging still require validation on Windows before publication.
+
+Normal startup uses installed GPU backends without downloading GPU packages.
+To install or repair optional acceleration, run `Install-GPU-NVIDIA.bat`,
+`Install-GPU-Universal.bat`, or explicitly use `Start.bat --gpu`.
+CPU operation is available without GPU packages.
+
 ## What can Draw Studio do?
 
 - Turn an image into an automatic drawing
@@ -52,7 +75,7 @@ Draw Studio is mainly written in **Python**. It uses normal desktop automation, 
 
 Draw Studio can run without GPU acceleration and fall back to the CPU when needed.
 
-- **NVIDIA:** CuPy/CUDA acceleration can be installed automatically inside Draw Studio's own Python environment. A compatible NVIDIA graphics driver is required, but a separate system-wide CUDA Toolkit is not required for the normal source setup.
+- **NVIDIA:** CuPy/CUDA acceleration can be installed using the optional GPU installer inside Draw Studio's own Python environment. A compatible NVIDIA graphics driver is required, but a separate system-wide CUDA Toolkit is not required for the normal source setup.
 - **AMD / Intel / NVIDIA:** PyOpenCL can use the OpenCL runtime supplied by the installed graphics driver for supported workloads and hardware benchmarking.
 - If GPU setup fails or is unavailable, Draw Studio keeps a **CPU fallback** instead of requiring a specific GPU.
 

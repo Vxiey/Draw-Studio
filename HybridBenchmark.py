@@ -38,8 +38,15 @@ CASES=(('icon',_icon),('line-art',_line),('text-small-detail',_text_detail),('ca
 
 def _row(make_plan,image,area,base_options,enabled,cancelled):
     options=dict(base_options);options['adaptive_hybrid_cost']='Auto' if enabled else 'Off';options['_preview_plan']=True
-    tracemalloc.start();start=time.perf_counter();plan=make_plan(image,area,options,cancelled);elapsed=time.perf_counter()-start
-    _cur,peak=tracemalloc.get_traced_memory();tracemalloc.stop()
+    owns_trace=not tracemalloc.is_tracing()
+    if owns_trace:tracemalloc.start()
+    start=time.perf_counter()
+    try:
+        plan=make_plan(image,area,options,cancelled)
+        elapsed=time.perf_counter()-start
+        _cur,peak=tracemalloc.get_traced_memory()
+    finally:
+        if owns_trace:tracemalloc.stop()
     po=plan.get('options') or {};acc=po.get('adaptive_accuracy_meta') or {};de=po.get('preview_delta_e_meta') or {};timing=plan.get('draw_time_estimate') or {}
     seq=plan.get('execution_sequence') or []
     switches=sum(1 for a,b in zip(seq,seq[1:]) if a.get('color_index')!=b.get('color_index'))

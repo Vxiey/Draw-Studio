@@ -43,7 +43,7 @@ def validate_precision(value: str) -> str:
 
 
 def profile(value: str) -> dict:
-    return PRECISION_PROFILES[validate_precision(value)]
+    return dict(PRECISION_PROFILES[validate_precision(value)])
 
 
 def round_screen(value: float) -> int:
@@ -68,7 +68,10 @@ def map_pixel_center(pixel: float, source_size: int, target_size: float, origin:
     target_size = float(target_size)
     if not math.isfinite(target_size) or target_size <= 0:
         raise ValueError('Target dimensions must be positive.')
-    return float(origin) + ((float(pixel) + .5) * target_size / source_size) - .5
+    origin, pixel = float(origin), float(pixel)
+    if not math.isfinite(origin) or not math.isfinite(pixel):
+        raise ValueError('Pixel coordinates and origin must be finite.')
+    return origin + ((pixel + .5) * target_size / source_size) - .5
 
 
 class CanvasTransform:
@@ -79,6 +82,8 @@ class CanvasTransform:
         self.width, self.height = int(width), int(height)
         self.fw, self.fh = map(float, fitted)
         self.left, self.top = float(left), float(top)
+        if not all(math.isfinite(v) for v in (self.fw,self.fh,self.left,self.top)):
+            raise ValueError("Canvas geometry must be finite.")
         if self.width <= 0 or self.height <= 0 or self.fw <= 0 or self.fh <= 0:
             raise ValueError('Canvas transform dimensions must be positive.')
 
@@ -92,7 +97,10 @@ class CanvasTransform:
 
 
 def effective_step(precision: str, requested_step_px: float | int = 8) -> float:
-    requested = float(requested_step_px)
+    try:
+        requested = float(requested_step_px)
+    except (TypeError, ValueError, OverflowError):
+        requested = 8.0
     if not math.isfinite(requested) or requested <= 0:
         requested = 8.0
     return max(1.0, min(requested, float(profile(precision)['max_step_px'])))

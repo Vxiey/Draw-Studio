@@ -26,8 +26,8 @@ class Root:
 
 class DryRunV1023Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.131-beta')
-        self.assertEqual(FILE_VERSION,'1.0.131')
+        self.assertEqual(APP_VERSION,'1.0.133-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.133')
 
     def test_execute_plan_dry_run_moves_but_never_clicks(self):
         plan=make_plan(Image.new('RGBA',(4,2),'black'),(40,20),options())

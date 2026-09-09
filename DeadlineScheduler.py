@@ -71,9 +71,11 @@ class DeadlineScheduler:
     """
 
     def __init__(self, sequence, *, start_time: float, budget_seconds: float | None, clock):
-        self.sequence = list(sequence or ())
+        self.sequence = [dict(entry) for entry in (sequence or ())]
         self.start_time = float(start_time)
-        self.budget_seconds = None if budget_seconds is None else max(.1, float(budget_seconds))
+        self.budget_seconds = None if budget_seconds is None else float(budget_seconds)
+        if not math.isfinite(self.start_time) or (self.budget_seconds is not None and (not math.isfinite(self.budget_seconds) or self.budget_seconds <= 0)):
+            raise ValueError("Scheduler start and budget must be finite; budget must be positive.")
         self.clock = clock
 
         self._remaining_by_type: dict[str, float] = defaultdict(float)
@@ -109,6 +111,7 @@ class DeadlineScheduler:
         self.current_strategy = "planned-quality"
         self.phase_executed: dict[str, int] = defaultdict(int)
         self.phase_skipped: dict[str, int] = defaultdict(int)
+        self.skip_reasons: dict[str, int] = defaultdict(int)
 
         self.structural_total = sum(self._structural_weight(e) for e in self.sequence if self._is_structural(e))
         self.structural_done = 0.0
@@ -117,9 +120,11 @@ class DeadlineScheduler:
     def _cost(entry: dict[str, Any]) -> float:
         try:
             value = float(entry.get("estimated_cost_seconds", 0.0) or 0.0)
-        except (TypeError, ValueError):
-            value = 0.0
-        return max(0.0, value if math.isfinite(value) else 0.0)
+        except (TypeError, ValueError, OverflowError) as error:
+            raise ValueError("Invalid operation cost.") from error
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("Operation cost must be finite and non-negative.")
+        return value
 
     @staticmethod
     def _op_type(entry: dict[str, Any]) -> str:
@@ -134,9 +139,17 @@ class DeadlineScheduler:
         return cls._phase(entry) in ("major_coverage", "structure")
 
     @staticmethod
-    def _structural_weight(entry):
-        score = max(0.0, float(entry.get("structural_score", 0.0) or 0.0))
-        imp = max(0.0, float(entry.get("importance", .5) or .5))
+    def _score(entry, key, default):
+        try:
+            value = float(entry.get(key, default))
+        except (TypeError, ValueError, OverflowError):
+            return default
+        return max(0.0, min(1.0, value)) if math.isfinite(value) else default
+
+    @classmethod
+    def _structural_weight(cls, entry):
+        score = cls._score(entry, "structural_score", 0.0)
+        imp = cls._score(entry, "importance", .5)
         return max(.05, score * .72 + imp * .28)
 
     def structural_coverage(self):
@@ -144,8 +157,14 @@ class DeadlineScheduler:
             return 1.0
         return max(0.0, min(1.0, self.structural_done / self.structural_total))
 
+    def _now(self):
+        now = float(self.clock())
+        if not math.isfinite(now):
+            raise ValueError("Scheduler clock returned a non-finite timestamp.")
+        return now
+
     def elapsed(self):
-        return max(0.0, self.clock() - self.start_time)
+        return max(0.0, self._now() - self.start_time)
 
     def remaining_time(self):
         if self.budget_seconds is None:
@@ -227,11 +246,14 @@ class DeadlineScheduler:
         self._remaining_raw = max(0.0, self._remaining_raw - cost)
         if skipped:
             self.skipped += 1
-            self.skipped_low_value += 1
             self.phase_skipped[self._phase(entry)] += 1
         self.predicted_remaining()
 
     def _skip(self, entry: dict[str, Any], reason: str, *, delta: float, coverage: float) -> SchedulerDecision:
+        self._last_before = None
+        self.skip_reasons[reason] += 1
+        if "low-value" in reason:
+            self.skipped_low_value += 1
         self._consume(entry, skipped=True)
         return SchedulerDecision(
             False, self.panic, reason, self.mode, delta, coverage,
@@ -244,7 +266,7 @@ class DeadlineScheduler:
         left = self.remaining_time()
         predicted = self.predicted_remaining()
         self.current_phase = self._phase(entry)
-        self._last_before = self.clock()
+        self._last_before = self._now()
         self._last_entry_cost = cost
         self._last_entry_type = op_type
 
@@ -264,12 +286,14 @@ class DeadlineScheduler:
         delta = left - predicted
         coverage = self.structural_coverage()
         phase = self.current_phase
-        importance = float(entry.get("importance", .5) or .5)
-        structural = float(entry.get("structural_score", 0.0) or 0.0)
+        importance = self._score(entry, "importance", .5)
         optional = bool(entry.get("optional"))
 
         if left <= RUNTIME_POLICY["hard_stop_guard_seconds"]:
             return self._skip(entry, "hard render budget reached", delta=delta, coverage=coverage)
+
+        if cost*self._runtime_scale(op_type) > max(0.0,left-RUNTIME_POLICY["hard_stop_guard_seconds"]):
+            return self._skip(entry, "dropped: operation does not fit remaining render budget", delta=delta, coverage=coverage)
 
         # Never spend early time on micro-detail while the drawing is still
         # missing its main silhouette.  This is independent from Panic mode and
@@ -308,12 +332,13 @@ class DeadlineScheduler:
         )
 
     def _learn_runtime_sample(self, estimated: float, actual: float, op_type: str):
-        if estimated <= .0005 or actual < 0 or not math.isfinite(actual):
+        if not math.isfinite(estimated) or estimated <= .0005 or actual < 0 or not math.isfinite(actual):
             return
         ratio = actual / max(.0005, estimated)
         ratio = max(RUNTIME_POLICY["sample_ratio_min"], min(RUNTIME_POLICY["sample_ratio_max"], ratio))
         alpha = RUNTIME_POLICY["ema_alpha"]
         if self._global_samples <= 0:
+            ratio=max(.5,min(2.5,ratio))
             self._global_ratio_ema = ratio
         else:
             self._global_ratio_ema = self._global_ratio_ema * (1.0 - alpha) + ratio * alpha
@@ -324,22 +349,39 @@ class DeadlineScheduler:
         self._type_samples[op_type] = typed_samples + 1
         self._recent_ratios.append(ratio)
 
-    def after(self, entry: dict[str, Any]):
-        now = self.clock()
+    def after(self, entry: dict[str, Any], *, excluded_seconds: float = 0.0):
+        now = self._now()
         actual = 0.0
         if self._last_before is not None:
-            actual = max(0.0, now - self._last_before)
+            actual = max(0.0, now - self._last_before - max(0.0,excluded_seconds))
             self._actual_active_seconds += actual
+        had_start = self._last_before is not None
+        self._last_before = None
         cost = self._cost(entry)
         op_type = self._op_type(entry)
         self._last_actual_seconds = actual
         self._estimated_executed_seconds += cost
-        self._learn_runtime_sample(cost, actual, op_type)
+        if had_start:
+            self._learn_runtime_sample(cost, actual, op_type)
         self._consume(entry, skipped=False)
         self.executed += 1
         self.phase_executed[self._phase(entry)] += 1
         if self._is_structural(entry):
             self.structural_done += self._structural_weight(entry)
+
+    def prediction_interval(self):
+        """Heuristic variability envelope, not a statistical confidence interval."""
+        center=self.predicted_remaining()
+        if len(self._recent_ratios)<3:
+            return {"lower_seconds":max(0.0,center*.5),"upper_seconds":center*2.0,
+                    "source":"cold-start heuristic", "samples":len(self._recent_ratios)}
+        values=sorted(self._recent_ratios)
+        median=values[len(values)//2]
+        deviations=sorted(abs(value-median) for value in values)
+        spread=max(.10,min(1.0,2.0*deviations[len(deviations)//2]/max(.25,median)))
+        return {"lower_seconds":max(0.0,center*(1.0-spread)),
+                "upper_seconds":center*(1.0+spread),
+                "source":"recent runtime variability heuristic", "samples":len(values)}
 
     def telemetry(self) -> dict[str, Any]:
         elapsed = self.elapsed()
@@ -359,6 +401,8 @@ class DeadlineScheduler:
             "estimated_work_seconds_per_real_second": round(work_rate, 3),
             "runtime_cost_multiplier": round(live_multiplier, 4),
             "runtime_samples": int(self._global_samples),
+            "prediction_interval": self.prediction_interval(),
+            "progress_evidence": "sent operations; visual verification is separate",
             "last_operation_actual_seconds": round(self._last_actual_seconds, 4),
             "skipped_low_value": int(self.skipped_low_value),
             "current_phase": self.current_phase,
@@ -367,6 +411,7 @@ class DeadlineScheduler:
             "structural_coverage_percent": round(self.structural_coverage() * 100.0, 2),
             "phase_executed": dict(self.phase_executed),
             "phase_skipped": dict(self.phase_skipped),
+            "skip_reasons": dict(self.skip_reasons),
             "recovered_from_catchup": int(self._recovered_from_catchup),
         }
 

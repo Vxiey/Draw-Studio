@@ -16,8 +16,8 @@
         0
       ],
       "delta_e2000": 0.0,
-      "method": "numeric",
       "confidence": 100.0,
+      "method": "numeric",
       "verified": true,
       "context_fingerprint": "55e856b4dbe34017adbd8fe5",
       "workflow": ""

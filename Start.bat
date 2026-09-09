@@ -54,6 +54,11 @@ echo Checking and installing packages. Internet access is required...
 if errorlevel 1 goto error
 copy /y requirements.txt ".venv\installed-requirements.txt" >nul
 :gpu_dependencies
+rem Optional GPU installation is explicit; normal startup uses installed backends.
+if /i "%~1"=="--update" goto setup_optional_gpu
+if /i "%~1"=="--gpu" goto setup_optional_gpu
+goto launch
+:setup_optional_gpu
 rem Draw Studio owns its CUDA runtime inside .venv. On NVIDIA systems the
 rem bootstrap detects hardware first, tests a real CUDA kernel, and only then
 rem installs/repairs CuPy + matched NVIDIA runtime/NVRTC/header wheels.
@@ -68,7 +73,7 @@ if exist ".venv\gpu-install-failed.marker" del /q ".venv\gpu-install-failed.mark
 goto universal_gpu_dependencies
 :gpu_warning
 echo NVIDIA GPU was detected, but automatic CUDA setup could not be completed.
-echo Draw Studio will open with CPU fallback and retry GPU setup on the next start.
+echo Draw Studio will open with CPU fallback. Run Start.bat --gpu to retry GPU setup.
 :universal_gpu_dependencies
 rem AMD/Intel use the vendor driver OpenCL runtime. PyOpenCL is installed only
 rem inside Draw Studio's .venv and only when AMD/Intel hardware is detected.

@@ -7,6 +7,7 @@ can fall back to a lighter one instead of appearing frozen for a long time.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Mapping, Any
 
@@ -43,7 +44,7 @@ def watchdog_enabled(value: str = "Auto", *, preview: bool = False, test: bool =
 def _as_int(value: Any, default: int) -> int:
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return int(default)
 
 
@@ -51,7 +52,9 @@ def _base_timeout(options: Mapping[str, Any]) -> float:
     raw = options.get("planning_timeout_seconds", 75)
     try:
         value = float(raw)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        value = 75.0
+    if not math.isfinite(value):
         value = 75.0
     return max(12.0, min(120.0, value))
 
@@ -61,7 +64,7 @@ def _reduced_target(current: Any, *, ceiling: int) -> str:
         return str(ceiling)
     try:
         return str(max(50, min(int(current), ceiling)))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return str(ceiling)
 
 
@@ -91,7 +94,7 @@ def build_planning_attempts(options: Mapping[str, Any], *, test: bool = False,
         opts=_with_meta(options, "Fast calibrated dry run", timeout=timeout, fallback_level=0, overrides={
             "planning_resolution":"Standard", "cpu_engine":"Threads",
             "cpu_workers_resolved":min(max(1,_as_int(options.get("cpu_workers_resolved"),4)),4),
-            "gpu_mode":"CPU", "color_layers":"Off", "background_fill":"Off",
+            "gpu_mode":"CPU", "color_layers":"Off", "background_fill":"Off", "use_region_fill_engine":False,
             "background_simplification":"Strong", "target_stroke_count":"500",
             "target_stroke_count_resolved":500, "max_stroke_cap":"1000",
             "planning_timeout_seconds":timeout, "visual_verification_enabled":False,
@@ -144,6 +147,7 @@ def build_planning_attempts(options: Mapping[str, Any], *, test: bool = False,
                 "color_layers": "Off",
                 "custom_color_workflow": "Calibrated palette",
                 "background_fill": "Off",
+                "use_region_fill_engine": False,
                 "background_simplification": "Strong",
                 "target_stroke_count": final_target,
                 "target_stroke_count_resolved": int(final_target),
@@ -154,6 +158,15 @@ def build_planning_attempts(options: Mapping[str, Any], *, test: bool = False,
             True,
         ))
 
+    if options.get("time_budget_mode") in ("Unlimited", "Unlimited / Accuracy"):
+        for _name, opts, _timeout, fallback in attempts:
+            if fallback:
+                for key in ("target_stroke_count", "target_stroke_count_resolved", "max_stroke_cap",
+                            "background_simplification", "color_rendering", "custom_color_workflow"):
+                    if key in options:
+                        opts[key] = options[key]
+                    else:
+                        opts.pop(key, None)
     total = len(attempts)
     return [PlanningAttempt(i + 1, total, name, opts, timeout, fallback)
             for i, (name, opts, timeout, fallback) in enumerate(attempts)]

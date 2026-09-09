@@ -1,6 +1,7 @@
 """Additional lightweight preview layers generated in the planning worker."""
 from __future__ import annotations
-from PIL import Image, ImageDraw, ImageEnhance
+from PIL import Image, ImageDraw
+import math
 
 
 def _canvas_to_preview(point, fitted, preview_size):
@@ -40,7 +41,7 @@ def build_auxiliary_previews(source, size, groups, palette_rgb, point, brush, op
         fitted_local = (int(area[2]), int(area[3])) if isinstance(area, (tuple, list)) and len(area) == 4 else (w, h)
         total_segments = sum(max(1, len(path) - 1) for paths in safety_groups for path in paths)
         max_segments = int(options.get("_preview_stroke_map_limit", 12000)) if options.get("_preview_plan") else 24000
-        stride = 1 if options.get('_full_detail_preview') else max(1, total_segments // max(1, max_segments))
+        stride = 1 if options.get('_full_detail_preview') else max(1, math.ceil(total_segments / max(1, max_segments)))
         counter = 0
         for index, paths in enumerate(safety_groups):
             if not paths:
@@ -51,6 +52,9 @@ def build_auxiliary_previews(source, size, groups, palette_rgb, point, brush, op
                     raise InterruptedError()
                 mapped = [_canvas_to_preview(p, fitted_local, (w, h)) for p in path]
                 if len(mapped) == 1:
+                    counter += 1
+                    if counter % stride:
+                        continue
                     x, y = mapped[0]
                     sd.ellipse((x-line_width, y-line_width, x+line_width, y+line_width), fill=color)
                     continue
@@ -65,7 +69,7 @@ def build_auxiliary_previews(source, size, groups, palette_rgb, point, brush, op
         # very large plans keeps live previews responsive and prevents shutdown from
         # waiting behind tens of thousands of Canvas-like drawing operations.
         max_segments = int(options.get("_preview_stroke_map_limit", 12000)) if options.get("_preview_plan") else 24000
-        stride = 1 if options.get('_full_detail_preview') else max(1, total_segments // max(1, max_segments))
+        stride = 1 if options.get('_full_detail_preview') else max(1, math.ceil(total_segments / max(1, max_segments)))
         counter = 0
         for index, strokes in enumerate(groups):
             if not strokes:
@@ -80,20 +84,28 @@ def build_auxiliary_previews(source, size, groups, palette_rgb, point, brush, op
                 p1, p2 = point(x1, y1), point(x2, y2)
                 sd.line((*p1, *p2), fill=color, width=line_width)
 
-    src = source.convert("RGB").resize((w, h), Image.Resampling.LANCZOS)
+    if cancelled():
+        raise InterruptedError()
+    def bounded_source(resampling):
+        small = source.resize((w, h), resampling).convert("RGBA")
+        background = Image.new("RGBA", (w, h), "white")
+        background.alpha_composite(small)
+        return background.convert("RGB")
+    src = bounded_source(Image.Resampling.LANCZOS)
     # v1.0.120: preview layers must preserve source sRGB tone. The old 0.68
     # brightness multiplier made the Fill Regions preview look artificially
     # dark/dull even when the executable palette plan was correct.
-    src = ImageEnhance.Brightness(src).enhance(1.0)
     fill = src.convert("RGBA")
     overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
     fill_meta = options.get("background_fill_plan") or {}
-    if fill_meta.get("enabled"):
+    if fill_meta.get("enabled") and w >= 3 and h >= 3:
         color_index = fill_meta.get("color_index")
         base = palette_rgb[int(color_index)] if isinstance(color_index, int) and 0 <= color_index < len(palette_rgb) else (90, 180, 145)
         od.rectangle((1, 1, w - 2, h - 2), outline=(*_visible(base), 230), width=max(2, line_width))
     for region in options.get("fill_regions", []) or []:
+        if cancelled():
+            raise InterruptedError()
         try:
             x0, y0, x1, y1 = map(int, region["bbox"])
             p0, p1 = point(x0, y0), point(x1, y1)
@@ -104,5 +116,5 @@ def build_auxiliary_previews(source, size, groups, palette_rgb, point, brush, op
             continue
     fill = Image.alpha_composite(fill, overlay).convert("RGB")
 
-    color_map = source.convert("RGB").resize((w,h),Image.Resampling.NEAREST)
+    color_map = bounded_source(Image.Resampling.NEAREST)
     return {"stroke": stroke, "fill": fill, "color": color_map}

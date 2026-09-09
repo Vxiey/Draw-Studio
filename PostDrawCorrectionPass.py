@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any, Callable, Sequence
 import math
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from AccuracyEvaluator import _srgb_to_oklab, normalize_source
 from ContinuousPaths import build_execution_paths
@@ -297,13 +297,49 @@ def build_post_draw_correction_plan(*, original_source: Image.Image,
         palette_lab = _srgb_to_oklab((np.asarray(palette, dtype=np.float32) / 255.0).reshape(-1, 1, 3)).reshape(-1, 3)
         correction_oklab_route = {'backend_id':'cpu:numpy','backend':'CPU/NumPy'}
         correction_palette_lab_route = dict(correction_oklab_route)
-    diff = selected_lab[:, None, :] - palette_lab[None, :, :]
-    # OKLab distance with a small lightness multiplier keeps highlights/shadows
-    # from being repainted with a same-hue but visibly wrong tone.
-    dist = np.sum(diff * diff, axis=2) + (diff[:, :, 0] * diff[:, :, 0]) * 0.65
-    wanted_indices = np.argmin(dist, axis=1).astype(np.int16)
+    # Bound the palette-distance temporary independently of image size.
+    wanted_indices=np.empty(len(selected_lab),dtype=np.int16)
+    best_error=np.empty(len(selected_lab),dtype=np.float32)
+    for start in range(0,len(selected_lab),2048):
+        if cancelled():raise InterruptedError()
+        values=selected_lab[start:start+2048]
+        diff=values[:,None,:]-palette_lab[None,:,:]
+        dist=np.sum(diff*diff,axis=2)+diff[:,:,0]*diff[:,:,0]*.65
+        best=np.argmin(dist,axis=1)
+        wanted_indices[start:start+len(values)]=best
+        best_error[start:start+len(values)]=dist[np.arange(len(values)),best]
+    before_error=np.sum((src_lab-act_lab)**2,axis=2)+lum*lum*.65
+    gains=before_error.reshape(-1)[selected_flat]-best_error
+    improves=gains>1e-7
     wanted = np.full(limited_mask.shape, -1, dtype=np.int16)
-    wanted.reshape(-1)[selected_flat] = np.asarray(wanted_indices, dtype=np.int16)
+    wanted.reshape(-1)[selected_flat] = np.where(improves,wanted_indices,-1)
+    rejected_non_improving=int(np.count_nonzero(~improves))
+    # A brush has area. Every possible touched pixel must be non-worsening,
+    # including neighbours that were already correct. A conservative square
+    # envelope also covers circular brushes and endpoint rounding.
+    brush=max(1.0,float(options.get('brush_px',1) or 1))
+    scale=min(float(fitted[0])/size[0],float(fitted[1])/size[1]) if fitted else 1.0
+    if not math.isfinite(brush) or not math.isfinite(scale) or scale<=0:
+        return {"enabled":False,"safe":False,"reason":"invalid correction brush geometry","stores_image_data":False}
+    radius=0 if brush==1 and scale==1 else int(math.ceil((brush/2+1)/scale))
+    if radius>31:
+        return {"enabled":False,"safe":True,"reason":"correction brush footprint exceeds bounded verifier","stores_image_data":False}
+    rejected_footprint=0
+    if radius:
+        for index in np.unique(wanted[wanted>=0]):
+            if cancelled():raise InterruptedError()
+            diff=src_lab-palette_lab[int(index)]
+            after=np.sum(diff*diff,axis=2)+diff[:,:,0]*diff[:,:,0]*.65
+            allowed=(after<=before_error+1e-7) & expected_mask
+            padded=np.pad(allowed, radius, constant_values=False)
+            eroded=np.asarray(Image.fromarray(padded.astype(np.uint8)*255).filter(
+                ImageFilter.MinFilter(radius*2+1)))[radius:-radius,radius:-radius]>0
+            reject=(wanted==index)&(~eroded)
+            rejected_footprint+=int(np.count_nonzero(reject))
+            wanted[reject]=-1
+    limited_mask=wanted>=0
+    selected_pixels=int(np.count_nonzero(limited_mask))
+    selected_ratio=100.0*selected_pixels/max(1,limited_mask.size)
 
     groups: list[list[tuple[int, int, int, int]]] = [[] for _ in palette]
     color_errors: list[tuple[float, int]] = []
@@ -345,7 +381,8 @@ def build_post_draw_correction_plan(*, original_source: Image.Image,
         capped_flag = False
 
     if total_paths <= 0:
-        return {"enabled": False, "safe": True, "reason": "no safe correction paths survived caps", "stores_image_data": False}
+        return {"enabled": False, "safe": True, "reason": "no improving correction paths survived quality/brush guards and caps", "stores_image_data": False,
+                "rejected_non_improving_pixels":rejected_non_improving,"rejected_brush_footprint_pixels":rejected_footprint}
 
     seconds_per_path = _float(estimated_seconds_per_path, None)
     if seconds_per_path is None:
@@ -391,6 +428,11 @@ def build_post_draw_correction_plan(*, original_source: Image.Image,
         "comparison_size": tuple(map(int, size)),
         "geometry_ok": bool(geometry.get("geometry_ok", True)),
         "raw_candidate_pixels": int(raw_pixels),
+        "rejected_non_improving_pixels": rejected_non_improving,
+        "rejected_brush_footprint_pixels": rejected_footprint,
+        "correction_footprint_radius": radius,
+        "quality_guard": "strict source-relative improvement with non-worsening brush envelope",
+        "quality_evidence": "conservative model; actual verification remains separate",
         "selected_correction_pixels": int(selected_pixels),
         "selected_candidate_percent": float(selected_ratio),
         "missing_pixels": int(np.count_nonzero(missing & limited_mask)),
@@ -419,6 +461,8 @@ def compact_correction_meta(correction: dict[str, Any]) -> dict[str, Any]:
     """Strip path geometry before storing diagnostics in long-lived metadata."""
     keep = (
         "enabled", "safe", "reason", "version", "method", "stores_image_data",
+        "rejected_non_improving_pixels", "rejected_brush_footprint_pixels",
+        "correction_footprint_radius", "quality_guard", "quality_evidence",
         "capture_pixels_persisted", "image_pixels_persisted", "comparison_size",
         "geometry_ok", "raw_candidate_pixels", "selected_correction_pixels",
         "missing_pixels", "wrong_color_pixels", "correction_paths", "corrected_colors",

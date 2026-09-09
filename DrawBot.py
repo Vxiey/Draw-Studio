@@ -969,6 +969,8 @@ def make_plan(original, area, options, cancelled=lambda: False):
             gpu_mode=options.get('gpu_mode','Auto'),
             gpu_vram=options.get('gpu_vram','Auto'),
             gpu_performance=options.get('gpu_performance','High throughput'))
+        options["_hybrid_scale_x"]=float(fitted[0])/max(1,pixel_map.width)
+        options["_hybrid_scale_y"]=float(fitted[1])/max(1,pixel_map.height)
         from SubjectFocus import focused_stroke_plan
         pixel_map,stroke_plan=focused_stroke_plan(
             pixel_map,image,len(allColors),options.get('subject_focus','Off'),options.get('subject_region'),lines=bool(options.get('lines',True)),
@@ -1112,7 +1114,7 @@ def make_plan(original, area, options, cancelled=lambda: False):
     fill_mode=options.get('background_fill','Balanced')
     safe_fill_margin=source_fill_margin_px(options.get('brush_px',3),2,palette_image.size)
     plan_options['safe_fill_mask_margin_px']=safe_fill_margin
-    region_fill_enabled=bool(options.get('use_region_fill_engine',True))
+    region_fill_enabled=bool(options.get('use_region_fill_engine',fill_mode!='Off'))
     if (fill_mode!='Off' or region_fill_enabled) and options.get('fill_tool_available') and not options.get('outline'):
         fill_plan=detect_background(palette_image,fill_mode,safe_margin_px=safe_fill_margin) if fill_mode!='Off' else None
         if options.get('extra_fast'):
@@ -1126,7 +1128,7 @@ def make_plan(original, area, options, cancelled=lambda: False):
         # wall-clock cost analysis. Unsafe or slower regions automatically remain
         # in the normal stroke/run renderer. Preview and final execution consume
         # the exact same accepted region dictionaries.
-        if bool(options.get('use_region_fill_engine',True)):
+        if region_fill_enabled:
             from RegionFillEngine import build_region_fill_plan
             fill_region_dicts,fill_region_meta=build_region_fill_plan(
                 palette_image,fitted,options,safe_margin_px=safe_fill_margin,cancelled=cancelled)
@@ -2010,11 +2012,11 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
             options['_accuracy_original_source']=_accuracy_source
         _cache=options.get('_accuracy_normalized_source_cache')
         _normalized=None
-        if isinstance(_cache,dict) and tuple(_cache.get('size') or ())==tuple(size) and isinstance(_cache.get('image'),Image.Image):
+        if isinstance(_cache,dict) and tuple(_cache.get('size') or ())==tuple(size) and _cache.get('source') is _accuracy_source and isinstance(_cache.get('image'),Image.Image):
             _normalized=_cache['image']
         if _normalized is None:
             _normalized=normalize_source(_accuracy_source,size)
-            options['_accuracy_normalized_source_cache']={'size':tuple(size),'image':_normalized}
+            options['_accuracy_normalized_source_cache']={'size':tuple(size),'image':_normalized,'source':_accuracy_source}
 
         _plan_accuracy=options.get('pixel_accuracy_meta') or {}
         _coverage=_plan_accuracy.get('coverage_percent') if isinstance(_plan_accuracy,dict) else None
@@ -2112,6 +2114,7 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
     execution_measure_started=None
     execution_measure_completed_at=None
     runtime_operation_stats={}
+    paused_seconds=0.0
     def note_runtime_operation(kind, elapsed, count=1):
         if dry_run:return
         key=str(kind or 'operation')
@@ -2829,7 +2832,11 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
         plan['options'].setdefault('edge_behavior_meta',{'active':True,'mode':edge_mode,'hard_clip':0,'hard_skip':0,'adaptive_boundary':0,'preserve_outline_boundary':0,'safe_skip':0})
 
         def pause_guard():
-            while paused.is_set():
+            nonlocal paused_seconds
+            if not paused.is_set():
+                return False
+            pause_started=clock()
+            try:
                 if not dry_run:mouse.release()
                 if hasattr(mouse,'reset_tracking'):mouse.reset_tracking()
                 report('status', 'Paused. The mouse is free. Press F6 or Resume to continue.')
@@ -2839,7 +2846,8 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                     report('status', f'Resuming in {second}… Switch to the drawing application.')
                     wait(1)
                 return True
-            return False
+            finally:
+                paused_seconds+=max(0.0,clock()-pause_started)
 
         def draw_path_item(index,item,smart_group=True,verify_color=True,verification_mode='strict',count_progress=True,slow_probe=False):
             nonlocal done
@@ -2920,8 +2928,10 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                                 for path_index,path_point in enumerate(path_points):
                                     draw_mouse.move_point(path_point, 'stroke clipped retry path' if retry else 'stroke clipped path');wait(max(stroke_delivery.min_path_delay, cadence.movement_delay(path_delay_now,path_index,len(path_points))))
                         finally:
-                            if release_settle_now:wait(release_settle_now)
-                            draw_mouse.release()
+                            try:
+                                if release_settle_now:wait(release_settle_now)
+                            finally:
+                                draw_mouse.release()
 
             deliver_current_stroke(retry=False)
             wait(cadence.movement_delay(boundary_delay,0,1))
@@ -3185,7 +3195,7 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                     original_source=source, palette_rgb=plan.get('colors') or (),
                     post_draw_meta=initial_meta if isinstance(initial_meta,dict) else plan['options'].get('post_draw_accuracy_meta'),
                     snapshot=snapshot, area=area, fitted=(fw,fh), comparison_size=compare_size,
-                    simulated_final=simulated, quantized_target=quantized, options=plan['options'],
+                    simulated_final=simulated, quantized_target=quantized, options={**plan['options'], 'brush_px':current_execution_brush},
                     usable_deadline_seconds=None if usable is None else float(usable), elapsed_seconds=elapsed,
                     visual_gate_percent=visual_gate, estimated_seconds_per_path=per_path,
                     max_paths=int(plan['options'].get('post_draw_correction_max_paths',120) or 120),
@@ -3364,7 +3374,9 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
             for entry in execution_sequence:
                 if stop.is_set():
                     raise InterruptedError()
+                pause_guard()
                 if deadline_scheduler is not None:
+                    _pause_before_entry=paused_seconds
                     decision=deadline_scheduler.before(entry)
                     if decision.mode=='CATCH_UP' and not deadline_catchup_reported:
                         deadline_catchup_reported=True
@@ -3405,10 +3417,11 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                         selected_method=verify_color_batch(index,item,True,selected_method,1,1)
                         note_runtime_operation('verification',clock()-_verify_started)
                 _path_started=clock()
+                _pause_before_path=paused_seconds
                 draw_path_item(index,item,smart_group=True,verify_color=(index not in verified_colors and not plan['options'].get('adaptive_color_verification',False) and plan['options'].get('strict_color_verification',True)))
-                note_runtime_operation(entry.get('operation_type','stroke'),clock()-_path_started)
+                note_runtime_operation(entry.get('operation_type','stroke'),max(0.0,clock()-_path_started-(paused_seconds-_pause_before_path)))
                 if deadline_scheduler is not None:
-                    deadline_scheduler.after(entry)
+                    deadline_scheduler.after(entry,excluded_seconds=paused_seconds-_pause_before_entry)
                     _now=clock()
                     if _now-deadline_last_telemetry>=.75:
                         deadline_last_telemetry=_now
@@ -3532,7 +3545,14 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
         runtime_safety.mark_stopped(error)
         raise
     finally:
-        runtime_payload=save_runtime_safety_report(runtime_safety)
+        # Release input before diagnostics: report/disk failures must never
+        # prevent mouse-up or disarming after an interrupted operation.
+        from StabilityRC import safe_release_and_disarm
+        safe_release_and_disarm(mouse,dry_run=dry_run,logger=log_event)
+        try:
+            runtime_payload=save_runtime_safety_report(runtime_safety)
+        except Exception as report_error:
+            runtime_payload={'counts':{},'save_error':str(report_error)}
         plan['options']['runtime_safety_report']=runtime_payload
         runtime_counts=runtime_payload.get('counts') or {}
         runtime_report_path=runtime_payload.get('text_path') or runtime_payload.get('json_path')
@@ -3601,9 +3621,6 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                         f"entries={int(history_meta.get('entries',0) or 0)}.")
             except Exception as history_error:
                 log_event(f'Correction history save skipped: {history_error!r}')
-
-        from StabilityRC import safe_release_and_disarm
-        safe_release_and_disarm(mouse,dry_run=dry_run,logger=log_event)
 
 
 class DrawBotApp:
@@ -9415,8 +9432,11 @@ class DrawBotApp:
                 strategy=str(value.get('strategy') or 'planned-quality')
                 left_text='∞' if left is None else f'{float(left):.1f}s'
                 delta_text='n/a' if delta is None else f'{float(delta):+.1f}s'
-                live_text=(f'live ×{multiplier:.2f} ({samples} samples)' if samples else 'live learning')
-                self.status.set(f'{mode} · {strategy} · elapsed {elapsed:.1f}s · budget left {left_text} · predicted finish {predicted:.1f}s · schedule {delta_text} · {ops:.1f} ops/s · {live_text} · {phase} · structure {coverage:.0f}% · skipped {skipped}')
+                live_text=(f'live ×{multiplier:.2f} ({samples} samples)' if samples else 'uncalibrated estimate')
+                interval=value.get('prediction_interval') or {}
+                if interval:
+                    live_text+=f" · remaining estimate {float(interval.get('lower_seconds',0)):.1f}–{float(interval.get('upper_seconds',0)):.1f}s"
+                self.status.set(f'{mode} · {strategy} · elapsed {elapsed:.1f}s · budget left {left_text} · predicted finish {predicted:.1f}s · schedule {delta_text} · {ops:.1f} ops/s · {live_text} · {phase} · structure sent {coverage:.0f}% · skipped {skipped}')
         elif kind=='performance_benchmark':
             if isinstance(value,dict):
                 text=str(value.get('text','Performance benchmark complete.'))

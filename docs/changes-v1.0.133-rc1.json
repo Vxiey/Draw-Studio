@@ -1,0 +1,602 @@
+[
+  {
+    "number": 1,
+    "area": "Färger",
+    "file": "ColorCache.py",
+    "change": "Trasigt schema i färgcachen ger tom cache i stället för krasch."
+  },
+  {
+    "number": 2,
+    "area": "Färger",
+    "file": "ColorCache.py",
+    "change": "Begränsar läsning av färgcache till 1 MB."
+  },
+  {
+    "number": 3,
+    "area": "Färger",
+    "file": "ColorCache.py",
+    "change": "Kräver kompletta RGB-tripletter inom 0–255."
+  },
+  {
+    "number": 4,
+    "area": "Färger",
+    "file": "ColorCache.py",
+    "change": "Avvisar ogiltiga och icke ändliga verifieringsmått."
+  },
+  {
+    "number": 5,
+    "area": "Färger",
+    "file": "ColorCache.py",
+    "change": "Kontrollerar att färgnyckeln motsvarar begärd RGB."
+  },
+  {
+    "number": 6,
+    "area": "Färger",
+    "file": "ColorCache.py",
+    "change": "Kontrollerar verifiering och kalibreringskontext för varje post."
+  },
+  {
+    "number": 7,
+    "area": "Färger",
+    "file": "ColorCache.py",
+    "change": "Begränsar även inlästa och direkt sparade cacher till 256 färger."
+  },
+  {
+    "number": 8,
+    "area": "Färger",
+    "file": "ColorCache.py",
+    "change": "Förnyad verifiering flyttar färgen sist i utkastningsordningen."
+  },
+  {
+    "number": 9,
+    "area": "Färger",
+    "file": "ColorCache.py",
+    "change": "Sparar färgcachen med gemensam atomisk skrivning och flush till disk."
+  },
+  {
+    "number": 10,
+    "area": "Färger",
+    "file": "ColorCache.py",
+    "change": "Låser samtidiga färgcacheuppdateringar för att undvika förlorade poster."
+  },
+  {
+    "number": 11,
+    "area": "Lagring",
+    "file": "RuntimePaths.py",
+    "change": "Tom LOCALAPPDATA använder hemkatalogen i paketerade byggen."
+  },
+  {
+    "number": 12,
+    "area": "Lagring",
+    "file": "RuntimePaths.py",
+    "change": "Rensar temporär fil även när kodning eller skrivning misslyckas."
+  },
+  {
+    "number": 13,
+    "area": "Tidsbudget",
+    "file": "TimeBudgetEngine.py",
+    "change": "Automatisk reserv avvisar oändliga och negativa tidsgränser."
+  },
+  {
+    "number": 14,
+    "area": "Tidsbudget",
+    "file": "TimeBudgetEngine.py",
+    "change": "Normaliserar blanksteg runt tidslägets namn."
+  },
+  {
+    "number": 15,
+    "area": "Tidsbudget",
+    "file": "TimeBudgetEngine.py",
+    "change": "Fasta och obegränsade lägen blockeras inte av ett gammalt manuellt gränsvärde."
+  },
+  {
+    "number": 16,
+    "area": "Tidsbudget",
+    "file": "TimeBudgetEngine.py",
+    "change": "Respekterar numerisk noll som uttryckligt avstängd reserv."
+  },
+  {
+    "number": 17,
+    "area": "Tidsbudget",
+    "file": "TimeBudgetEngine.py",
+    "change": "Ogiltig ETA kan inte klassas som säker."
+  },
+  {
+    "number": 18,
+    "area": "Tidsbudget",
+    "file": "TimeBudgetEngine.py",
+    "change": "Ogiltig aktiv budget klassas konservativt som PANIC."
+  },
+  {
+    "number": 19,
+    "area": "Ritplan",
+    "file": "TimeBudget.py",
+    "change": "Unlimited / Accuracy får inte längre automatisk gräns för antalet banor."
+  },
+  {
+    "number": 20,
+    "area": "Ritplan",
+    "file": "TimeBudget.py",
+    "change": "Väljer begränsade banor med partiell sortering för stora planer."
+  },
+  {
+    "number": 21,
+    "area": "Förhandsvisning",
+    "file": "PreviewLayers.py",
+    "change": "Använder uppåtrundning så provtagningen håller gränsen för segment."
+  },
+  {
+    "number": 22,
+    "area": "Förhandsvisning",
+    "file": "PreviewLayers.py",
+    "change": "Provtagning begränsar även stora punktplaner."
+  },
+  {
+    "number": 23,
+    "area": "Förhandsvisning",
+    "file": "PreviewLayers.py",
+    "change": "Skalar ned källbilden före RGB-konvertering för lägre minnesåtgång."
+  },
+  {
+    "number": 24,
+    "area": "Förhandsvisning",
+    "file": "PreviewLayers.py",
+    "change": "Visar transparenta pixlar mot vit bakgrund i färg- och fyllnadskartor."
+  },
+  {
+    "number": 25,
+    "area": "Förhandsvisning",
+    "file": "PreviewLayers.py",
+    "change": "Tar bort onödig ljusstyrkekopia utan visuell effekt."
+  },
+  {
+    "number": 26,
+    "area": "Förhandsvisning",
+    "file": "PreviewLayers.py",
+    "change": "Fyllnadskant fungerar även för bilder på en eller två pixlar."
+  },
+  {
+    "number": 27,
+    "area": "Förhandsvisning",
+    "file": "PreviewLayers.py",
+    "change": "Fyllnadsförhandsvisning kan avbrytas mellan regioner."
+  },
+  {
+    "number": 28,
+    "area": "Förhandsvisning",
+    "file": "PreviewSafety.py",
+    "change": "Tomma säkerhetsbanor hoppas över utan indexfel."
+  },
+  {
+    "number": 29,
+    "area": "Förhandsvisning",
+    "file": "PreviewSafety.py",
+    "change": "Säkerhetskartans avbrytknapp kontrolleras mellan banor."
+  },
+  {
+    "number": 30,
+    "area": "Förhandsvisning",
+    "file": "PreviewSafety.py",
+    "change": "Kontrollerar avbrott även inuti mycket långa förhandsvisningsbanor."
+  },
+  {
+    "number": 31,
+    "area": "Förhandsvisning",
+    "file": "PreviewSafety.py",
+    "change": "Små säkerhetskartor kraschar inte vid ritning av etiketter."
+  },
+  {
+    "number": 32,
+    "area": "Förhandsvisning",
+    "file": "PreviewSafety.py",
+    "change": "Exporterad säkerhetsmetadata delar inte längre muterbara objekt med planen."
+  },
+  {
+    "number": 33,
+    "area": "Förhandsvisning",
+    "file": "PreviewQuality.py",
+    "change": "Ogiltig sparad RAM-budget återgår till 512 MB."
+  },
+  {
+    "number": 34,
+    "area": "Förhandsvisning",
+    "file": "PreviewQuality.py",
+    "change": "Full förhandsvisning bevarar skärmområdet för absoluta säkerhetspolygoner."
+  },
+  {
+    "number": 35,
+    "area": "Förhandsvisning",
+    "file": "PreviewQuality.py",
+    "change": "Tom källbild ger ett tydligt fel före division."
+  },
+  {
+    "number": 36,
+    "area": "Förhandsvisning",
+    "file": "PreviewQuality.py",
+    "change": "Ogiltig zoom återgår till anpassa bild."
+  },
+  {
+    "number": 37,
+    "area": "Förhandsvisning",
+    "file": "PreviewQuality.py",
+    "change": "Ogiltig panorering återcentrerar bilden."
+  },
+  {
+    "number": 38,
+    "area": "Bildinläsning",
+    "file": "ImageFormatInfo.py",
+    "change": "Bildetiketten undviker full RGBA-kopia för opaka bilder och bilder med separat alfakanal."
+  },
+  {
+    "number": 39,
+    "area": "Färger",
+    "file": "ColorPreviewDiagnostics.py",
+    "change": "Ogiltiga färgmätningar märks Unavailable i stället för missvisande kvalitetsbetyg."
+  },
+  {
+    "number": 40,
+    "area": "Färger",
+    "file": "ColorPreviewDiagnostics.py",
+    "change": "Automatisk ommappning tolererar trasig diagnostik utan krasch eller strängtolkad flagga."
+  },
+  {
+    "number": 41,
+    "area": "Planering",
+    "file": "PlanningWatchdog.py",
+    "change": "Överflödande numeriska inställningar återgår till reservvärden i watchdog."
+  },
+  {
+    "number": 42,
+    "area": "Planering",
+    "file": "PlanningWatchdog.py",
+    "change": "Icke ändlig planeringstid använder normal tidsgräns."
+  },
+  {
+    "number": 43,
+    "area": "Planering",
+    "file": "PlanningWatchdog.py",
+    "change": "Snabb torrkörning stänger även av regionfyllnadsmotorn."
+  },
+  {
+    "number": 44,
+    "area": "Planering",
+    "file": "PlanningWatchdog.py",
+    "change": "Sista reservplanen stänger verkligen av regionfyllnad."
+  },
+  {
+    "number": 45,
+    "area": "Planering",
+    "file": "PlanningWatchdog.py",
+    "change": "Obegränsat noggrannhetsläge bevarar färgval och bangränser vid reservplanering."
+  },
+  {
+    "number": 46,
+    "area": "Användarflöde",
+    "file": "UIState.py",
+    "change": "En vald målprofil krävs innan arbetsytan visar redo för test."
+  },
+  {
+    "number": 47,
+    "area": "Användarflöde",
+    "file": "UIState.py",
+    "change": "Pågående arbete visas före ett gammalt felmeddelande."
+  },
+  {
+    "number": 48,
+    "area": "Användarflöde",
+    "file": "UIState.py",
+    "change": "Tidsgränsfel känns igen även utan prefixet Error."
+  },
+  {
+    "number": 49,
+    "area": "Användarflöde",
+    "file": "UIState.py",
+    "change": "Start locked känns igen och visar stegen för upplåsning."
+  },
+  {
+    "number": 50,
+    "area": "Användarflöde",
+    "file": "UIState.py",
+    "change": "GPU-fel får GPU-råd även när meddelandet nämner färgmappning."
+  },
+  {
+    "number": 51,
+    "area": "Användarflöde",
+    "file": "UIState.py",
+    "change": "Disk full ger konkret råd om att frigöra utrymme."
+  },
+  {
+    "number": 52,
+    "area": "Användarflöde",
+    "file": "UIState.py",
+    "change": "Skrivskydd ger råd om skrivbar mapp och fillås."
+  },
+  {
+    "number": 53,
+    "area": "Användarflöde",
+    "file": "UIState.py",
+    "change": "Oläsbara bildformat ger ett begripligt återställningsråd."
+  },
+  {
+    "number": 54,
+    "area": "Användarflöde",
+    "file": "UIState.py",
+    "change": "Saknade Python-komponenter får installationsråd."
+  },
+  {
+    "number": 55,
+    "area": "Användarflöde",
+    "file": "UIState.py",
+    "change": "Minnesbrist ger råd om mindre bildyta och förhandsvisning."
+  },
+  {
+    "number": 56,
+    "area": "Återupptagning",
+    "file": "RenderResume.py",
+    "change": "Dubblerade färgindex skapar inte dubbla återupptagningsbatcher."
+  },
+  {
+    "number": 57,
+    "area": "Återupptagning",
+    "file": "RenderResume.py",
+    "change": "Återupptagning kan identifiera planer som endast har execution_groups."
+  },
+  {
+    "number": 58,
+    "area": "Återupptagning",
+    "file": "RenderResume.py",
+    "change": "Negativa batchindex avvisas före Python-indexering."
+  },
+  {
+    "number": 59,
+    "area": "Återupptagning",
+    "file": "RenderResume.py",
+    "change": "Planens fingeravtryck inkluderar alfakanalen."
+  },
+  {
+    "number": 60,
+    "area": "Återupptagning",
+    "file": "RenderResume.py",
+    "change": "Hashar plangeometri stegvis utan en jättestor JSON-sträng."
+  },
+  {
+    "number": 61,
+    "area": "Återupptagning",
+    "file": "RenderResume.py",
+    "change": "Kontrollerar att sparade fingeravtryck är riktiga hexvärden."
+  },
+  {
+    "number": 62,
+    "area": "Återupptagning",
+    "file": "RenderResume.py",
+    "change": "Ogiltiga antal och negativa banpositioner avvisas i stället för att klampas."
+  },
+  {
+    "number": 63,
+    "area": "Återupptagning",
+    "file": "RenderResume.py",
+    "change": "Sparade booleska flaggor måste vara booleska värden."
+  },
+  {
+    "number": 64,
+    "area": "Återupptagning",
+    "file": "RenderResume.py",
+    "change": "Kontrollerar längd, format och unika nycklar för avslutade färgbatcher."
+  },
+  {
+    "number": 65,
+    "area": "Återupptagning",
+    "file": "RenderResume.py",
+    "change": "Nya bankontrollpunkter måste motsvara verkligt antal ordnade banor."
+  },
+  {
+    "number": 66,
+    "area": "Tidsuppskattning",
+    "file": "HybridCostModel.py",
+    "change": "Trasiga räknare i operationshistoriken hoppas över."
+  },
+  {
+    "number": 67,
+    "area": "Tidsuppskattning",
+    "file": "HybridCostModel.py",
+    "change": "Felaktig kalibreringsstruktur återgår till standardkostnader."
+  },
+  {
+    "number": 68,
+    "area": "Tidsuppskattning",
+    "file": "HybridCostModel.py",
+    "change": "Ogiltigt antal kalibreringsprov kan inte krascha modellbyggandet."
+  },
+  {
+    "number": 69,
+    "area": "Tidsuppskattning",
+    "file": "HybridCostModel.py",
+    "change": "Punktkostnad använder uppmätta punktoperationer när de finns."
+  },
+  {
+    "number": 70,
+    "area": "Tidsuppskattning",
+    "file": "HybridCostModel.py",
+    "change": "Distansbaserad bankostnad respekterar det inlärda kostnadsgolvet."
+  },
+  {
+    "number": 71,
+    "area": "Tidsuppskattning",
+    "file": "HybridCostModel.py",
+    "change": "Avvisar ogiltiga distanser som annars gav optimistisk bankostnad."
+  },
+  {
+    "number": 72,
+    "area": "Profiler",
+    "file": "ProfilePortability.py",
+    "change": "Profilimport och export avvisar NaN och Infinity."
+  },
+  {
+    "number": 73,
+    "area": "Profiler",
+    "file": "ProfilePortability.py",
+    "change": "Läser UTF-8-profiler med BOM från Windows-redigerare."
+  },
+  {
+    "number": 74,
+    "area": "Profiler",
+    "file": "ProfilePortability.py",
+    "change": "Begränsar faktisk filläsning även om filen växer efter storlekskontrollen."
+  },
+  {
+    "number": 75,
+    "area": "Profiler",
+    "file": "ProfilePortability.py",
+    "change": "Dubbla JSON-nycklar ger fel i stället för tyst överskrivning."
+  },
+  {
+    "number": 76,
+    "area": "Profiler",
+    "file": "ProfilePortability.py",
+    "change": "Extremt nästlade profiler fångas före kopiering och ger begripligt fel."
+  },
+  {
+    "number": 77,
+    "area": "Profiler",
+    "file": "ProfilePortability.py",
+    "change": "Avvisar okända inställningssektioner i importerade profiler."
+  },
+  {
+    "number": 78,
+    "area": "Profiler",
+    "file": "ProfilePortability.py",
+    "change": "Tomma listor godtas inte längre som objektsektioner."
+  },
+  {
+    "number": 79,
+    "area": "Profiler",
+    "file": "ProfilePortability.py",
+    "change": "Canvas med noll bredd eller höjd avvisas vid import."
+  },
+  {
+    "number": 80,
+    "area": "Profiler",
+    "file": "ProfilePortability.py",
+    "change": "Namnförslag för importerade kopior undviker kollisioner oavsett skiftläge."
+  },
+  {
+    "number": 81,
+    "area": "Profiler",
+    "file": "ProfilePortability.py",
+    "change": "Långa profilnamn får ett giltigt första kopienamn inom 50 tecken."
+  },
+  {
+    "number": 82,
+    "area": "Profiler",
+    "file": "ProfilePortability.py",
+    "change": "Profilimport blockeras under pågående ritning eller planering."
+  },
+  {
+    "number": 83,
+    "area": "Profiler",
+    "file": "ProfilePortability.py",
+    "change": "Misslyckad sparning av aktuell profil avbryter importen utan tyst dataförlust."
+  },
+  {
+    "number": 84,
+    "area": "Precision",
+    "file": "Precision.py",
+    "change": "Precisionens profilvärden kan inte ändras genom en returnerad referens."
+  },
+  {
+    "number": 85,
+    "area": "Precision",
+    "file": "Precision.py",
+    "change": "Avvisar icke ändliga pixelkoordinater före skärmtransformering."
+  },
+  {
+    "number": 86,
+    "area": "Precision",
+    "file": "Precision.py",
+    "change": "CanvasTransform validerar storlek och skärmursprung redan vid skapandet."
+  },
+  {
+    "number": 87,
+    "area": "Precision",
+    "file": "Precision.py",
+    "change": "Felaktig steglängd använder samma reservvärde som icke ändlig steglängd."
+  },
+  {
+    "number": 88,
+    "area": "Lagring",
+    "file": "ProfileStorage.py",
+    "change": "Sanerade eller avkortade profilnycklar får hashändelse som undviker filkollisioner."
+  },
+  {
+    "number": 89,
+    "area": "Lagring",
+    "file": "ProfileStorage.py",
+    "change": "Längdmärker extra kalibreringskontext för att undvika tvetydiga radbrytningar."
+  },
+  {
+    "number": 90,
+    "area": "Lagring",
+    "file": "ProfileStorage.py",
+    "change": "Hashar kalibreringsfiler i block med begränsad minnesåtgång."
+  },
+  {
+    "number": 91,
+    "area": "Körning",
+    "file": "DeadlineScheduler.py",
+    "change": "Schemaläggaren tar en kopia av operationsmetadata vid skapandet."
+  },
+  {
+    "number": 92,
+    "area": "Körning",
+    "file": "DeadlineScheduler.py",
+    "change": "Ogiltig starttid eller budget stoppas före schemaläggning."
+  },
+  {
+    "number": 93,
+    "area": "Körning",
+    "file": "DeadlineScheduler.py",
+    "change": "Trasiga eller negativa operationskostnader kan inte tolkas som gratis arbete."
+  },
+  {
+    "number": 94,
+    "area": "Körning",
+    "file": "DeadlineScheduler.py",
+    "change": "Struktur- och betydelsevärden normaliseras till ändliga värden inom 0–1."
+  },
+  {
+    "number": 95,
+    "area": "Körning",
+    "file": "DeadlineScheduler.py",
+    "change": "Uttrycklig betydelse noll bevaras i prioriteringen."
+  },
+  {
+    "number": 96,
+    "area": "Körning",
+    "file": "DeadlineScheduler.py",
+    "change": "Icke ändliga klockvärden stoppas med ett tydligt fel."
+  },
+  {
+    "number": 97,
+    "area": "Körning",
+    "file": "DeadlineScheduler.py",
+    "change": "Avslutad tidsmätning nollställs så den inte återanvänds för nästa operation."
+  },
+  {
+    "number": 98,
+    "area": "Körning",
+    "file": "DeadlineScheduler.py",
+    "change": "Operationer utan startmätning förorenar inte inlärd ritfart."
+  },
+  {
+    "number": 99,
+    "area": "Körning",
+    "file": "DeadlineScheduler.py",
+    "change": "Skiljer tidsbrist från lågprioriterat arbete i räknaren för bortval."
+  },
+  {
+    "number": 100,
+    "area": "Körning",
+    "file": "DeadlineScheduler.py",
+    "change": "Diagnostik visar antal överhoppade operationer per orsak."
+  }
+]

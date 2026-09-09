@@ -23,19 +23,22 @@ def _clean_rgb(value):
 def active_color_order(plan):
     groups = plan.get('groups') or []
     execution_groups = plan.get('execution_groups')
-    requested = (plan.get('options') or {}).get('color_order') or list(range(len(groups)))
+    count = max(len(groups), len(execution_groups or ()))
+    requested = (plan.get('options') or {}).get('color_order') or list(range(count))
     result = []
     for raw in requested:
         try:index = int(raw)
-        except (TypeError, ValueError):continue
-        if not 0 <= index < len(groups):continue
-        has_strokes = bool(groups[index])
+        except (TypeError, ValueError, OverflowError):continue
+        if not 0 <= index < count or index in result:continue
+        has_strokes = bool(index < len(groups) and groups[index])
         has_paths = bool(execution_groups is not None and index < len(execution_groups) and execution_groups[index])
         if has_strokes or has_paths:result.append(index)
     return result
 
 
 def batch_key(plan, index):
+    if type(index) is not int or index < 0:
+        raise ValueError('Invalid color batch index.')
     colors = plan.get('colors') or ()
     selectors = plan.get('color_selectors') or ()
     rgb = _clean_rgb(colors[index] if index < len(colors) else (0, 0, 0))
@@ -67,7 +70,7 @@ def plan_fingerprint(plan):
     image = plan.get('image')
     if image is not None:
         try:
-            rgb = image.convert('RGB');h.update(f'image:{rgb.width}x{rgb.height}:'.encode());h.update(rgb.tobytes())
+            rgb = image.convert('RGBA');h.update(f'image-rgba:{rgb.width}x{rgb.height}:'.encode());h.update(rgb.tobytes())
         except Exception:h.update(repr(getattr(image, 'size', None)).encode())
     h.update(repr(tuple(plan.get('fitted') or ())).encode())
     h.update(repr(tuple(_clean_rgb(c) for c in (plan.get('colors') or ()))).encode())
@@ -78,6 +81,23 @@ def plan_fingerprint(plan):
         selector=src[index] if index < len(src) and isinstance(src[index],dict) else {}
         selectors.append((selector.get('kind'),selector.get('palette_index'),selector.get('fallback_palette_index'),_clean_rgb(selector.get('rgb') or (0,0,0))))
     h.update(repr(tuple(selectors)).encode())
+    # Same image/count is insufficient: geometry, brush, target and preludes
+    # can change while all old fingerprint fields remain identical.
+    options=plan.get('options') or {}
+    context_keys=(
+        'profile_key','profile_name','brush_px','effective_paint_tool','paint_tool',
+        'speed','precision','drawing_mode','corners','canvas_polygon','target_dpi',
+        'calibration_fingerprint','target_lock_fingerprint','edge_behavior_resolved',
+        'fill_regions','background_fill_plan','tool_actions','fill_tool_actions',
+        'fill_restore_actions','exact_color_actions','canvas_clear_actions',
+    )
+    h.update(json.dumps({k:options.get(k) for k in context_keys},sort_keys=True,
+                        separators=(',',':'),default=str).encode('utf-8'))
+    for key in ('groups','execution_groups','execution_sequence','plan_area'):
+        h.update(key.encode('ascii'))
+        encoder = json.JSONEncoder(sort_keys=True, separators=(',', ':'), default=str)
+        for chunk in encoder.iterencode(plan.get(key)):
+            h.update(chunk.encode('utf-8'))
     return h.hexdigest()
 
 
@@ -103,7 +123,10 @@ def checkpoint_after_batch(plan, completed_count, *, prelude_complete=True):
 def checkpoint_before_path(plan, color_number, path_index, path_count, *, ordered_items=None, prelude_complete=True):
     order=active_color_order(plan);color_number=int(color_number)
     if not 1 <= color_number <= len(order):raise ValueError('Invalid active color number for path checkpoint.')
-    path_count=max(0,int(path_count));path_index=max(0,min(int(path_index),path_count))
+    if type(path_count) is not int or type(path_index) is not int or not 0 <= path_index <= path_count:
+        raise ValueError("Path checkpoint index must be within the path count.")
+    if ordered_items is not None and len(ordered_items) != path_count:
+        raise ValueError("Path checkpoint count does not match ordered items.")
     color_index=order[color_number-1]
     out=_base(plan,color_number-1,prelude_complete=prelude_complete)
     out.update({
@@ -120,35 +143,43 @@ def checkpoint_after_path(plan, color_number, completed_path_index, path_count, 
                                   ordered_items=ordered_items,prelude_complete=prelude_complete)
 
 
+def _hex(value, length):
+    return isinstance(value, str) and len(value) == length and all(c in '0123456789abcdef' for c in value)
+
+
 def validate_progress(value):
-    if not isinstance(value,dict):return None
-    try:schema=int(value.get('schema',0))
-    except (TypeError,ValueError):return None
-    if schema not in SUPPORTED_SCHEMAS:return None
-    fp=value.get('plan_fingerprint')
-    try:
-        total=max(0,int(value.get('total_colors',0)));completed=max(0,min(int(value.get('completed_count',0)),total))
-    except (TypeError,ValueError):return None
-    keys=value.get('completed_keys') or []
-    if not isinstance(fp,str) or len(fp)!=64 or not isinstance(keys,list):return None
-    keys=[str(k)[:40] for k in keys[:completed]]
-    if len(keys)!=completed:return None
-    out={
-        'schema':schema,'plan_fingerprint':fp,'total_colors':total,'completed_count':completed,'completed_keys':keys,
-        'next_color':completed+1 if completed<total else 0,'prelude_complete':bool(value.get('prelude_complete')),
-        'active_color_number':0,'active_color_index':None,'active_batch_key':'','next_path_index':0,
-        'active_path_count':0,'active_items_fingerprint':'','path_level':False,
-    }
-    if schema>=2 and bool(value.get('path_level')):
-        try:
-            n=max(0,int(value.get('active_color_number',0)));idx=int(value.get('active_color_index'))
-            nxt=max(0,int(value.get('next_path_index',0)));count=max(0,int(value.get('active_path_count',0)))
-        except (TypeError,ValueError):return None
-        key=str(value.get('active_batch_key') or '')[:40];items_fp=str(value.get('active_items_fingerprint') or '')
-        if n != completed+1 or not 1 <= n <= total or nxt>count or len(key)<8 or len(items_fp)!=64:return None
-        out.update({'active_color_number':n,'active_color_index':idx,'active_batch_key':key,
-                    'next_path_index':nxt,'active_path_count':count,'active_items_fingerprint':items_fp,
-                    'next_color':n,'path_level':True})
+    if not isinstance(value, dict):
+        return None
+    schema = value.get('schema')
+    if type(schema) is not int or schema not in SUPPORTED_SCHEMAS:
+        return None
+    fp, total, completed = value.get('plan_fingerprint'), value.get('total_colors'), value.get('completed_count')
+    if not _hex(fp, 64) or type(total) is not int or type(completed) is not int or not 0 <= completed <= total:
+        return None
+    keys = value.get('completed_keys', [])
+    if not isinstance(keys, list) or len(keys) != completed or not all(_hex(k, 20) for k in keys) or len(set(keys)) != len(keys):
+        return None
+    prelude, path_level = value.get('prelude_complete', False), value.get('path_level', False)
+    if type(prelude) is not bool or type(path_level) is not bool:
+        return None
+    out = dict(schema=schema, plan_fingerprint=fp, total_colors=total, completed_count=completed,
+               completed_keys=list(keys), next_color=completed+1 if completed<total else 0,
+               prelude_complete=prelude, active_color_number=0, active_color_index=None,
+               active_batch_key='', next_path_index=0, active_path_count=0,
+               active_items_fingerprint='', path_level=False)
+    if schema >= 2 and path_level:
+        n, idx = value.get('active_color_number'), value.get('active_color_index')
+        nxt, count = value.get('next_path_index'), value.get('active_path_count')
+        if any(type(v) is not int for v in (n, idx, nxt, count)):
+            return None
+        key, items_fp = value.get('active_batch_key'), value.get('active_items_fingerprint')
+        if n != completed+1 or not 1 <= n <= total or idx < 0 or not 0 <= nxt <= count:
+            return None
+        if not _hex(key, 20) or not _hex(items_fp, 64):
+            return None
+        out.update(active_color_number=n, active_color_index=idx, active_batch_key=key,
+                   next_path_index=nxt, active_path_count=count, active_items_fingerprint=items_fp,
+                   next_color=n, path_level=True)
     return out
 
 

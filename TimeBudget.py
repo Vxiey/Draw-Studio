@@ -8,6 +8,7 @@ mouse is armed.
 from __future__ import annotations
 
 import math
+import heapq
 from typing import Sequence
 
 Point = tuple[int, int]
@@ -127,7 +128,7 @@ def resolve_target_stroke_count(value: str, custom_value: str | int | None = Non
         resolved = parse_custom_stroke_count(custom_value)
         reason = "custom"
     elif value == "Auto":
-        if time_budget_mode in ("Manual","Unlimited"):
+        if time_budget_mode in ("Manual", "Unlimited", "Unlimited / Accuracy"):
             resolved = None
             reason = "manual-auto"
         else:
@@ -142,7 +143,7 @@ def resolve_target_stroke_count(value: str, custom_value: str | int | None = Non
         "target_stroke_count_reason": reason,
         "time_budget_mode": time_budget_mode,
         "time_budget_seconds": int(effective_time_seconds),
-        "time_budget_active": time_budget_mode not in ("Manual","Unlimited"),
+        "time_budget_active": time_budget_mode not in ("Manual", "Unlimited", "Unlimited / Accuracy"),
     }
 
 
@@ -187,8 +188,7 @@ def apply_target_path_cap(groups: Sequence[Sequence[Path]], cap: int | None, *, 
         for path in paths:
             entries.append((color_index, serial, _importance_score(path, serial, prioritize_structure=prioritize_structure), path))
             serial += 1
-    entries.sort(key=lambda item: (-item[2], item[1]))
-    keep = entries[:cap]
+    keep = heapq.nsmallest(cap, entries, key=lambda item: (-item[2], item[1]))
     regrouped: list[list[Path]] = [[] for _ in normalized]
     for color_index, serial, _score, path in sorted(keep, key=lambda item: (item[0], item[1])):
         regrouped[color_index].append(path)

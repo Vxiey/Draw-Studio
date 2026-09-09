@@ -1,0 +1,39 @@
+{
+  "version": "1.0.133-rc1",
+  "base_version": "1.0.132-rc1",
+  "changes": 100,
+  "production_modules_changed": 17,
+  "tests": {
+    "command": "python3 -m unittest discover",
+    "count": 1307,
+    "seconds": 63.508,
+    "result": "PASS",
+    "new_regression_tests": 51
+  },
+  "self_test": {
+    "command": "python3 DrawBot.py --self-test",
+    "exit_code": 0
+  },
+  "source_gate": {
+    "channel": "rc",
+    "checks": [
+      "version-metadata",
+      "installer-metadata",
+      "update-repository",
+      "workflow-gates",
+      "source-one-shot-hygiene",
+      "lifecycle-soak",
+      "profile-isolation-soak"
+    ],
+    "file_version": "1.0.133",
+    "passed": true,
+    "repository": "Vxiey/Draw-Studio",
+    "schema": 1,
+    "soak_cycles": 5000,
+    "version": "1.0.133-rc1"
+  },
+  "github_updated": false,
+  "windows_input_verified": false,
+  "gpu_verified": false,
+  "exe_built": false
+}
