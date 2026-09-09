@@ -22,7 +22,7 @@ def resolve_drawing(image,options):
             drawing_mode='Smart paths (recommended)',smart_paths=True,lines=True,
             color_layers='Off',background_simplification='Off',
             background_fill='Balanced' if out.get('fill_tool_available') else 'Off',
-            fill_engine='Closed regions v2',human_mode='Off')
+            fill_engine='Closed regions v2',human_mode='Off',stroke_optimizer='Smart merge + 2-opt')
         out.setdefault('color_rendering','Perceptual match')
         out.setdefault('color_fidelity','Faithful')
         out.setdefault('custom_color_workflow','Adaptive exact (recommended)' if out.get('exact_color_available') else 'Calibrated palette')
