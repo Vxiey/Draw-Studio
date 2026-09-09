@@ -61,15 +61,23 @@ p.write_text(text.replace(old,"self.assertEqual(BUILD_CHANNEL,'beta')",1),encodi
 
 p=Path('test_step30_release_candidate_hardening_v10129rc1.py')
 text=p.read_text(encoding='utf-8')
-old='"filevers=(1,0,129,0)\\nprodvers=(1,0,129,0)\\n"'
+# The main integration helper updates dotted 1.0.130 strings, but tuple metadata
+# has no dots and therefore still needs an explicit 130 -> 131 fixture update.
+old='"filevers=(1,0,130,0)\\nprodvers=(1,0,130,0)\\n"'
 new='"filevers=(1,0,131,0)\\nprodvers=(1,0,131,0)\\n"'
 if text.count(old)!=1:raise SystemExit('release hardening version_info fixture anchor missing')
 text=text.replace(old,new,1)
-# Change only the literal release-manifest fixture channel. The intentional
-# channel='rc' mismatch test remains untouched.
-old='"channel":"rc",\n                    "files"'
-new='"channel":"beta",\n                    "files"'
+# Change only the release-manifest fixture's literal channel. Do not touch the
+# intentional rc/beta mismatch test elsewhere in this file.
+old="'file_version': '1.0.131', 'channel': 'rc', 'architecture': 'windows-x64'"
+new="'file_version': '1.0.131', 'channel': 'beta', 'architecture': 'windows-x64'"
 if text.count(old)!=1:raise SystemExit('release hardening manifest channel fixture anchor missing')
+text=text.replace(old,new,1)
+# In the stale-metadata part of the manifest test, flip away from the current
+# beta channel so it remains a real negative test after the version transition.
+old="payload['channel'] = 'beta'"
+new="payload['channel'] = 'rc'"
+if text.count(old)!=1:raise SystemExit('release hardening negative manifest channel anchor missing')
 text=text.replace(old,new,1)
 p.write_text(text,encoding='utf-8')
 
