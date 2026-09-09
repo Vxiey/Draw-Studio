@@ -280,7 +280,10 @@ def build_cost_model(options:dict[str,Any]|None)->HybridCostModel:
         floor=max(0.0,learned*.82*confidence)
 
     point_default=max(fixed*.72,path_delay*effective_ratio)
-    point=max(.001,_blend(point_default,measured_point,confidence))
+    # A typed dot/point runtime is the complete atomic operation, not an inferred
+    # coefficient. Preserve it as a hard lower bound so confidence blending can
+    # never predict a known point operation faster than its measured runtime.
+    point=max(.001,point_default,measured_point or 0.0)
 
     def operation(default: float, measured: float|None, *, minimum: float=0.0) -> float:
         expected=max(minimum,float(default)*effective_ratio)
