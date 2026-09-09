@@ -45,3 +45,9 @@ remain to be validated. Screenshot recognition and mock-backed control tests
 are not a claim of a completed real Paint drawing.
 
 Local regression result: 1,329 tests ran in 82.815 s, OK (one Windows-only parser test skipped on Linux).
+
+## Custom color palette for picture
+
+With a source image loaded, **Custom color palette for picture** uses the same bounded image-color planner as rendering to choose important Paint RGB colors. It calibrates Edit colors numeric R/G/B fields automatically if necessary, enters the required custom colors, and saves the resulting picture palette by source-image and Paint-calibration fingerprint. Standard Paint palette colors are reused instead of being re-entered. Small high-edge colors receive a bounded reserve so eyes, thin contours and isolated color fields are less likely to be lost.
+
+Exact RGB controls are saved as soon as the Edit colors dialog is calibrated. Full canvas detection is a separate gate: if the Paint canvas is clipped or must be selected manually, working RGB calibration is retained. Runtime drawing still verifies rendered color; preloading a picture palette never marks a color as verified by itself.

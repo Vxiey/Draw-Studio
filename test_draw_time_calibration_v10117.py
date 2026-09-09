@@ -32,8 +32,8 @@ class DrawTimeCalibrationV10117Tests(unittest.TestCase):
             self.assertFalse(result['recorded'])
 
     def test_release_version(self):
-        self.assertEqual(APP_VERSION,'1.0.141-rc1')
-        self.assertEqual(FILE_VERSION,'1.0.141')
+        self.assertEqual(APP_VERSION,'1.0.142-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.142')
 
 
 if __name__ == '__main__':

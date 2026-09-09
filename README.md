@@ -6,17 +6,22 @@ Draw Studio is a Windows desktop app that recreates images with mouse paths,
 color matching, outlines and fills. It uses local image processing, not AI image
 generation. Each target profile keeps its own calibration and drawing settings.
 
-## Download — v1.0.141-rc1
+## Download — v1.0.142-rc1
 
 | Download | How to use it |
 | --- | --- |
-| [Windows installer — recommended](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.141-rc1/DrawStudio-1.0.141-rc1-Windows-x64-Setup.exe) | Run Setup, then open Draw Studio. No separate Python installation needed. |
-| [Portable Windows ZIP](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.141-rc1/DrawStudio-1.0.141-rc1-Windows-x64.zip) | Extract the entire ZIP, open the DrawStudio folder and run DrawStudio.exe. Keep its supporting files together. |
-| [SHA-256 checksums](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.141-rc1/DrawStudio-1.0.141-rc1-SHA256.txt) | Verify the downloaded files. |
+| [Windows installer — recommended](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.142-rc1/DrawStudio-1.0.142-rc1-Windows-x64-Setup.exe) | Run Setup, then open Draw Studio. No separate Python installation needed. |
+| [Portable Windows ZIP](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.142-rc1/DrawStudio-1.0.142-rc1-Windows-x64.zip) | Extract the entire ZIP, open the DrawStudio folder and run DrawStudio.exe. Keep its supporting files together. |
+| [SHA-256 checksums](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.142-rc1/DrawStudio-1.0.142-rc1-SHA256.txt) | Verify the downloaded files. |
 
 [All releases](https://github.com/Vxiey/Draw-Studio/releases) ·
-[Release notes](RELEASE-NOTES-v1.0.141-rc1.md) ·
+[Release notes](RELEASE-NOTES-v1.0.142-rc1.md) ·
 [Documentation](README-INDEX.md)
+
+
+### Picture custom palette for Microsoft Paint
+
+After loading an image and calibrating Paint, use **Custom color palette for picture** to analyze the current picture, prepare its important exact RGB colors through **Edit colors**, and cache that image-specific palette. The action is Paint-only, bounded and cancel-safe. Exact RGB control calibration is saved independently from canvas detection, so a clipped Paint canvas can still use manual area selection without losing custom-color support.
 
 Requires **Windows 10/11, 64-bit**. Run Draw Studio and the target app at the same
 privilege level, normally without administrator rights.

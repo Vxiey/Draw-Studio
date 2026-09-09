@@ -1,3 +1,11 @@
+# v1.0.142-rc1
+
+- Add **Custom color palette for picture** to the Microsoft Paint color-calibration workflow.
+- Analyze the loaded image with the production DynamicColors/OKLab planner and prepare a bounded set of important exact RGB colors, including protected edge/detail colors.
+- Automatically calibrate Edit colors R/G/B controls when needed and save that calibration independently from full canvas detection.
+- Persist picture palettes by image + Paint calibration fingerprint and seed numeric selection without bypassing normal rendered-color verification.
+- Keep palette preparation explicit, cancel-safe and guaranteed to disarm native input after the UI sequence.
+
 # v1.0.141-rc1
 
 - Fix Microsoft Paint automatic Edit colors discovery/activation on modern Windows 11 Paint.
