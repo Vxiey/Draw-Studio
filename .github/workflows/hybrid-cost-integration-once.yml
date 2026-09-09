@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/hybrid-cost-integration-trigger'
       - 'hybrid_cost_integrate_once.py'
+      - 'hybrid_cost_compat_fix_once.py'
       - '.github/workflows/hybrid-cost-integration-once.yml'
 
 permissions:
@@ -31,12 +32,14 @@ jobs:
         run: |
           python hybrid_cost_integrate_once.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python hybrid_cost_compat_fix_once.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Compile and focused tests
         shell: pwsh
         run: |
           python -m py_compile HybridCostModel.py HybridBenchmark.py PixelStrokeEngine.py SubjectFocus.py RegionFillEngine.py DrawBot.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python -m unittest -v test_hybrid_cost_engine_v10131.py test_pixel_stroke_engine_v1087.py test_pixel_accuracy_engine_v1088.py test_step7_extra_fast2_v10131.py test_region_fill_v10117.py test_gartic_phone_turbo_v1065.py test_gartic_sketch_v1098.py test_stroke_delivery_v1062.py test_step9_profile_calibration_isolation_v10133.py
+          python -m unittest -v test_hybrid_cost_engine_v10131.py test_pixel_stroke_engine_v1087.py test_pixel_accuracy_engine_v1088.py test_step7_extra_fast2_v10131.py test_region_fill_v10117.py test_step25_quick_sketch_fill_contour_v10148.py test_gartic_phone_turbo_v1065.py test_gartic_sketch_v1098.py test_stroke_delivery_v1062.py test_step9_profile_calibration_isolation_v10133.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Six-case benchmark smoke
         shell: pwsh
