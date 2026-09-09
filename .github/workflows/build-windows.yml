@@ -46,7 +46,7 @@ jobs:
           python ReleasePackage.py --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: RC source release gate
+      - name: Release source gate
         shell: pwsh
         run: |
           python ReleaseCandidateHardening.py --source-gate --soak-cycles 5000
@@ -83,7 +83,7 @@ jobs:
           $setup = Get-ChildItem release/DrawStudio-*-Windows-x64-Setup.exe | Select-Object -First 1
           if (-not $setup) { throw 'Setup.exe was not produced' }
 
-          $installDir = Join-Path $env:RUNNER_TEMP 'DrawStudio-RC-install'
+          $installDir = Join-Path $env:RUNNER_TEMP 'DrawStudio-release-install'
           if (Test-Path $installDir) { Remove-Item $installDir -Recurse -Force }
 
           Write-Host "Installing $($setup.Name) to $installDir"
@@ -91,33 +91,21 @@ jobs:
             -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$installDir") `
             -Wait -PassThru
           Write-Host "Installer exit code: $($installProcess.ExitCode)"
-          if ($installProcess.ExitCode -ne 0) {
-            throw "Silent install failed: $($installProcess.ExitCode)"
-          }
+          if ($installProcess.ExitCode -ne 0) { throw "Silent install failed: $($installProcess.ExitCode)" }
 
           $exe = Join-Path $installDir 'DrawStudio.exe'
           if (-not (Test-Path $exe)) { throw "Installed DrawStudio.exe is missing at $exe" }
-
           Write-Host 'Running installed DrawStudio.exe --self-test'
-          $selfTestProcess = Start-Process -FilePath $exe `
-            -ArgumentList @('--self-test') `
-            -Wait -PassThru
+          $selfTestProcess = Start-Process -FilePath $exe -ArgumentList @('--self-test') -Wait -PassThru
           Write-Host "Installed self-test exit code: $($selfTestProcess.ExitCode)"
-          if ($selfTestProcess.ExitCode -ne 0) {
-            throw "Installed self-test failed: $($selfTestProcess.ExitCode)"
-          }
+          if ($selfTestProcess.ExitCode -ne 0) { throw "Installed self-test failed: $($selfTestProcess.ExitCode)" }
 
           $uninstall = Join-Path $installDir 'unins000.exe'
           if (-not (Test-Path $uninstall)) { throw "Uninstaller is missing at $uninstall" }
-
           Write-Host 'Running silent uninstall'
-          $uninstallProcess = Start-Process -FilePath $uninstall `
-            -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') `
-            -Wait -PassThru
+          $uninstallProcess = Start-Process -FilePath $uninstall -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
           Write-Host "Uninstaller exit code: $($uninstallProcess.ExitCode)"
-          if ($uninstallProcess.ExitCode -ne 0) {
-            throw "Silent uninstall failed: $($uninstallProcess.ExitCode)"
-          }
+          if ($uninstallProcess.ExitCode -ne 0) { throw "Silent uninstall failed: $($uninstallProcess.ExitCode)" }
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
@@ -144,4 +132,4 @@ jobs:
             release/DrawStudio-*-manifest.json `
             --prerelease `
             --title "Draw Studio $env:GITHUB_REF_NAME" `
-            --notes-file RELEASE-NOTES-v1.0.130-rc2.md
+            --notes-file RELEASE-NOTES-v1.0.131-beta.md
