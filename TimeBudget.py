@@ -171,26 +171,105 @@ def _importance_score(path: Sequence[Point], serial: int, *, prioritize_structur
     return score - serial * 1e-9
 
 
-def apply_target_path_cap(groups: Sequence[Sequence[Path]], cap: int | None, *, prioritize_structure: bool = False) -> tuple[list[list[Path]], dict]:
-    """Keep the most visually important paths while preserving colour order.
+def _aligned_phase_hints(groups, phase_hints):
+    if phase_hints is None:
+        return None
+    hints=[]
+    for index, group in enumerate(groups):
+        raw=list(phase_hints[index]) if index < len(phase_hints) else []
+        hints.append(raw if len(raw)==len(group) else [None]*len(group))
+    return hints
 
-    The returned groups are stable within each colour.  This works as a final
-    execution-layer cap for both Smart paths and Shape paths.
+
+def _prefix_counts(groups, values):
+    raw=list(values or ())
+    counts=[]
+    for index, group in enumerate(groups):
+        try:value=int(raw[index]) if index < len(raw) else 0
+        except (TypeError,ValueError,OverflowError):value=0
+        counts.append(max(0,min(len(group),value)))
+    return counts
+
+
+def apply_target_path_cap(groups: Sequence[Sequence[Path]], cap: int | None, *,
+                          prioritize_structure: bool = False, phase_hints=None,
+                          protected_prefix_counts=None) -> tuple[list[list[Path]], dict]:
+    """Keep important paths while preserving semantic execution barriers.
+
+    List-compatible execution metadata from ``ContinuousPaths.ExecutionGroups``
+    is consumed automatically. Protected prefixes are selected before ordinary
+    detail, while paths inside each class retain the established visual score.
+    Phase hints are filtered with the exact same kept path indices and returned
+    in metadata so DrawBot's existing ``path_meta.update`` keeps them aligned.
     """
-    normalized: list[list[Path]] = [[tuple(path) for path in paths if path] for paths in groups]
-    before = sum(len(paths) for paths in normalized)
+    normalized=[[tuple(path) for path in paths if path] for paths in groups]
+    inherited_hints=getattr(groups,'phase_hints',None)
+    inherited_prefixes=getattr(groups,'protected_prefix_counts',None)
+    inherited_semantic=getattr(groups,'semantic_meta',None)
+    hints=_aligned_phase_hints(normalized, phase_hints if phase_hints is not None else inherited_hints)
+    prefixes=_prefix_counts(normalized, protected_prefix_counts if protected_prefix_counts is not None else inherited_prefixes)
+    semantic=dict(inherited_semantic or {}) if isinstance(inherited_semantic,dict) else {}
+    before=sum(len(paths) for paths in normalized)
+    protected_before=sum(prefixes)
+
+    def wrap(result, result_hints, prefix_after):
+        if hints is None and not semantic and not any(prefixes):
+            return result
+        try:
+            from ContinuousPaths import ExecutionGroups
+            meta=dict(semantic)
+            if 'portrait_semantic_barrier' in meta:
+                meta['portrait_outline_paths_after_cap']=sum(prefix_after)
+            return ExecutionGroups(result, phase_hints=result_hints,
+                                   protected_prefix_counts=prefix_after, semantic_meta=meta)
+        except Exception:
+            return result
+
+    def metadata(after, prefix_after, skipped, result_hints):
+        meta={
+            'target_before_paths':before,'target_after_paths':after,
+            'target_skipped_paths':skipped,'structure_priority':bool(prioritize_structure),
+            'protected_prefix_before':protected_before,
+            'protected_prefix_after':sum(prefix_after),
+            'protected_prefix_truncated':sum(prefix_after)<protected_before,
+            'semantic_hints_preserved':hints is not None,
+        }
+        if result_hints is not None:
+            meta['path_phase_hints']=[list(group) for group in result_hints]
+        if semantic:
+            meta.update(semantic)
+            if semantic.get('portrait_semantic_barrier'):
+                meta['portrait_outline_paths_after_cap']=sum(prefix_after)
+        return meta
+
     if cap is None or before <= int(cap):
-        return normalized, {"target_before_paths": before, "target_after_paths": before, "target_skipped_paths": 0, "structure_priority": bool(prioritize_structure)}
-    cap = max(0, int(cap))
-    entries: list[tuple[int, int, float, Path]] = []
-    serial = 0
-    for color_index, paths in enumerate(normalized):
-        for path in paths:
-            entries.append((color_index, serial, _importance_score(path, serial, prioritize_structure=prioritize_structure), path))
-            serial += 1
-    keep = heapq.nsmallest(cap, entries, key=lambda item: (-item[2], item[1]))
-    regrouped: list[list[Path]] = [[] for _ in normalized]
-    for color_index, serial, _score, path in sorted(keep, key=lambda item: (item[0], item[1])):
-        regrouped[color_index].append(path)
-    after = sum(len(paths) for paths in regrouped)
-    return regrouped, {"target_before_paths": before, "target_after_paths": after, "target_skipped_paths": before - after, "structure_priority": bool(prioritize_structure)}
+        result_hints=[list(group) for group in hints] if hints is not None else None
+        result=wrap(normalized,result_hints,list(prefixes))
+        return result,metadata(before,list(prefixes),0,result_hints)
+
+    cap=max(0,int(cap));entries=[];serial=0
+    for color_index,paths in enumerate(normalized):
+        prefix=prefixes[color_index]
+        for local_index,path in enumerate(paths):
+            score=_importance_score(path,serial,prioritize_structure=prioritize_structure)
+            protected=local_index<prefix
+            entries.append((color_index,local_index,serial,score,path,protected))
+            serial+=1
+    keep=heapq.nsmallest(cap,entries,key=lambda item:(0 if item[5] else 1,-item[3],item[2]))
+    kept_serials={item[2] for item in keep}
+    regrouped=[[] for _ in normalized]
+    regrouped_hints=[[] for _ in normalized] if hints is not None else None
+    prefix_after=[0 for _ in normalized]
+    serial=0
+    for color_index,paths in enumerate(normalized):
+        for local_index,path in enumerate(paths):
+            if serial in kept_serials:
+                regrouped[color_index].append(path)
+                if regrouped_hints is not None:
+                    regrouped_hints[color_index].append(hints[color_index][local_index])
+                if local_index<prefixes[color_index]:
+                    prefix_after[color_index]+=1
+            serial+=1
+    after=sum(len(paths) for paths in regrouped)
+    result=wrap(regrouped,regrouped_hints,prefix_after)
+    return result,metadata(after,prefix_after,before-after,regrouped_hints)
