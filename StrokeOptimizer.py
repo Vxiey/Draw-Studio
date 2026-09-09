@@ -1,8 +1,12 @@
-"""Geometry-safe path optimizer for Draw Studio v1.0.37.
+"""Geometry-safe path optimizer for Draw Studio.
 
 The optimizer only changes execution order/direction and may merge paths whose
 endpoints are exactly identical. It never invents a connector across unpainted
 space, so the visible geometry is preserved.
+
+``Smart merge + 2-opt`` extends the established nearest-neighbour route with a
+small bounded 2-opt pass. The pass reverses both the route slice and each path
+inside it, preserving every drawn segment while changing only pen-up order.
 """
 from __future__ import annotations
 
@@ -12,7 +16,7 @@ from typing import Sequence
 Point = tuple[int, int]
 Path = tuple[Point, ...]
 
-STROKE_OPTIMIZER_MODES = ('Auto', 'Off', 'Travel only', 'Smart merge')
+STROKE_OPTIMIZER_MODES = ('Auto', 'Off', 'Travel only', 'Smart merge', 'Smart merge + 2-opt')
 
 
 def validate_stroke_optimizer(mode: str) -> str:
@@ -61,11 +65,7 @@ def _clean_path(path) -> Path:
 
 def _nearest_order(paths: Sequence[Path], *, speed: str = 'Balanced', allow_reverse: bool = True,
                    cancelled=lambda: False) -> list[Path]:
-    """Adaptive bounded nearest-neighbour ordering.
-
-    The window grows compared with the legacy optimizer, but remains bounded so
-    thousands of paths do not turn planning into O(n^2) work.
-    """
+    """Adaptive bounded nearest-neighbour ordering."""
     remaining = [_clean_path(p) for p in paths if p]
     if len(remaining) < 3:
         return remaining
@@ -92,16 +92,12 @@ def _nearest_order(paths: Sequence[Path], *, speed: str = 'Balanced', allow_reve
         best_i = 0
         best_reverse = False
         best_cost = float('inf')
-        # Search the next bounded slice. Removing selected items gradually slides
-        # fresh candidates into the window while preserving a weak priority bias.
         for i in range(limit):
             path = remaining[i]
             d0 = _distance(cursor, path[0])
             d1 = _distance(cursor, path[-1]) if allow_reverse and len(path) > 1 else float('inf')
             reverse = d1 < d0
             cost = d1 if reverse else d0
-            # Tiny stable priority penalty prevents distant low-priority paths from
-            # constantly leapfrogging the beginning of the candidate window.
             cost += i * 1e-5
             if cost < best_cost:
                 best_i, best_reverse, best_cost = i, reverse, cost
@@ -113,6 +109,108 @@ def _nearest_order(paths: Sequence[Path], *, speed: str = 'Balanced', allow_reve
         output.append(chosen)
         cursor = chosen[-1]
     return output
+
+
+def _two_opt_budget(speed: str, path_count: int) -> tuple[int, int]:
+    """Return a bounded pass count and local search window.
+
+    The search is intentionally small: it is a planner refinement, not a global
+    TSP solver. Very large jobs reduce their budget to protect preview/draw-start
+    latency.
+    """
+    if path_count < 4:
+        return 0, 0
+    if speed == 'Safe':
+        passes, window = 8, 12
+    elif speed == 'Fast':
+        passes, window = 24, 36
+    else:
+        passes, window = 16, 24
+    if path_count > 12000:
+        passes, window = min(passes, 6), min(window, 12)
+    elif path_count > 4000:
+        passes, window = min(passes, 10), min(window, 18)
+    elif path_count > 1200:
+        passes, window = min(passes, 12), min(window, 24)
+    return passes, window
+
+
+def _bounded_two_opt(paths: Sequence[Path], *, speed: str = 'Balanced',
+                     allow_reverse: bool = True, cancelled=lambda: False) -> tuple[list[Path], dict]:
+    """Apply bounded 2-opt without changing drawn geometry.
+
+    A 2-opt move reverses a contiguous route slice and reverses every path inside
+    that slice. Internal pen-up distances are therefore unchanged; only the two
+    route boundary edges change. The move is accepted only for a strict travel
+    reduction. If path direction may not be reversed, the pass is disabled.
+    """
+    route = [_clean_path(path) for path in paths if path]
+    before = pen_up_distance(route)
+    max_passes, window = _two_opt_budget(speed, len(route))
+    if not allow_reverse or max_passes <= 0:
+        return route, {
+            'optimizer_two_opt_iterations': 0,
+            'optimizer_two_opt_improvements': 0,
+            'optimizer_two_opt_evaluations': 0,
+            'optimizer_two_opt_before': before,
+            'optimizer_two_opt_after': before,
+        }
+
+    improvements = 0
+    evaluations = 0
+    iterations = 0
+    n = len(route)
+
+    for _ in range(max_passes):
+        if cancelled():
+            raise InterruptedError()
+        iterations += 1
+        best_gain = 1e-9
+        best_pair = None
+
+        for i in range(0, n - 1):
+            if cancelled():
+                raise InterruptedError()
+            previous = route[i - 1][-1] if i > 0 else None
+            old_first = route[i][0]
+            max_j = min(n - 1, i + window)
+            for j in range(i + 1, max_j + 1):
+                following = route[j + 1][0] if j + 1 < n else None
+                old_cost = 0.0
+                new_cost = 0.0
+                if previous is not None:
+                    old_cost += _distance(previous, old_first)
+                    new_cost += _distance(previous, route[j][-1])
+                if following is not None:
+                    old_cost += _distance(route[j][-1], following)
+                    new_cost += _distance(route[i][0], following)
+                evaluations += 1
+                gain = old_cost - new_cost
+                if gain > best_gain:
+                    best_gain = gain
+                    best_pair = (i, j)
+
+        if best_pair is None:
+            break
+        i, j = best_pair
+        route[i:j + 1] = [_reverse(path) for path in reversed(route[i:j + 1])]
+        improvements += 1
+
+    after = pen_up_distance(route)
+    # Defensive guard: floating-point/local-delta mistakes must never make the
+    # real route worse. Revert to the supplied route if the full metric regresses.
+    if after > before + 1e-9:
+        route = [_clean_path(path) for path in paths if path]
+        after = before
+        improvements = 0
+
+    return route, {
+        'optimizer_two_opt_iterations': iterations,
+        'optimizer_two_opt_improvements': improvements,
+        'optimizer_two_opt_evaluations': evaluations,
+        'optimizer_two_opt_before': before,
+        'optimizer_two_opt_after': after,
+    }
 
 
 def _merge_exact_neighbors(paths: Sequence[Path]) -> tuple[list[Path], int]:
@@ -137,7 +235,6 @@ def _merge_exact_neighbors(paths: Sequence[Path]) -> tuple[list[Path], int]:
         else:
             merged.append(path)
     return merged, joins
-
 
 
 def _merge_exact_graph(paths: Sequence[Path], cancelled=lambda: False) -> tuple[list[Path], int]:
@@ -183,6 +280,7 @@ def _merge_exact_graph(paths: Sequence[Path], cancelled=lambda: False) -> tuple[
         chains.append(tuple(chain))
     return chains, joins
 
+
 def optimize_path_group(paths: Sequence[Path], *, mode: str = 'Auto', drawing_mode: str | None = None,
                         speed: str = 'Balanced', allow_reverse: bool = True,
                         cancelled=lambda: False) -> tuple[list[Path], dict]:
@@ -190,22 +288,38 @@ def optimize_path_group(paths: Sequence[Path], *, mode: str = 'Auto', drawing_mo
     effective = resolve_stroke_optimizer(mode, drawing_mode=drawing_mode)
     original = [_clean_path(p) for p in paths if p]
     before_distance = pen_up_distance(original)
+    two_opt_meta = {
+        'optimizer_two_opt_iterations': 0,
+        'optimizer_two_opt_improvements': 0,
+        'optimizer_two_opt_evaluations': 0,
+        'optimizer_two_opt_before': before_distance,
+        'optimizer_two_opt_after': before_distance,
+    }
+
     if effective == 'Off' or len(original) < 2:
         result = original
         joins = 0
     else:
         joins = 0
         working = original
-        if effective == 'Smart merge':
-            # Join exact shared endpoints globally before travel ordering. This can
-            # collapse long segmented contours without drawing any new connector.
+        smart_merge = effective in ('Smart merge', 'Smart merge + 2-opt')
+        if smart_merge:
             working, joins = _merge_exact_graph(working, cancelled=cancelled)
-        result = _nearest_order(working, speed=speed, allow_reverse=allow_reverse, cancelled=cancelled)
-        if effective == 'Smart merge':
-            # Ordering can place independent chains with a shared endpoint next to
-            # each other; stitch that final exact boundary too.
+        result = _nearest_order(
+            working, speed=speed, allow_reverse=allow_reverse, cancelled=cancelled,
+        )
+        if smart_merge:
             result, joins2 = _merge_exact_neighbors(result)
             joins += joins2
+        if effective == 'Smart merge + 2-opt':
+            result, two_opt_meta = _bounded_two_opt(
+                result, speed=speed, allow_reverse=allow_reverse, cancelled=cancelled,
+            )
+            # A route improvement can make exact endpoints adjacent. Merge only
+            # those zero-gap boundaries; no connector is invented.
+            result, joins2 = _merge_exact_neighbors(result)
+            joins += joins2
+
     after_distance = pen_up_distance(result)
     return result, {
         'stroke_optimizer_requested': requested,
@@ -217,6 +331,7 @@ def optimize_path_group(paths: Sequence[Path], *, mode: str = 'Auto', drawing_mo
         'optimizer_pen_up_before': before_distance,
         'optimizer_pen_up_after': after_distance,
         'optimizer_travel_reduction': 0.0 if before_distance <= 0 else max(0.0, min(1.0, 1.0-after_distance/before_distance)),
+        **two_opt_meta,
     }
 
 
@@ -226,9 +341,17 @@ def optimize_execution_groups(groups: Sequence[Sequence[Path]], *, mode: str = '
     optimized = []
     rebuilt_hints = [] if phase_hints is not None else None
     totals = {
-        'optimizer_before_paths': 0, 'optimizer_after_paths': 0,
-        'optimizer_merged_paths': 0, 'optimizer_exact_joins': 0,
-        'optimizer_pen_up_before': 0.0, 'optimizer_pen_up_after': 0.0,
+        'optimizer_before_paths': 0,
+        'optimizer_after_paths': 0,
+        'optimizer_merged_paths': 0,
+        'optimizer_exact_joins': 0,
+        'optimizer_pen_up_before': 0.0,
+        'optimizer_pen_up_after': 0.0,
+        'optimizer_two_opt_iterations': 0,
+        'optimizer_two_opt_improvements': 0,
+        'optimizer_two_opt_evaluations': 0,
+        'optimizer_two_opt_before': 0.0,
+        'optimizer_two_opt_after': 0.0,
     }
     requested = mode
     effective = resolve_stroke_optimizer(mode, drawing_mode=drawing_mode)
@@ -243,30 +366,38 @@ def optimize_execution_groups(groups: Sequence[Sequence[Path]], *, mode: str = '
         if hints:
             out = []
             out_hints = []
-            # Keep phase order stable, optimize only within each contiguous phase.
+            # Keep phase order stable. 2-opt is therefore unable to cross any
+            # explicit foundation/detail/tool/semantic boundary supplied here.
             start = 0
             while start < len(group):
                 phase = hints[start]
                 end = start + 1
                 while end < len(group) and hints[end] == phase:
                     end += 1
-                part, meta = optimize_path_group(group[start:end], mode=mode, drawing_mode=drawing_mode,
-                                                 speed=speed, cancelled=cancelled)
-                out.extend(part); out_hints.extend([phase] * len(part))
+                part, meta = optimize_path_group(
+                    group[start:end], mode=mode, drawing_mode=drawing_mode,
+                    speed=speed, cancelled=cancelled,
+                )
+                out.extend(part)
+                out_hints.extend([phase] * len(part))
                 for key in totals:
                     totals[key] += meta[key]
                 start = end
-            optimized.append(out); rebuilt_hints.append(out_hints)
+            optimized.append(out)
+            rebuilt_hints.append(out_hints)
         else:
-            out, meta = optimize_path_group(group, mode=mode, drawing_mode=drawing_mode,
-                                            speed=speed, cancelled=cancelled)
+            out, meta = optimize_path_group(
+                group, mode=mode, drawing_mode=drawing_mode,
+                speed=speed, cancelled=cancelled,
+            )
             optimized.append(out)
             if rebuilt_hints is not None:
                 rebuilt_hints.append([])
             for key in totals:
                 totals[key] += meta[key]
 
-    before = totals['optimizer_pen_up_before']; after = totals['optimizer_pen_up_after']
+    before = totals['optimizer_pen_up_before']
+    after = totals['optimizer_pen_up_after']
     totals.update({
         'stroke_optimizer_requested': requested,
         'stroke_optimizer_effective': effective,
