@@ -8,6 +8,7 @@ on:
     tags:
       - 'v*'
     paths:
+      - 'Version.py'
       - '.github/release-build-trigger'
 
 permissions:
