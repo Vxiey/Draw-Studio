@@ -18,6 +18,54 @@ def _run(mask):
     return best
 
 
+def _detect_visible_canvas(white, *, toolbar_end, w, h, scale, screen_origin, ratio):
+    """Return a safe visible Paint drawing area, even when the document is clipped.
+
+    Modern Paint commonly lets the document extend beyond the client viewport.  A
+    clipped document edge is not itself unsafe: Draw Studio only needs a verified
+    blank visible drawing rectangle.  Edges that are visible still have to be
+    bounded by non-canvas pixels, while edges that coincide with the client
+    boundary are inset more aggressively before being returned.
+    """
+    top,bottom=_run(np.mean(white,axis=1)>.35)
+    if bottom-top<h*.25:
+        raise ValueError('No blank Paint canvas found. Open a blank canvas or select the drawing area manually.')
+    left,right=_run(np.mean(white[top:bottom],axis=0)>.995)
+    if right-left<w*.35:
+        raise ValueError('Paint canvas visible area is too small. Enlarge Paint or select the drawing area manually.')
+    if np.mean(white[top:bottom,left:right])<.999:
+        raise ValueError('Paint canvas is not blank or is covered. Clear it or select the area manually.')
+
+    clipped=[]
+    if left<2:clipped.append('left')
+    if right>w-2:clipped.append('right')
+    if bottom>h-2:clipped.append('bottom')
+
+    # A real visible Paint border is surrounded by non-white workspace pixels.
+    # Do not index outside the screenshot for document edges clipped by the
+    # client viewport; those are valid and are handled by the larger inset below.
+    edges=[]
+    if left>0:edges.append(white[top:bottom,left-1])
+    if right<w:edges.append(white[top:bottom,right])
+    if top>0:edges.append(white[top-1,left:right])
+    if bottom<h:edges.append(white[bottom,left:right])
+    if any(float(np.mean(edge))>.10 for edge in edges):
+        raise ValueError('Paint canvas border is ambiguous or covered. Clear Paint or select the drawing area manually.')
+
+    normal_inset=max(2,round(2*scale))
+    clipped_inset=max(normal_inset+2,round(6*scale))
+    x0=left+(clipped_inset if 'left' in clipped else normal_inset)
+    x1=right-(clipped_inset if 'right' in clipped else normal_inset)
+    y0=top+normal_inset
+    y1=bottom-(clipped_inset if 'bottom' in clipped else normal_inset)
+    if x1-x0<max(24,round(80*scale)) or y1-y0<max(24,round(80*scale)):
+        raise ValueError('Paint canvas safe visible area is too small. Enlarge Paint or select the drawing area manually.')
+
+    box=(round(x0/ratio)+screen_origin[0],round(y0/ratio)+screen_origin[1],
+         round(x1/ratio)+screen_origin[0],round(y1/ratio)+screen_origin[1])
+    return box,tuple(clipped)
+
+
 def detect_setup(image,screen_origin=(0,0),cancelled=lambda:False):
     if cancelled():raise InterruptedError()
     # Bound detection arrays and component scans independently of screen DPI.
@@ -69,25 +117,16 @@ def detect_setup(image,screen_origin=(0,0),cancelled=lambda:False):
         if difference>32:raise ValueError(f'Paint {name} icon could not be verified. Close menus or use manual tool calibration.')
         tools[name]=(round(cx/ratio)+screen_origin[0],round(cy/ratio)+screen_origin[1])
     if cancelled():raise InterruptedError()
-    # Only a blank, fully visible rectangular canvas is accepted. Existing artwork
-    # and a canvas scrolled offscreen require manual area selection.
     a=np.asarray(work);white=np.min(a,axis=2)>=253
     toolbar_end=min(h,round(anchor_y+100*scale));white[:toolbar_end]=False
-    top,bottom=_run(np.mean(white,axis=1)>.35)
-    if bottom-top<h*.25:raise ValueError('No blank Paint canvas found. Open a blank canvas and make it fully visible.')
-    left,right=_run(np.mean(white[top:bottom],axis=0)>.995)
-    if right-left<w*.35 or left<2 or right>w-2 or bottom>h-2:
-        raise ValueError('Paint canvas is clipped or too small. Fit the whole blank canvas into the window.')
-    if np.mean(white[top:bottom,left:right])<.999:
-        raise ValueError('Paint canvas is not blank or is covered. Clear it or select the area manually.')
-    edges=(white[top:bottom,left-1],white[top:bottom,right],white[top-1,left:right],white[bottom,left:right])
-    if any(float(np.mean(edge))>.10 for edge in edges):
-        raise ValueError('Paint canvas border is not fully visible. Fit the whole blank canvas and try again.')
-    # Stay inside the border/resize handles; coordinates are physical screen pixels.
-    box=(round((left+2)/ratio)+screen_origin[0],round((top+2)/ratio)+screen_origin[1],
-         round((right-2)/ratio)+screen_origin[0],round((bottom-2)/ratio)+screen_origin[1])
+    box,clipped_edges=_detect_visible_canvas(white,toolbar_end=toolbar_end,w=w,h=h,scale=scale,
+                                              screen_origin=screen_origin,ratio=ratio)
+    clipped=bool(clipped_edges)
     return {'tools':tools,'positions':positions,'rgbs':rgbs,'canvas_box':box,'palette_count':len(rgbs),
-            'confidence':.90,'method':'modern-paint-grid-and-icons-v2'}
+            'confidence':.87 if clipped else .90,
+            'method':'modern-paint-grid-and-icons-v3',
+            'canvas_visibility':'viewport-clipped' if clipped else 'full',
+            'canvas_clipped_edges':list(clipped_edges)}
 
 
 def save_setup(result,meta,palette_path,tool_path=None):
