@@ -17,7 +17,7 @@ def segments(paths):
 
 class StrokeOptimizerV1037Tests(unittest.TestCase):
     def test_modes_and_auto_resolution(self):
-        self.assertEqual(STROKE_OPTIMIZER_MODES,('Auto','Off','Travel only','Smart merge'))
+        self.assertEqual(STROKE_OPTIMIZER_MODES,('Auto','Off','Travel only','Smart merge','Smart merge + 2-opt'))
         self.assertEqual(resolve_stroke_optimizer('Auto',drawing_mode='Shape paths'),'Smart merge')
         self.assertEqual(resolve_stroke_optimizer('Auto',drawing_mode='Smart paths (recommended)'),'Smart merge')
         self.assertEqual(resolve_stroke_optimizer('Auto',drawing_mode='Lines (fastest)'),'Travel only')
