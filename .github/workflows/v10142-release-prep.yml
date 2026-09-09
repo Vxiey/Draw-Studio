@@ -1,0 +1,119 @@
+name: Prepare v1.0.142-rc1 release
+
+on:
+  push:
+    branches:
+      - v1.0.142-rc1-release
+    paths:
+      - '.github/workflows/v10142-release-prep.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Synchronize v1.0.142-rc1 release metadata
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          OLD_APP='1.0.141-rc1'
+          OLD_FILE='1.0.141'
+          NEW_APP='1.0.142-rc1'
+          NEW_FILE='1.0.142'
+
+          def write(path, text):
+              Path(path).write_text(text, encoding='utf-8')
+
+          version=Path('Version.py').read_text(encoding='utf-8')
+          version=version.replace("APP_VERSION = '1.0.141-rc1'", "APP_VERSION = '1.0.142-rc1'")
+          version=version.replace("FILE_VERSION = '1.0.141'", "FILE_VERSION = '1.0.142'")
+          if NEW_APP not in version or NEW_FILE not in version:
+              raise SystemExit('Version.py synchronization failed')
+          write('Version.py',version)
+
+          info=Path('version_info.txt').read_text(encoding='utf-8').replace(OLD_FILE,NEW_FILE)
+          write('version_info.txt',info)
+
+          iss=Path('installer/DrawStudio.iss').read_text(encoding='utf-8')
+          iss=iss.replace(f'#define MyAppVersion "{OLD_APP}"',f'#define MyAppVersion "{NEW_APP}"')
+          iss=re.sub(r'(?m)^VersionInfoVersion=\d+\.\d+\.\d+\.\d+$','VersionInfoVersion=1.0.142.0',iss)
+          if f'#define MyAppVersion "{NEW_APP}"' not in iss or 'VersionInfoVersion=1.0.142.0' not in iss:
+              raise SystemExit('installer metadata synchronization failed')
+          write('installer/DrawStudio.iss',iss)
+
+          changed_tests=0
+          for path in sorted(Path('.').glob('test_*.py')):
+              text=path.read_text(encoding='utf-8')
+              updated=text.replace(OLD_APP,NEW_APP).replace(OLD_FILE,NEW_FILE)
+              if updated != text:
+                  path.write_text(updated,encoding='utf-8');changed_tests+=1
+          print('version-pinned tests synchronized:',changed_tests)
+
+          readme=Path('README.md').read_text(encoding='utf-8')
+          readme=readme.replace('## Download — v1.0.141-rc1','## Download — v1.0.142-rc1')
+          readme=readme.replace('/v1.0.141-rc1/DrawStudio-1.0.141-rc1-','/v1.0.142-rc1/DrawStudio-1.0.142-rc1-')
+          readme=readme.replace('[Release notes](RELEASE-NOTES-v1.0.141-rc1.md)','[Release notes](RELEASE-NOTES-v1.0.142-rc1.md)')
+          paint_note='''\n### Picture custom palette for Microsoft Paint\n\nAfter loading an image and calibrating Paint, use **Custom color palette for picture** to analyze the current picture, prepare its important exact RGB colors through **Edit colors**, and cache that image-specific palette. The action is Paint-only, bounded and cancel-safe. Exact RGB control calibration is saved independently from canvas detection, so a clipped Paint canvas can still use manual area selection without losing custom-color support.\n'''
+          if '### Picture custom palette for Microsoft Paint' not in readme:
+              marker='Requires **Windows 10/11, 64-bit**.'
+              if marker not in readme: raise SystemExit('README insertion marker missing')
+              readme=readme.replace(marker,paint_note+'\n'+marker,1)
+          write('README.md',readme)
+
+          idx=Path('README-INDEX.md').read_text(encoding='utf-8')
+          idx=idx.replace('[Current release: v1.0.141-rc1](RELEASE-NOTES-v1.0.141-rc1.md)',
+                          '[Current release: v1.0.142-rc1](RELEASE-NOTES-v1.0.142-rc1.md)')
+          write('README-INDEX.md',idx)
+
+          history_entry='''# v1.0.142-rc1\n\n- Add **Custom color palette for picture** to the Microsoft Paint color-calibration workflow.\n- Analyze the loaded image with the production DynamicColors/OKLab planner and prepare a bounded set of important exact RGB colors, including protected edge/detail colors.\n- Automatically calibrate Edit colors R/G/B controls when needed and save that calibration independently from full canvas detection.\n- Persist picture palettes by image + Paint calibration fingerprint and seed numeric selection without bypassing normal rendered-color verification.\n- Keep palette preparation explicit, cancel-safe and guaranteed to disarm native input after the UI sequence.\n\n'''
+          for name in ('VERSION-HISTORY.md','docs/VERSION-HISTORY.md'):
+              text=Path(name).read_text(encoding='utf-8')
+              if not text.startswith('# v1.0.142-rc1'):
+                  text=history_entry+text
+              write(name,text)
+
+          updates=Path('docs/IN-APP-UPDATES.md').read_text(encoding='utf-8')
+          old='The first updater-enabled release was `1.0.133-rc2`; `1.0.141-rc1` strengthens installed-build in-place update and automatic relaunch behavior.'
+          new='The first updater-enabled release was `1.0.133-rc2`; `1.0.140-rc1` strengthened installed-build in-place update and automatic relaunch behavior. `1.0.142-rc1` is delivered through the same verified update chain.'
+          if old in updates: updates=updates.replace(old,new)
+          write('docs/IN-APP-UPDATES.md',updates)
+
+          paintdoc=Path('docs/PAINT-AUTOMATIC-PREPARATION.md').read_text(encoding='utf-8')
+          section='''\n## Custom color palette for picture\n\nWith a source image loaded, **Custom color palette for picture** uses the same bounded image-color planner as rendering to choose important Paint RGB colors. It calibrates Edit colors numeric R/G/B fields automatically if necessary, enters the required custom colors, and saves the resulting picture palette by source-image and Paint-calibration fingerprint. Standard Paint palette colors are reused instead of being re-entered. Small high-edge colors receive a bounded reserve so eyes, thin contours and isolated color fields are less likely to be lost.\n\nExact RGB controls are saved as soon as the Edit colors dialog is calibrated. Full canvas detection is a separate gate: if the Paint canvas is clipped or must be selected manually, working RGB calibration is retained. Runtime drawing still verifies rendered color; preloading a picture palette never marks a color as verified by itself.\n'''
+          if '## Custom color palette for picture' not in paintdoc:
+              paintdoc += section
+          write('docs/PAINT-AUTOMATIC-PREPARATION.md',paintdoc)
+
+          notes='''# Draw Studio 1.0.142-rc1\n\n## Microsoft Paint — picture custom palette\n\n- Adds **Custom color palette for picture** directly to the Paint color-calibration area.\n- Requires a loaded image and analyzes it with Draw Studio's production DynamicColors/OKLab color planner.\n- Prepares only a bounded set of useful exact RGB colors; normal Paint palette colors are reused when they are already sufficient.\n- Reserves a small bounded detail-color budget for high-edge pixels so eyes, thin contours and small isolated color fields can survive palette reduction.\n- Automatically opens Paint **Edit colors**, enters Red/Green/Blue values, confirms each custom color, and saves the picture palette for the current image/calibration.\n- If numeric RGB controls are not calibrated yet, the feature calibrates them first without requiring full automatic canvas detection.\n- Exact RGB calibration is now saved before canvas detection, so a clipped/zoomed Paint canvas can fall back to manual drawing-area selection without losing custom-color support.\n- Prepared picture colors only seed the numeric selection method. The normal first rendered-stroke verification remains mandatory before a color is trusted.\n- Native mouse input is bounded, cancellation-aware, and always disarmed in a `finally` cleanup path.\n\n## Regression coverage\n\n- Image fingerprint and image/calibration cache isolation.\n- Bounded production palette generation and cache reuse.\n- Exact R/G/B typing order.\n- Cancellation, dialog escape and input disarm.\n- Paint-only UI scope and no-image guard.\n- Full Windows/Linux CI and DrawBot Windows self-test remain mandatory before release.\n'''
+          write('RELEASE-NOTES-v1.0.142-rc1.md',notes)
+
+          # Release source must no longer expose the previous version as a current
+          # pin outside historical notes/changelog entries.
+          assert "APP_VERSION = '1.0.142-rc1'" in Path('Version.py').read_text(encoding='utf-8')
+          assert "FILE_VERSION = '1.0.142'" in Path('Version.py').read_text(encoding='utf-8')
+          assert 'VersionInfoVersion=1.0.142.0' in Path('installer/DrawStudio.iss').read_text(encoding='utf-8')
+          assert Path('RELEASE-NOTES-v1.0.142-rc1.md').is_file()
+
+      - name: Validate release source before commit
+        run: |
+          python -m py_compile PictureCustomPalette.py DrawBot.py StudioUI.py
+          python -m unittest -v test_picture_custom_palette_v10142 test_paint_preparation test_update_center_v1059 test_installer_updates test_release_v100 test_version_history_v1068
+          python ReleasePackage.py --check
+      - name: Commit synchronized release source
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A -- ':!.github/workflows/**'
+          if git diff --cached --quiet; then
+            echo 'No release changes to commit.'
+          else
+            git commit -m 'Release v1.0.142-rc1 picture custom palette'
+            git push origin HEAD:v1.0.142-rc1-release
+          fi
