@@ -1,3 +1,8 @@
+# v1.0.141-rc1
+
+- Fix Microsoft Paint automatic Edit colors discovery/activation on modern Windows 11 Paint.
+- Automatically calibrate numeric RGB fields so image colors can be typed, verified and cached persistently.
+
 v1.0.131-beta Sketch 2.0 + Auto Fill improves Paint sketch structure with color-boundary edges and adds a strict Sketch -> Color Fill -> Re-outline renderer that reuses calibrated custom RGB while leaving browser/Gartic execution unchanged.
 v1.0.130-rc2 Release Candidate Hardening II removes leftover one-shot integration files, adds permanent source-tree hygiene enforcement, adopts version-only current release-note naming, and strengthens release-manifest version/channel/hash/size validation while keeping the RC feature freeze.
 

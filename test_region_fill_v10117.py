@@ -47,8 +47,8 @@ class RegionFillEngineV10117Tests(unittest.TestCase):
         self.assertTrue(meta['pixel_accurate_protected'])
 
     def test_release_version(self):
-        self.assertEqual(APP_VERSION,'1.0.140-rc1')
-        self.assertEqual(FILE_VERSION,'1.0.140')
+        self.assertEqual(APP_VERSION,'1.0.141-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.141')
 
 
 if __name__ == '__main__':
