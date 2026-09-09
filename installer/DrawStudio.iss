@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.133-rc3"
+#define MyAppVersion "1.0.140-rc1"
 #endif
 
 [Setup]
@@ -10,7 +10,7 @@ SignedUninstaller=yes
 AppId={{6A4AD303-4F16-4ED7-A9AF-5B912352D83E}
 AppName=Draw Studio
 AppVersion={#MyAppVersion}
-VersionInfoVersion=1.0.133.0
+VersionInfoVersion=1.0.140.0
 AppPublisher=Draw Studio
 DefaultDirName={localappdata}\Programs\Draw Studio
 DefaultGroupName=Draw Studio
@@ -41,4 +41,25 @@ Name: "{autodesktop}\Draw Studio"; Filename: "{app}\DrawStudio.exe"; Tasks: desk
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 
 [Run]
-Filename: "{app}\DrawStudio.exe"; Description: "Launch Draw Studio"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\DrawStudio.exe"; Description: "Launch Draw Studio"; Flags: nowait postinstall; Check: ShouldLaunchDrawStudio
+
+[Code]
+function HasCommandLineParam(const Value: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+  begin
+    if CompareText(ParamStr(I), Value) = 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+end;
+
+function ShouldLaunchDrawStudio(): Boolean;
+begin
+  Result := (not WizardSilent) or HasCommandLineParam('/RELAUNCHDRAWSTUDIO');
+end;

@@ -1,3 +1,10 @@
+# v1.0.140-rc1
+
+- Merge the v1.0.134–v1.0.140 drawing-engine correctness, travel, semantic-barrier and Cost Model v2 work.
+- Installed Windows builds can download a verified GitHub Release installer, update the same installation in place, and relaunch Draw Studio automatically.
+- Version bumps on `main` trigger the verified Windows release workflow so Update Center can discover newly published installers.
+- Keep SHA-256, size, redirect-host and PE-header verification before any downloaded installer is started.
+
 # v1.0.133-rc3
 
 - Gartic Phone auto calibration checks visible edges before planning and conservatively shrinks detected paper bounds.
