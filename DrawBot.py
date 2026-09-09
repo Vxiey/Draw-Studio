@@ -5842,15 +5842,19 @@ class DrawBotApp:
                 meta=probe_handle_isolated(int(candidate['handle']))
                 exact_controls=prepare_controls(int(candidate['handle']),cancelled=self.stop.is_set)
                 rect=tuple(meta['client_rect'])
+                # Exact RGB controls are independent from canvas detection. Save
+                # them as soon as Edit colors has been identified, so a clipped
+                # Paint canvas can fall back to manual area selection without
+                # losing working custom-color calibration.
+                from ExactColorTools import save as save_exact_colors
+                from CalibrationAnchors import make_anchor
+                save_exact_colors('microsoft-paint',exact_controls,anchor=make_anchor(rect))
                 shot=ImageGrab.grab(bbox=rect,all_screens=True)
                 if shot.size!=(rect[2]-rect[0],rect[3]-rect[1]):raise ValueError('Paint window changed size. Try again.')
                 result=detect_setup(shot,screen_origin=rect[:2],cancelled=self.stop.is_set)
                 if self.stop.is_set():raise InterruptedError()
                 fresh=probe_handle_isolated(int(candidate['handle']))
                 if tuple(fresh['client_rect'])!=rect:raise ValueError('Paint moved during calibration. Try again.')
-                from ExactColorTools import save as save_exact_colors
-                from CalibrationAnchors import make_anchor
-                save_exact_colors('microsoft-paint',exact_controls,anchor=make_anchor(rect))
                 result=save_setup(result,meta,palette_path)
                 result['exact_colors_ready']=True
                 result['start_request']=request

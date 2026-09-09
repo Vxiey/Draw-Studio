@@ -370,27 +370,13 @@ def start_picture_custom_palette(app) -> bool:
     max_colors = _resolve_max_colors(app)
     fidelity = getattr(getattr(app, "color_fidelity", None), "get", lambda: "Faithful")()
     palette_path = getattr(app, "calibration_path", None)
-    try:
-        from ProfileStorage import calibration_context_fingerprint
-        calibration_fp = calibration_context_fingerprint(
-            PROFILE_KEY, workflow="picture-custom-palette", palette_path=palette_path,
-            extras=(f"colors:{max_colors}", f"fidelity:{fidelity}"),
-        )
-    except Exception:
-        calibration_fp = ""
 
     def work():
         if getattr(app, "stop", None) is not None and app.stop.is_set():
             raise InterruptedError("Picture custom palette cancelled.")
-        from Colors import allColors
-        fallback = tuple(tuple(c.RGB) for c in allColors)
-        palette = build_picture_palette(
-            source, fallback, max_colors=max_colors, fidelity=fidelity,
-            calibration_fingerprint=calibration_fp,
-            cancelled=app.stop.is_set,
-        )
-        if id(getattr(app, "original", None)) != source_id:
-            raise InterruptedError("Source image changed while the picture palette was being prepared.")
+        # Resolve Paint and its RGB controls before fingerprinting the palette.
+        # If this is the first run, the exact-color calibration file is created
+        # below; the resulting fingerprint therefore stays reusable on later runs.
         handle, rect = _resolve_target(app, app.stop.is_set)
         from ScreenGuard import WindowMonitor
         monitor = WindowMonitor()
@@ -412,6 +398,22 @@ def start_picture_custom_palette(app) -> bool:
             meta = probe_handle_isolated(handle)
             save_exact_colors(PROFILE_KEY, exact_controls, anchor=make_anchor(tuple(meta["client_rect"])))
         controls = resolved_controls(PROFILE_KEY, tuple(meta["client_rect"]))
+        try:
+            from ProfileStorage import calibration_context_fingerprint
+            calibration_fp = calibration_context_fingerprint(
+                PROFILE_KEY, workflow="picture-custom-palette", palette_path=palette_path,
+                extras=(f"colors:{max_colors}", f"fidelity:{fidelity}"),
+            )
+        except Exception:
+            calibration_fp = ""
+        from Colors import allColors
+        fallback = tuple(tuple(c.RGB) for c in allColors)
+        palette = build_picture_palette(
+            source, fallback, max_colors=max_colors, fidelity=fidelity,
+            calibration_fingerprint=calibration_fp, cancelled=app.stop.is_set,
+        )
+        if id(getattr(app, "original", None)) != source_id:
+            raise InterruptedError("Source image changed while the picture palette was being prepared.")
         custom = tuple(palette.custom_colors)
         if not custom:
             app.picture_custom_palette_state = dict(palette.as_dict(), image_id=source_id, prepared_count=0)
