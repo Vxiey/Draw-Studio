@@ -108,7 +108,6 @@ def _axis_candidate(group, edge_n, rows, points, cancelled):
         if y0 == y1:
             horizontal.append((x0, y0, x1, y1))
         elif x0 == x1:
-            # Reuse the proven horizontal overlap planner by transposing axes.
             vertical.append((y0, x0, y1, x1))
         else:
             other.append(_segment_path((x0, y0, x1, y1)))
@@ -129,12 +128,16 @@ def _intrinsic_cost(paths, model) -> float:
     return sum(float(model.path_seconds(path)) for path in paths if path)
 
 
-def _ordered_group_cost(paths, options, model, cancelled) -> tuple[float, dict[str, Any]]:
-    """Model one color group after the same current StrokeOptimizer ordering.
+def _sequence_cost(model, paths) -> float:
+    """Compatibility-safe sequence cost for real models and lightweight test doubles."""
+    fn=getattr(model, 'paths_seconds', None)
+    if callable(fn):
+        return float(fn(paths))
+    return sum(float(model.path_seconds(path)) for path in paths if path)
 
-    The returned ordering is used only for evaluation. The caller retains the
-    original candidate and DrawBot applies the real optimizer exactly once later.
-    """
+
+def _ordered_group_cost(paths, options, model, cancelled) -> tuple[float, dict[str, Any]]:
+    """Model one color group after the same current StrokeOptimizer ordering."""
     from SpeedOptimizer import normalize_speed
     from StrokeOptimizer import optimize_path_group
 
@@ -149,17 +152,11 @@ def _ordered_group_cost(paths, options, model, cancelled) -> tuple[float, dict[s
     except ValueError:
         ordered = [tuple(path) for path in paths if path]
         meta = {'stroke_optimizer_effective': 'Off', 'optimizer_error': 'invalid setting'}
-    return float(model.paths_seconds(ordered)), dict(meta)
+    return _sequence_cost(model, ordered), dict(meta)
 
 
 def _downstream_plan_cost(groups, options, model, cancelled) -> tuple[float, dict[str, Any]]:
-    """Evaluate the complete proposal after the real downstream cap + ordering.
-
-    Travel is modeled inside each color group. A color-selection operation breaks
-    the geometry cursor between groups in real drawing, so cross-color Euclidean
-    travel is deliberately not invented here; the calibrated color-change cost is
-    added once per non-empty group instead.
-    """
+    """Evaluate the complete proposal after the real downstream cap + ordering."""
     from SpeedOptimizer import normalize_speed
     from StrokeOptimizer import optimize_execution_groups
     from TimeBudget import apply_target_path_cap
@@ -176,14 +173,14 @@ def _downstream_plan_cost(groups, options, model, cancelled) -> tuple[float, dic
             mode=options.get('stroke_optimizer', 'Auto'),
             drawing_mode=options.get('drawing_mode'),
             speed=normalize_speed(options.get('speed', 'Balanced')),
-            phase_hints=None,
+            phase_hints=getattr(capped, 'phase_hints', None),
             cancelled=cancelled,
         )
     except ValueError:
         ordered = [[tuple(path) for path in group if path] for group in capped]
         optimizer_meta = {'stroke_optimizer_effective': 'Off', 'optimizer_error': 'invalid setting'}
 
-    path_seconds = sum(float(model.paths_seconds(group)) for group in ordered)
+    path_seconds = sum(_sequence_cost(model, group) for group in ordered)
     color_groups = sum(1 for group in ordered if group)
     color_seconds = color_groups * float(getattr(model, 'color_change_seconds', 0.0) or 0.0)
     total = path_seconds + color_seconds
@@ -194,22 +191,17 @@ def _downstream_plan_cost(groups, options, model, cancelled) -> tuple[float, dic
         'nonempty_color_groups': color_groups,
         'target_cap_applied': bool(cap_meta.get('target_skipped_paths')),
         'target_skipped_paths': int(cap_meta.get('target_skipped_paths', 0) or 0),
+        'protected_prefix_before': int(cap_meta.get('protected_prefix_before', 0) or 0),
+        'protected_prefix_after': int(cap_meta.get('protected_prefix_after', 0) or 0),
+        'semantic_hints_preserved': bool(cap_meta.get('semantic_hints_preserved')),
         'stroke_optimizer_effective': optimizer_meta.get('stroke_optimizer_effective', 'Off'),
     }
     return total, meta
 
 
 def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lambda: False):
-    """Choose a bounded lossless path plan using downstream-aware cost.
-
-    Baseline is always built first. Per-color proposals may use longer overlap-safe
-    horizontal/vertical paths, but they may never increase path count. When travel
-    awareness is enabled, each proposal is scored after the same current
-    StrokeOptimizer used by DrawBot. The completed proposal must then beat or tie
-    baseline after the normal target-path cap and StrokeOptimizer; otherwise the
-    complete baseline is returned.
-    """
-    from ContinuousPaths import build_execution_paths
+    """Choose a bounded lossless path plan using downstream-aware cost."""
+    from ContinuousPaths import build_execution_paths, execution_groups_with_portrait_semantics
     from HybridCostModel import build_cost_model
 
     rows, points, policy = path_limits(options)
@@ -259,8 +251,6 @@ def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lam
             candidate, h_runs, v_runs, v_paths = _axis_candidate(
                 group, edge_n, candidate_rows, candidate_points, cancelled,
             )
-            # Boundary safety invariant: never use a candidate with more mouse
-            # press/release paths than the original baseline for this color.
             if len(candidate) > len(original):
                 continue
             candidate_intrinsic = _intrinsic_cost(candidate, model)
@@ -295,12 +285,13 @@ def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lam
     proposal_downstream_meta: dict[str, Any] = {}
     downstream_accepted = True
 
+    semantic_proposed = execution_groups_with_portrait_semantics(proposed, portrait_edge_count)
     if travel_aware:
         baseline_downstream, baseline_downstream_meta = _downstream_plan_cost(
             baseline, options, model, cancelled,
         )
         proposal_downstream, proposal_downstream_meta = _downstream_plan_cost(
-            proposed, options, model, cancelled,
+            semantic_proposed, options, model, cancelled,
         )
         no_more_paths = sum(map(len, proposed)) <= sum(map(len, baseline))
         downstream_accepted = bool(
@@ -313,7 +304,7 @@ def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lam
         intrinsic_after = intrinsic_before
         local_ordered_after = local_ordered_before
     else:
-        result = proposed
+        result = semantic_proposed
         intrinsic_after = intrinsic_proposed
         local_ordered_after = local_ordered_proposed
 
@@ -344,7 +335,7 @@ def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lam
 
     ordered_before = baseline_downstream if baseline_downstream is not None else local_ordered_before
     if downstream_accepted:
-        ordered_after = proposal_downstream if proposal_downstream is not None else local_ordered_after
+        ordered_after = proposal_downstream if proposal_downstream is not None else local_ordered_proposed
     else:
         ordered_after = ordered_before
 
@@ -367,6 +358,18 @@ def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lam
         downstream_target_cap_applied=bool(
             baseline_downstream_meta.get('target_cap_applied')
             or proposal_downstream_meta.get('target_cap_applied')
+        ),
+        downstream_semantic_hints_preserved=bool(
+            baseline_downstream_meta.get('semantic_hints_preserved')
+            or proposal_downstream_meta.get('semantic_hints_preserved')
+        ),
+        downstream_protected_prefix_before=max(
+            int(baseline_downstream_meta.get('protected_prefix_before',0) or 0),
+            int(proposal_downstream_meta.get('protected_prefix_before',0) or 0),
+        ),
+        downstream_protected_prefix_after=max(
+            int(baseline_downstream_meta.get('protected_prefix_after',0) or 0),
+            int(proposal_downstream_meta.get('protected_prefix_after',0) or 0),
         ),
         downstream_optimizer_effective=(
             proposal_downstream_meta.get('stroke_optimizer_effective')
