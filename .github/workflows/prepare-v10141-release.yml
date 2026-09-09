@@ -1,0 +1,105 @@
+name: Prepare v1.0.141 release
+
+on:
+  push:
+    branches:
+      - v1.0.141-rc1-release
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Synchronize release metadata and tests
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          root=Path('.')
+          old_app='1.0.140-rc1'
+          new_app='1.0.141-rc1'
+          old_file='1.0.140'
+          new_file='1.0.141'
+
+          # Version assertions in regression tests intentionally track the current
+          # release. Keep them synchronized mechanically rather than editing dozens
+          # of files by hand for every release.
+          for path in root.glob('test_*.py'):
+              text=path.read_text(encoding='utf-8')
+              updated=text.replace(old_app,new_app).replace(old_file,new_file)
+              if updated!=text:
+                  path.write_text(updated,encoding='utf-8')
+
+          current_files=[
+              Path('Version.py'),
+              Path('installer/DrawStudio.iss'),
+              Path('README.md'),
+              Path('README-INDEX.md'),
+              Path('docs/IN-APP-UPDATES.md'),
+          ]
+          for path in current_files:
+              if not path.exists():
+                  continue
+              text=path.read_text(encoding='utf-8')
+              updated=text.replace(old_app,new_app)
+              if path.name=='Version.py':
+                  updated=updated.replace(old_file,new_file)
+              path.write_text(updated,encoding='utf-8')
+
+          notes=Path(f'RELEASE-NOTES-v{new_app}.md')
+          notes.write_text(f'''# Draw Studio {new_app}\n\n## Microsoft Paint automatic custom colors\n\n- Fixes Auto Paint preparation on current Windows 11 Paint/XAML controls that expose a named UI control but no `InvokePattern`/`SelectionItemPattern`.\n- `Edit colors` is now discovered across current English/Swedish aliases and Button/MenuItem/Custom UI Automation variants.\n- Control activation uses bounded fallbacks: Invoke, SelectionItem, Toggle, ExpandCollapse, LegacyIAccessible, then focused Enter on the already re-resolved UI element. No guessed canvas coordinate is clicked.\n- Auto preparation captures and saves the `Edit colors` opener plus numeric Red/Green/Blue fields and OK button for the Microsoft Paint profile.\n- During rendering Draw Studio can open `Edit colors`, type the image-derived RGB values automatically, confirm them, verify the rendered color, and persist verified RGB entries in the existing profile-isolated color cache.\n- Reused verified colors remain bound to the calibration fingerprint/workflow so stale Paint layouts cannot silently reuse old coordinates.\n\n## Regression coverage\n\n- Adds current English `Edit colors` automatic-calibration coverage.\n- Adds regression coverage for Paint controls without Invoke/SelectionItem support.\n- Full Windows/Linux CI and DrawBot Windows self-test remain required before merge/release.\n''',encoding='utf-8')
+
+          for history in (Path('VERSION-HISTORY.md'),Path('docs/VERSION-HISTORY.md')):
+              if history.exists():
+                  text=history.read_text(encoding='utf-8')
+                  heading=f'# v{new_app}'
+                  if heading not in text:
+                      entry=(f'{heading}\n\n'
+                             '- Fix Microsoft Paint automatic Edit colors discovery/activation on modern Windows 11 Paint.\n'
+                             '- Automatically calibrate numeric RGB fields so image colors can be typed, verified and cached persistently.\n\n')
+                      history.write_text(entry+text,encoding='utf-8')
+
+          # The old release notes/history remain historical and are intentionally
+          # not rewritten. Report any remaining current-version pins elsewhere.
+          allowed={
+              Path(f'RELEASE-NOTES-v{old_app}.md'),
+              Path('VERSION-HISTORY.md'),
+              Path('docs/VERSION-HISTORY.md'),
+          }
+          remaining=[]
+          for path in root.rglob('*'):
+              if not path.is_file() or path in allowed or '.git' in path.parts:
+                  continue
+              if path.suffix.lower() not in {'.py','.md','.txt','.iss','.yml','.yaml','.json'}:
+                  continue
+              try:text=path.read_text(encoding='utf-8')
+              except UnicodeDecodeError:continue
+              if old_app in text:
+                  remaining.append(str(path))
+          if remaining:
+              raise SystemExit('Unsynchronized current version references: '+', '.join(remaining))
+          PY
+      - name: Validate release source package
+        run: python ReleasePackage.py --check
+      - name: Commit prepared release metadata
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Version.py installer/DrawStudio.iss README.md README-INDEX.md docs/IN-APP-UPDATES.md VERSION-HISTORY.md docs/VERSION-HISTORY.md RELEASE-NOTES-v1.0.141-rc1.md test_*.py
+          if git diff --cached --quiet; then
+            echo "No release metadata changes required."
+            exit 0
+          fi
+          git commit -m "Prepare Draw Studio v1.0.141-rc1 release"
+          git push origin HEAD:v1.0.141-rc1-release
