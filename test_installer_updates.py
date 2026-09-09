@@ -6,7 +6,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 from UpdateCenter import installer_asset,download_installer,UpdateCheckError
-from DrawBot import DrawBotApp
+
+try:
+    from DrawBot import DrawBotApp
+except ModuleNotFoundError:
+    DrawBotApp=None
 
 DATA=b'MZ'+b'verified-test-installer'*100
 
@@ -61,6 +65,7 @@ class InstallerUpdateTests(unittest.TestCase):
             self.assertTrue(response.closed)
 
     def test_stale_or_cancelled_ui_handoff_does_not_install(self):
+        if DrawBotApp is None:self.skipTest('DrawBot GUI dependencies are not installed')
         token=object();app=SimpleNamespace(closing=False,stop=threading.Event(),update_request=token)
         self.assertFalse(DrawBotApp._install_checked_update(app,{'request':object()}))
         app.stop.set()
