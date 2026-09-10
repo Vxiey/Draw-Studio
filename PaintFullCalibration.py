@@ -28,16 +28,50 @@ def _significant_runs(mask,min_length):
     return out
 
 
-def _edge_supported_horizontal_span(white, *, top, bottom, scale, min_safe_w):
-    """Infer the document span from clean bands near its top/bottom edges.
+def resolve_manual_canvas_override(corners, selected_handle, selected_client_rect,
+                                   current_handle, current_client_rect):
+    """Return a rebased user-selected Paint canvas when it still matches Paint.
 
-    Interior ink/overlays must not make calibration silently shrink to a smaller
-    white sub-rectangle.  Paint's top and bottom document bands normally retain
-    the true horizontal extent, while using the maximum of both bands tolerates
-    a resize handle or shadow affecting only one edge.  Significant separated
-    white runs are enveloped so an interior obstruction is caught later by the
-    blankness check instead of becoming a fake new canvas edge.
+    Manual selection is an explicit hard boundary.  It is safer and more useful
+    than re-guessing Paint's pale document shadow every time Prepare Paint runs.
+    The selection is reused only for the same native window and same client size;
+    a pure window move is rebased, while resize/target changes fall back to fresh
+    automatic detection instead of silently transforming the user's boundary.
     """
+    try:
+        if len(corners)!=2 or int(selected_handle)!=int(current_handle):return None
+        old=tuple(map(int,selected_client_rect));cur=tuple(map(int,current_client_rect))
+        if len(old)!=4 or len(cur)!=4:return None
+        ow,oh=old[2]-old[0],old[3]-old[1];cw,ch=cur[2]-cur[0],cur[3]-cur[1]
+        if ow<=0 or oh<=0 or (ow,oh)!=(cw,ch):return None
+        dx,dy=cur[0]-old[0],cur[1]-old[1]
+        p0=(int(corners[0][0])+dx,int(corners[0][1])+dy)
+        p1=(int(corners[1][0])+dx,int(corners[1][1])+dy)
+        left,right=sorted((p0[0],p1[0]));top,bottom=sorted((p0[1],p1[1]))
+        if right-left<64 or bottom-top<64:return None
+        if left<cur[0] or top<cur[1] or right>cur[2] or bottom>cur[3]:return None
+        return (left,top,right,bottom)
+    except (TypeError,ValueError,OverflowError):
+        return None
+
+
+def _validate_canvas_override(box, *, screen_origin, w, h, ratio, toolbar_end, scale):
+    try:left,top,right,bottom=map(int,box)
+    except (TypeError,ValueError):raise ValueError('The selected Paint drawing area is invalid. Select it again.')
+    if right-left<64 or bottom-top<64:
+        raise ValueError('The selected Paint drawing area is too small. Select the canvas again.')
+    ox,oy=map(int,screen_origin)
+    lx0=(left-ox)*ratio;ly0=(top-oy)*ratio;lx1=(right-ox)*ratio;ly1=(bottom-oy)*ratio
+    tolerance=max(2,round(3*scale))
+    if lx0 < -tolerance or ly0 < -tolerance or lx1 > w+tolerance or ly1 > h+tolerance:
+        raise ValueError('The selected Paint drawing area is outside the current Paint window. Select it again.')
+    if ly0 < toolbar_end-tolerance:
+        raise ValueError('The selected Paint drawing area overlaps the Paint toolbar. Select only the drawable canvas.')
+    return (left,top,right,bottom)
+
+
+def _edge_supported_horizontal_span(white, *, top, bottom, scale, min_safe_w):
+    """Infer the document span from clean bands near its top/bottom edges."""
     probe_h=max(3,round(6*scale));inset=max(3,round(10*scale))
     profiles=[]
     for y0 in (top+inset,bottom-inset-probe_h):
@@ -53,37 +87,24 @@ def _edge_supported_horizontal_span(white, *, top, bottom, scale, min_safe_w):
 
 
 def _border_band_has_workspace(white, side, *, left, right, top, bottom, width, trim, toolbar_end):
-    """Verify a visible canvas edge using an outside band, not one brittle pixel line.
-
-    Current Paint can draw a light canvas shadow, anti-aliased border or resize
-    handle immediately outside the document.  A single outside row/column can
-    therefore contain enough pure-white pixels to look like more canvas even
-    though grey workspace is present a few pixels farther out.  We accept the
-    edge when the outside band contains substantial workspace overall or a
-    continuous non-white separator along most of the edge.
-    """
+    """Verify a visible edge using a band instead of one brittle pixel line."""
     h,w=white.shape
     trim=max(0,int(trim));width=max(1,int(width))
     y0=min(bottom,top+trim);y1=max(y0+1,bottom-trim)
     x0=min(right,left+trim);x1=max(x0+1,right-trim)
     if side=='left':
         if left<=0:return True
-        band=white[y0:y1,max(0,left-width):left]
-        line_axis=1
+        band=white[y0:y1,max(0,left-width):left];line_axis=1
     elif side=='right':
         if right>=w:return True
-        band=white[y0:y1,right:min(w,right+width)]
-        line_axis=1
+        band=white[y0:y1,right:min(w,right+width)];line_axis=1
     elif side=='top':
         if top<=toolbar_end:return True
-        band=white[max(toolbar_end,top-width):top,x0:x1]
-        line_axis=0
+        band=white[max(toolbar_end,top-width):top,x0:x1];line_axis=0
     elif side=='bottom':
         if bottom>=h:return True
-        band=white[bottom:min(h,bottom+width),x0:x1]
-        line_axis=0
-    else:
-        raise ValueError(f'Unknown Paint canvas edge: {side}')
+        band=white[bottom:min(h,bottom+width),x0:x1];line_axis=0
+    else:raise ValueError(f'Unknown Paint canvas edge: {side}')
     if band.size==0:return False
     nonwhite=np.logical_not(band)
     density=float(np.mean(nonwhite))
@@ -96,36 +117,26 @@ def _border_band_has_workspace(white, side, *, left, right, top, bottom, width, 
 
 def _detect_visible_canvas(white, *, toolbar_end, w, h, scale, screen_origin, ratio):
     """Return a safe visible Paint drawing area, including compact/clipped viewports."""
-    min_safe_w=max(96,round(160*scale))
-    min_safe_h=max(96,round(120*scale))
-
+    min_safe_w=max(96,round(160*scale));min_safe_h=max(96,round(120*scale))
     row_fraction=min(.35,max(.06,(min_safe_w/max(1,w))*.72))
     top,bottom=_run(np.mean(white,axis=1)>row_fraction)
     if bottom-top<min_safe_h:
         raise ValueError('Paint canvas visible area is too small. Enlarge Paint or select the drawing area manually.')
 
-    # Prefer the document envelope inferred from near-edge bands.  This keeps a
-    # central obstruction inside the candidate so blankness verification rejects
-    # it rather than silently selecting one white side of the document.
     left,right=_edge_supported_horizontal_span(white,top=top,bottom=bottom,scale=scale,min_safe_w=min_safe_w)
     if right-left<min_safe_w:
-        edge_trim=max(2,round(8*scale))
-        sample_top=min(bottom,top+edge_trim)
-        sample_bottom=max(sample_top+1,bottom-edge_trim)
-        column_white=np.mean(white[sample_top:sample_bottom],axis=0)
-        left,right=_run(column_white>.985)
+        edge_trim=max(2,round(8*scale));sample_top=min(bottom,top+edge_trim);sample_bottom=max(sample_top+1,bottom-edge_trim)
+        left,right=_run(np.mean(white[sample_top:sample_bottom],axis=0)>.985)
     if right-left<min_safe_w:
         raise ValueError('Paint canvas visible area is too small. Enlarge Paint or select the drawing area manually.')
 
-    verify_inset=max(2,round(5*scale))
-    vy0=min(bottom,top+verify_inset);vy1=max(vy0+1,bottom-verify_inset)
+    verify_inset=max(2,round(5*scale));vy0=min(bottom,top+verify_inset);vy1=max(vy0+1,bottom-verify_inset)
     vx0=min(right,left+verify_inset);vx1=max(vx0+1,right-verify_inset)
     interior=white[vy0:vy1,vx0:vx1]
     if interior.size==0 or float(np.mean(interior))<.997:
         raise ValueError('Paint canvas is not blank or is covered. Clear it or select the area manually.')
 
-    edge_tol=max(2,round(3*scale))
-    clipped=[]
+    edge_tol=max(2,round(3*scale));clipped=[]
     if left<=edge_tol:clipped.append('left')
     if right>=w-edge_tol:clipped.append('right')
     if bottom>=h-edge_tol:clipped.append('bottom')
@@ -141,22 +152,22 @@ def _detect_visible_canvas(white, *, toolbar_end, w, h, scale, screen_origin, ra
            for side in visible_sides):
         raise ValueError('Paint canvas border is ambiguous or covered. Clear Paint or select the drawing area manually.')
 
-    normal_inset=max(2,round(2*scale))
-    clipped_inset=max(normal_inset+2,round(6*scale))
+    # A pure-white Paint shadow is visually indistinguishable from the document
+    # in a screenshot. Keep a conservative inward margin on auto-detected visible
+    # borders so a few pixels of shadow/resize chrome can never become drawable.
+    normal_inset=max(6,round(10*scale));clipped_inset=max(normal_inset+2,round(12*scale))
     x0=left+(clipped_inset if 'left' in clipped else normal_inset)
     x1=right-(clipped_inset if 'right' in clipped else normal_inset)
-    y0=top+normal_inset
-    y1=bottom-(clipped_inset if 'bottom' in clipped else normal_inset)
+    y0=top+normal_inset;y1=bottom-(clipped_inset if 'bottom' in clipped else normal_inset)
     if x1-x0<max(64,round(120*scale)) or y1-y0<max(64,round(90*scale)):
         raise ValueError('Paint canvas safe visible area is too small. Enlarge Paint or select the drawing area manually.')
-
     box=(round(x0/ratio)+screen_origin[0],round(y0/ratio)+screen_origin[1],
          round(x1/ratio)+screen_origin[0],round(y1/ratio)+screen_origin[1])
     compact=(right-left)<w*.35 or (bottom-top)<max(1,h-toolbar_end)*.35
     return box,tuple(clipped),compact
 
 
-def detect_setup(image,screen_origin=(0,0),cancelled=lambda:False):
+def detect_setup(image,screen_origin=(0,0),cancelled=lambda:False,canvas_box_override=None):
     if cancelled():raise InterruptedError()
     ratio=min(1.,1920/image.width,1200/image.height)
     work=image.resize((round(image.width*ratio),round(image.height*ratio))).convert('RGB')
@@ -185,17 +196,14 @@ def detect_setup(image,screen_origin=(0,0),cancelled=lambda:False):
     reference=Image.open(resource_path('assets/paint-tools-reference.png')).convert('RGB')
     tools={}
     for name,rx,ry in (('Pencil',268,88),('Fill',308,88),('Eraser',268,128)):
-        cx=anchor_x+(rx-794)*scale;cy=anchor_y+(ry-83)*scale
-        radius=12*scale
+        cx=anchor_x+(rx-794)*scale;cy=anchor_y+(ry-83)*scale;radius=12*scale
         if cx-radius<0 or cy-radius<0:raise ValueError('Paint tools are clipped.')
-        expected=reference.crop((rx-250-12,ry-70-12,rx-250+12,ry-70+12))
-        best=(float('inf'),cx,cy)
+        expected=reference.crop((rx-250-12,ry-70-12,rx-250+12,ry-70+12));best=(float('inf'),cx,cy)
         for dx in (-2,0,2):
             for dy in (-2,0,2):
                 x,y=cx+dx*scale,cy+dy*scale
                 actual=work.crop((round(x-radius),round(y-radius),round(x+radius),round(y+radius))).resize((24,24))
-                aa=np.asarray(actual);ee=np.asarray(expected)
-                am=np.min(aa,axis=2)<170;em=np.min(ee,axis=2)<170
+                aa=np.asarray(actual);ee=np.asarray(expected);am=np.min(aa,axis=2)<170;em=np.min(ee,axis=2)<170
                 ad=np.asarray(Image.fromarray(am.astype('uint8')*255).filter(ImageFilter.MaxFilter(3)))>0
                 ed=np.asarray(Image.fromarray(em.astype('uint8')*255).filter(ImageFilter.MaxFilter(3)))>0
                 overlap=min(float(np.sum(am&ed))/max(1,int(am.sum())),float(np.sum(em&ad))/max(1,int(em.sum())))
@@ -205,16 +213,20 @@ def detect_setup(image,screen_origin=(0,0),cancelled=lambda:False):
         if difference>32:raise ValueError(f'Paint {name} icon could not be verified. Close menus or use manual tool calibration.')
         tools[name]=(round(cx/ratio)+screen_origin[0],round(cy/ratio)+screen_origin[1])
     if cancelled():raise InterruptedError()
-    a=np.asarray(work);white=np.min(a,axis=2)>=253
-    toolbar_end=min(h,round(anchor_y+100*scale));white[:toolbar_end]=False
-    box,clipped_edges,compact=_detect_visible_canvas(white,toolbar_end=toolbar_end,w=w,h=h,scale=scale,
-                                                      screen_origin=screen_origin,ratio=ratio)
-    clipped=bool(clipped_edges)
+    toolbar_end=min(h,round(anchor_y+100*scale))
+    if canvas_box_override is not None:
+        box=_validate_canvas_override(canvas_box_override,screen_origin=screen_origin,w=w,h=h,ratio=ratio,toolbar_end=toolbar_end,scale=scale)
+        clipped_edges=();compact=False;visibility='manual-selected';confidence=.96
+    else:
+        a=np.asarray(work);white=np.min(a,axis=2)>=253;white[:toolbar_end]=False
+        box,clipped_edges,compact=_detect_visible_canvas(white,toolbar_end=toolbar_end,w=w,h=h,scale=scale,
+                                                          screen_origin=screen_origin,ratio=ratio)
+        clipped=bool(clipped_edges);visibility='viewport-compact' if compact else ('viewport-clipped' if clipped else 'full')
+        confidence=.85 if compact else (.87 if clipped else .90)
     return {'tools':tools,'positions':positions,'rgbs':rgbs,'canvas_box':box,'palette_count':len(rgbs),
-            'confidence':.85 if compact else (.87 if clipped else .90),
-            'method':'modern-paint-grid-and-icons-v6',
-            'canvas_visibility':'viewport-compact' if compact else ('viewport-clipped' if clipped else 'full'),
-            'canvas_clipped_edges':list(clipped_edges)}
+            'confidence':confidence,'method':'modern-paint-grid-and-icons-v7',
+            'canvas_visibility':visibility,'canvas_clipped_edges':list(clipped_edges),
+            'canvas_source':'manual-selection' if canvas_box_override is not None else 'auto-detected'}
 
 
 def save_setup(result,meta,palette_path,tool_path=None):
