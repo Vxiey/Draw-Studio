@@ -1,7 +1,7 @@
 # Windows code signing
 
-The published 1.0.133-rc2 is unsigned. This preparatory change does not sign it
-retroactively and does not certify Smart App Control compatibility.
+The published 1.0.144-rc1 build is unsigned. This preparatory support does not
+sign it retroactively and does not certify Smart App Control compatibility.
 
 ## Ready build path
 
@@ -10,8 +10,8 @@ certificate/private key through the provider's supported hardware or cloud KSP.
 The certificate must be accessible in CurrentUser/My. Do not commit keys or
 certificate passwords. Install Windows SDK SignTool and set:
 
-- DRAWSTUDIO_SIGNTOOL: absolute path to signtool.exe
-- DRAWSTUDIO_SIGNING_THUMBPRINT: certificate's 40-character thumbprint
+- IMAGEDRAWBOT_SIGNTOOL: absolute path to signtool.exe
+- IMAGEDRAWBOT_SIGNING_THUMBPRINT: certificate's 40-character thumbprint
 
 Run `python build_release.py --installer --signed`.
 
@@ -26,8 +26,8 @@ signing mode. Ordinary unsigned development builds remain available.
 Current GitHub-hosted runners do not have a signing identity provisioned by
 this change. Configure the chosen provider's supported signing access before
 enabling signed builds in CI; no identity, certificate purchase, or service
-account has been created. Publish the signed result as a NEW version; do not
-replace the existing rc2 files or their updater digests.
+account has been created. Publish the signed result as a new version; do not
+replace existing release files or their updater digests.
 
 ## Remaining validation
 
