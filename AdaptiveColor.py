@@ -39,7 +39,7 @@ def method_candidates(selector, actions=None, *, has_sample=False, keyboard_avai
         add('palette',True);add('numeric',numeric);add('spectrum',spectrum);add('eyedropper',eye)
         return tuple(result)
     add('eyedropper',eye)
-    add(cached_method,cached_method in ('eyedropper','spectrum','numeric','palette'))
+    add(cached_method,cached_method in ('eyedropper','spectrum','numeric','palette') and not (selector.get('require_exact') and cached_method=='palette'))
     # v1.0.109: image-derived custom selectors prefer calibrated numeric RGB
     # because it can reproduce the measured source RGB exactly. Older/manual
     # selectors keep the spectrum-first order for backwards compatibility.
@@ -47,7 +47,7 @@ def method_candidates(selector, actions=None, *, has_sample=False, keyboard_avai
         add('numeric',numeric);add('spectrum',spectrum)
     else:
         add('spectrum',spectrum);add('numeric',numeric)
-    add('palette',True)
+    add('palette',not selector.get('require_exact',False))
     return tuple(result)
 
 

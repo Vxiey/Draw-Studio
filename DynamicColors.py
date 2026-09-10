@@ -251,7 +251,7 @@ def _custom_color_policy(max_colors, color_fidelity='Faithful', profile_name='',
 
 def build_dynamic_color_strokes(image, palette_rgb, *, max_colors=16, skip_white=True,
                                 lines=True, exact_available=False, exact_threshold=2.5, color_fidelity='Faithful',
-                                profile_name='', protected_mask=None, cancelled=lambda:False):
+                                profile_name='', protected_mask=None, cancelled=lambda:False, source_palette=False):
     """Return groups, rendered colors, selectors and metadata.
 
     selectors are dictionaries of either:
@@ -358,8 +358,10 @@ def build_dynamic_color_strokes(image, palette_rgb, *, max_colors=16, skip_white
                       selected[i]['coverage'], -i),
         reverse=True
     )
-    use_custom=set()
-    if exact_available:
+    if source_palette and exact_available:
+        custom_budget=len(selected)
+    use_custom=set(range(len(selected))) if source_palette and exact_available else set()
+    if exact_available and not source_palette:
         for i in ranked_custom:
             item=selected[i]
             # Require visible improvement over palette. Tiny regions need an even

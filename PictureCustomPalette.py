@@ -21,7 +21,7 @@ from typing import Iterable, Sequence
 
 from RuntimePaths import atomic_write_text, data_dir
 
-SCHEMA = 1
+SCHEMA = 2
 PROFILE_KEY = "microsoft-paint"
 DEFAULT_MAX_COLORS = 16
 MAX_ANALYSIS_DIMENSION = 640
@@ -233,7 +233,7 @@ def build_picture_palette(image, palette_rgb: Iterable[Sequence[int]], *, max_co
         raise ValueError("No Paint palette colors are available. Read/calibrate the Paint palette first.")
     groups, planned, selectors, meta = build_dynamic_color_strokes(
         analysis, fallback, max_colors=max_colors, skip_white=False, lines=True,
-        exact_available=True, color_fidelity=fidelity, profile_name="Microsoft Paint",
+        exact_available=True, color_fidelity=fidelity, profile_name="Microsoft Paint", source_palette=True,
         cancelled=cancelled,
     )
     if groups is None:
@@ -515,10 +515,11 @@ def start_picture_custom_palette(app) -> bool:
         if not monitor.activate(target):
             raise InterruptedError("Paint could not be reactivated after picture custom palette preparation.")
         if app.stop.wait(.12):raise InterruptedError("Picture custom palette cancelled.")
-        app.picture_custom_palette_state = dict(
+        completed_state = dict(
             palette.as_dict(), image_id=source_id, prepared_count=completed,
             cache_file=str(cache_path(palette.image_fingerprint, palette.calibration_fingerprint)),
         )
+        app.events.put(("picture_palette_complete", completed_state))
         # Seed only the method preference, never a fake verification result.
         # Runtime still performs its normal first-stroke color verification.
         try:
@@ -534,8 +535,11 @@ def start_picture_custom_palette(app) -> bool:
             pass
         app.events.put((
             "status",
-            f"Picture custom palette ready: {completed} custom RGB colors added with + to Paint Custom colors. The picture palette is saved for this image/calibration.",
+            f"Picture custom palette ready: {completed} custom RGB colors added with + to Paint Custom colors. Build preview to use this image RGB palette.",
         ))
 
+    app.picture_custom_palette_state = None
+    if hasattr(app, "_mark_plan_stale"):
+        app._mark_plan_stale("Picture palette is changing. Build preview after preparation completes.")
     app.status.set(f"Building picture custom palette: analyzing image and preparing up to {max_colors} colors…")
     return bool(app.begin_worker("exact-color-calibration", work))

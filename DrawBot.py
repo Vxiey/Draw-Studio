@@ -953,6 +953,23 @@ def make_plan(original, area, options, cancelled=lambda: False):
         profiler_stop(options, 'color_planning', _prof_color)
         return _finalize_auto_tuned_plan(finish_plan(image,fitted,groups,options,cancelled),original,area,cancelled)
 
+    # Paint image RGB must be resolved before Pixel Accurate's early return.
+    # A prepared palette also fixes the RGB order used by non-pixel planners.
+    picture_plan_colors=tuple(c.RGB for c in allColors)
+    picture_selectors=();picture_palette_meta={}
+    if str(options.get('draw_quality') or '')=='Pixel Accurate' or options.get('picture_palette_rgb'):
+        resolution=resolve_image_custom_color_workflow(
+            options.get('profile_name'),options.get('profile_key'),
+            options.get('custom_color_workflow','Calibrated palette'),
+            render_preset=options.get('render_preset','Auto'))
+        if resolution.get('available') and 'exact_color_actions' not in options:
+            options['exact_color_available']=True
+        if resolution.get('auto_promoted'):
+            options['custom_color_workflow']=resolution['workflow']
+        from PicturePalettePlanning import resolve_paint_plan_palette
+        picture_plan_colors,picture_selectors,picture_palette_meta=resolve_paint_plan_palette(
+            original,picture_plan_colors,options,cancelled)
+
     # v1.0.86 Block A: Pixel Accurate Planner. Build a full-resolution PixelMap
     # before any background simplification, adaptive pruning, reduced palette or
     # browser turbo policy can remove source information. Horizontal same-colour
@@ -962,7 +979,7 @@ def make_plan(original, area, options, cancelled=lambda: False):
         from PixelStrokeEngine import build_pixel_stroke_plan
         _prof_color = profiler_start(options, 'color_planning')
         pixel_map=build_pixel_map(
-            image, tuple(c.RGB for c in allColors),
+            image, picture_plan_colors,
             color_rendering=options.get('color_rendering','Perceptual match'),
             color_fidelity=options.get('color_fidelity','Faithful'),
             skip_white=bool(options.get('skip_white',True)),
@@ -973,7 +990,7 @@ def make_plan(original, area, options, cancelled=lambda: False):
         options["_hybrid_scale_y"]=float(fitted[1])/max(1,pixel_map.height)
         from SubjectFocus import focused_stroke_plan
         pixel_map,stroke_plan=focused_stroke_plan(
-            pixel_map,image,len(allColors),options.get('subject_focus','Off'),options.get('subject_region'),lines=bool(options.get('lines',True)),
+            pixel_map,image,len(picture_plan_colors),options.get('subject_focus','Off'),options.get('subject_region'),lines=bool(options.get('lines',True)),
             cpu_workers=int(options.get('cpu_workers_resolved',1) or 1),options=options,cancelled=cancelled)
         from AdaptiveBrushEngine import assign_adaptive_brushes
         adaptive_brush=assign_adaptive_brushes(
@@ -997,7 +1014,7 @@ def make_plan(original, area, options, cancelled=lambda: False):
             correction_reserve_ratio=(0 if options.get('subject_focus','Off')!='Off' else .12))
         base_sequence=progressive_budget['execution_sequence']
         accuracy_plan=refine_with_corrections(
-            pixel_map,base_sequence,tuple(c.RGB for c in allColors),
+            pixel_map,base_sequence,picture_plan_colors,
             brush_px=max(1,int(options.get('brush_px',1) or 1)),max_passes=(0 if options.get('subject_focus','Off')!='Off' else 2),
             correction_brush_px=int(adaptive_brush['metadata'].get('detail_brush_px',options.get('brush_px',1)) or 1),
             max_total_paths=(progressive_budget.get('path_budget') if progressive_budget.get('active') else None),
@@ -1005,12 +1022,14 @@ def make_plan(original, area, options, cancelled=lambda: False):
             gpu_performance=options.get('gpu_performance','High throughput'),cancelled=cancelled)
         stroke_plan['execution_sequence']=accuracy_plan['execution_sequence']
         stroke_plan['execution_groups']=execution_groups_from_sequence(
-            stroke_plan['execution_sequence'],len(allColors))
+            stroke_plan['execution_sequence'],len(picture_plan_colors))
         groups=stroke_plan['groups']
         plan_options=dict(options)
         plan_options['pixel_accurate']=True
+        plan_options['color_selectors']=picture_selectors
+        plan_options['picture_palette_meta']=picture_palette_meta
         plan_options['pixel_map_meta']=pixel_map.as_meta()
-        plan_options['plan_palette_rgb']=tuple(c.RGB for c in allColors)
+        plan_options['plan_palette_rgb']=picture_plan_colors
         # Preserve a distinct quantized-target object for diagnostics/accuracy
         # separation. This is not used to choose colors or alter stroke planning.
         try:
@@ -1045,7 +1064,7 @@ def make_plan(original, area, options, cancelled=lambda: False):
         plan_options['pixel_stroke_meta']=stroke_plan['metadata']
         plan_options['pixel_stroke_engine']='Block B + C + D + Shadow/Contour + Adaptive Brush v2'
         checkpoints=progressive_accuracy_checkpoints(
-            pixel_map,stroke_plan['execution_sequence'],tuple(c.RGB for c in allColors),
+            pixel_map,stroke_plan['execution_sequence'],picture_plan_colors,
             brush_px=max(1,int(options.get('brush_px',1) or 1)),cancelled=cancelled)
         accuracy_meta=dict(accuracy_plan['metadata'])
         accuracy_meta['progressive_time_budget']={k:v for k,v in progressive_budget.items() if k!='execution_sequence'}
@@ -1183,7 +1202,7 @@ def make_plan(original, area, options, cancelled=lambda: False):
     if custom_resolution.get('auto_promoted'):
         plan_options['custom_color_workflow']=custom_color_workflow
         plan_options['custom_color_auto_meta']=dict(custom_resolution)
-    dynamic_exact=(custom_color_workflow in ('Exact custom + palette fallback','Adaptive exact (recommended)'))
+    dynamic_exact=bool(picture_selectors) or (custom_color_workflow in ('Exact custom + palette fallback','Adaptive exact (recommended)'))
     if dynamic_exact:
         # Exact-color planning is bounded: cluster the image into a useful number
         # of colors. Each cluster uses exact RGB when calibrated; otherwise it
@@ -1222,11 +1241,20 @@ def make_plan(original, area, options, cancelled=lambda: False):
             }
         plan_options['exact_color_limit_resolved']=int(limit)
         plan_options['adaptive_color_count_meta']=dict(adaptive_color_count_meta)
-        groups,plan_colors,selectors,color_render_meta=build_dynamic_color_strokes(
-            image,tuple(c.RGB for c in allColors),max_colors=limit,skip_white=planner_skip_white,
-            lines=options['lines'],exact_available=bool(plan_options.get('exact_color_available')),
-            color_fidelity=str(options.get('color_fidelity','Faithful')),profile_name=str(options.get('profile_name') or ''),
-            protected_mask=adaptive_mask,cancelled=cancelled)
+        if picture_selectors:
+            from PicturePalettePlanning import build_prepared_color_strokes
+            groups,plan_colors,selectors,color_render_meta=build_prepared_color_strokes(
+                image,picture_plan_colors,picture_selectors,options,skip_white=planner_skip_white,cancelled=cancelled)
+            plan_options['picture_palette_meta']=picture_palette_meta
+            limit=len(picture_plan_colors)
+            plan_options['exact_color_limit_resolved']=limit
+            adaptive_color_count_meta={'active':False,'policy':'prepared-picture-palette','recommended_colors':limit}
+        else:
+            groups,plan_colors,selectors,color_render_meta=build_dynamic_color_strokes(
+                image,tuple(c.RGB for c in allColors),max_colors=limit,skip_white=planner_skip_white,
+                lines=options['lines'],exact_available=bool(plan_options.get('exact_color_available')),
+                color_fidelity=str(options.get('color_fidelity','Faithful')),profile_name=str(options.get('profile_name') or ''),
+                protected_mask=adaptive_mask,cancelled=cancelled)
         if groups is None:raise InterruptedError()
         if adaptive_mask is not None and options.get('lines',True):
             groups,prune_meta=prune_flat_micro_strokes(groups,adaptive_mask,
@@ -2234,6 +2262,8 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
             method=candidates[0] if candidates else 'palette'
 
         def nearest_palette(reason=''):
+            if selector.get('require_exact') and not dry_run:
+                raise ValueError(f'Paint could not select picture RGB {rgb}: {reason}. Stopped without substituting a standard palette color.')
             if not dry_run and hasattr(mouse,'reset_tracking'):mouse.reset_tracking()
             mouse.move(*palette[fallback]);wait(max(delay,.025))
             if not dry_run:mouse.click();wait(max(delay,stroke_delivery.palette_click_delay))
@@ -6477,6 +6507,11 @@ class DrawBotApp:
                 'color_session_cache':getattr(self,'color_session_cache',{}),
                 'render_resume_state':getattr(self,'pending_render_resume',None),
                 'paint_tool':selected_tool,'effective_paint_tool':effective_paint_tool,'tool_actions':[],'fill_tool_available':fill_available,'fill_tool_actions':[],'fill_restore_actions':[]}
+        from PicturePalettePlanning import active_picture_palette
+        prepared=active_picture_palette(self)
+        if prepared and not result.get('paint_current_color') and not result.get('outline'):
+            result['picture_palette_rgb']=prepared
+            result['custom_color_workflow']='Adaptive exact (recommended)'
         return result
 
     def area(self):
@@ -9042,6 +9077,16 @@ class DrawBotApp:
             self.display_screen(value)
         elif kind=='toggle_pause':
             self.toggle_pause()
+        elif kind=='picture_palette_complete':
+            from PicturePalettePlanning import active_picture_palette
+            if self.game.get()!='Microsoft Paint' or value.get('image_id')!=id(self.original):return
+            self.picture_custom_palette_state=dict(value)
+            if not active_picture_palette(self):return
+            self.custom_color_workflow.set('Adaptive exact (recommended)')
+            self.refresh_exact_color_status()
+            self._mark_plan_stale('Picture colors changed. Build preview to use the saved image RGB palette.')
+            self.save_settings()
+            self.show_previews()
         elif kind=='exact_color_calibration_complete':
             code=int((value or {}).get('code',-1));self.refresh_exact_color_status();self.color_session_cache.clear()
             self._mark_plan_stale('Exact color controls changed. Press Build preview manually when ready.')
