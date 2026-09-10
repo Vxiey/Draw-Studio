@@ -70,9 +70,6 @@ def _release_allowed(release: dict, channel: str) -> bool:
     if parsed is None:
         return False
     channel = str(channel or "beta").lower()
-    # Channel floors prevent an RC build from being pointed back toward beta
-    # releases. Higher patch versions still compare normally inside the allowed
-    # channel set. Stable accepts published non-prereleases only.
     if channel == "stable":
         return not bool(release.get("prerelease")) and parsed.stage_rank >= _STAGE_RANK["stable"]
     if channel == "rc":
@@ -130,10 +127,7 @@ def check_for_updates(*, request_get=None, timeout=(4, 8)) -> dict:
     available = is_newer_version(latest, APP_VERSION)
     url = str(release.get("html_url") or GITHUB_RELEASES_PAGE)
     name = str(release.get("name") or release.get("tag_name") or latest)[:160]
-    if available:
-        message = f"Download version {latest}"
-    else:
-        message = "You are on the latest version."
+    message = f"Download version {latest}" if available else "You are on the latest version."
     return {
         "current_version": APP_VERSION,
         "latest_version": latest,
@@ -147,34 +141,24 @@ def check_for_updates(*, request_get=None, timeout=(4, 8)) -> dict:
 
 
 def installer_asset(release):
-    """Return one verified installer, preferring the Image Draw Bot name.
-
-    DrawStudio is accepted only as a transition bridge for pre-v1.0.144 clients.
-    """
+    """Return the verified Image Draw Bot installer for a release."""
     from urllib.parse import urlparse,unquote
     version=normalize_tag(release.get('tag_name'))
     if parse_version(version) is None:return None
-    names=(f'ImageDrawBot-{version}-Windows-x64-Setup.exe',
-           f'DrawStudio-{version}-Windows-x64-Setup.exe')
-    repositories=('Vxiey/Image-Draw-Bot','Vxiey/Draw-Studio')
+    name=f'ImageDrawBot-{version}-Windows-x64-Setup.exe'
     hits=[]
-    for rank,name in enumerate(names):
-        for asset in release.get('assets') or ():
-            if not isinstance(asset,dict) or asset.get('name')!=name:continue
-            url=str(asset.get('browser_download_url') or '')
-            parsed=urlparse(url)
-            valid_paths={f'/{repo}/releases/download/{release["tag_name"]}/{name}' for repo in repositories}
-            if parsed.scheme!='https' or parsed.netloc!='github.com' or unquote(parsed.path) not in valid_paths or parsed.query or parsed.fragment:continue
-            digest=str(asset.get('digest') or '')
-            if not re.fullmatch(r'sha256:[0-9a-fA-F]{64}',digest):continue
-            size=asset.get('size')
-            if type(size) is not int or not 0<size<=2*1024**3:continue
-            hits.append((rank,dict(name=name,url=url,sha256=digest[7:].lower(),size=size,version=version)))
-    if not hits:return None
-    hits.sort(key=lambda item:item[0])
-    best_rank=hits[0][0]
-    best=[item for rank,item in hits if rank==best_rank]
-    return best[0] if len(best)==1 else None
+    for asset in release.get('assets') or ():
+        if not isinstance(asset,dict) or asset.get('name')!=name:continue
+        url=str(asset.get('browser_download_url') or '')
+        parsed=urlparse(url)
+        valid_path=f'/{GITHUB_REPOSITORY}/releases/download/{release["tag_name"]}/{name}'
+        if parsed.scheme!='https' or parsed.netloc!='github.com' or unquote(parsed.path)!=valid_path or parsed.query or parsed.fragment:continue
+        digest=str(asset.get('digest') or '')
+        if not re.fullmatch(r'sha256:[0-9a-fA-F]{64}',digest):continue
+        size=asset.get('size')
+        if type(size) is not int or not 0<size<=2*1024**3:continue
+        hits.append(dict(name=name,url=url,sha256=digest[7:].lower(),size=size,version=version))
+    return hits[0] if len(hits)==1 else None
 
 
 def download_installer(asset, *, directory=None, request_get=None, cancelled=lambda:False, progress=lambda done,total:None):
@@ -189,7 +173,6 @@ def download_installer(asset, *, directory=None, request_get=None, cancelled=lam
         from RuntimePaths import data_dir
         directory=data_dir()/'updates'
     root=Path(directory);root.mkdir(parents=True,exist_ok=True)
-    # Revalidate metadata even when called without check_for_updates.
     version=asset.get('version','');name=asset.get('name','')
     parts=urlparse(str(asset.get('url',''))).path.split('/')
     if len(parts)<3:raise UpdateCheckError('Invalid installer URL.')
@@ -226,19 +209,15 @@ def download_installer(asset, *, directory=None, request_get=None, cancelled=lam
         if response is not None and hasattr(response,'close'):response.close()
         path.unlink(missing_ok=True)
 
-def installer_launch_args(path, *, executable=None):
-    """Build updater arguments without touching the OS, for deterministic tests.
 
-    Installed builds update silently in place and request an explicit relaunch
-    after Setup replaces the application files. Portable/source builds keep
-    the normal interactive installer flow and are never overwritten in place.
-    """
+def installer_launch_args(path, *, executable=None):
+    """Build updater arguments without touching the OS, for deterministic tests."""
     import sys
     from pathlib import Path
     target=Path(path)
     current=Path(executable or sys.executable)
     args=[str(target),'/SP-','/NORESTART']
-    installed=(current.name.lower()=='drawstudio.exe' and any(current.parent.glob('unins*.exe')))
+    installed=(current.name.lower()=='imagedrawbot.exe' and any(current.parent.glob('unins*.exe')))
     if installed:
         args.extend([
             '/VERYSILENT',
