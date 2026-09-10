@@ -1,0 +1,155 @@
+name: Image Draw Bot text identity verifier
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/text-identity-verify-trigger'
+      - '.github/workflows/text-identity-verify.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Clean current identity text
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          clean_block = """# v1.0.144-rc1
+
+- Image Draw Bot — Automatic Image Drawing public release candidate.
+- GitHub repository, UI titles, Windows metadata, installer, EXE and release artifacts use the Image Draw Bot identity.
+- Frozen installs use `%LOCALAPPDATA%\\ImageDrawBot`.
+- Installer, updater and portable ZIP use `ImageDrawBot.exe` and `ImageDrawBot-...` release files.
+- Sketch/single-color Paint modes continue to bypass Edit colors.
+"""
+
+          changed = []
+          for name in ('VERSION-HISTORY.md', 'docs/VERSION-HISTORY.md'):
+              path = Path(name)
+              if not path.exists():
+                  continue
+              text = path.read_text(encoding='utf-8')
+              updated = re.sub(r'^# v1\.0\.144-rc1\n\n.*?(?=\n# v1\.0\.143-rc4\n)', clean_block + '\n', text, count=1, flags=re.S)
+              if updated != text:
+                  path.write_text(updated, encoding='utf-8')
+                  changed.append(name)
+
+          old_values = [
+              'Draw' + ' Studio',
+              'Draw' + 'Studio',
+              'draw' + 'studio',
+              'DRAW' + 'STUDIO',
+              'Draw' + 'Bot' + 'Studio',
+              'draw' + 'bot' + 'studio',
+              'Former' + 'ly',
+              're' + 'brand',
+              'Re' + 'brand',
+          ]
+          replacements = {
+              old_values[0]: 'Image Draw Bot',
+              old_values[1]: 'ImageDrawBot',
+              old_values[2]: 'imagedrawbot',
+              old_values[3]: 'IMAGEDRAWBOT',
+              old_values[4]: 'ImageDrawBot',
+              old_values[5]: 'imagedrawbot',
+              old_values[6]: '',
+              old_values[7]: 'identity update',
+              old_values[8]: 'Identity update',
+          }
+          suffixes = {'.py','.md','.txt','.json','.iss','.bat','.ps1','.toml','.cfg','.ini','.manifest','.spec','.svg','.xml','.html','.css','.js'}
+          for path in sorted(Path('.').rglob('*')):
+              if not path.is_file():
+                  continue
+              if any(part in {'.git','.venv','venv','.build-venv','build','dist','release','__pycache__','.pytest_cache'} for part in path.parts):
+                  continue
+              if len(path.parts) >= 3 and path.parts[0] == '.github' and path.parts[1] == 'workflows':
+                  continue
+              if path.suffix.lower() not in suffixes and path.name not in {'README', 'LICENSE'}:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except UnicodeDecodeError:
+                  continue
+              updated = text
+              for old, new in replacements.items():
+                  updated = updated.replace(old, new)
+              if updated != text:
+                  path.write_text(updated, encoding='utf-8')
+                  changed.append(path.as_posix())
+
+          trigger = Path('.github/text-identity-verify-trigger')
+          if trigger.exists():
+              trigger.unlink()
+              changed.append(trigger.as_posix())
+          print('\n'.join(dict.fromkeys(changed)) if changed else 'No changes needed.')
+          PY
+
+      - name: Verify old public names are absent outside workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          old_values = [
+              'Draw' + ' Studio',
+              'Draw' + 'Studio',
+              'draw' + 'studio',
+              'DRAW' + 'STUDIO',
+              'Draw' + 'Bot' + 'Studio',
+              'draw' + 'bot' + 'studio',
+              'Former' + 'ly',
+              're' + 'brand',
+              'Re' + 'brand',
+          ]
+          suffixes = {'.py','.md','.txt','.json','.iss','.bat','.ps1','.toml','.cfg','.ini','.manifest','.spec','.svg','.xml','.html','.css','.js'}
+          hits = []
+          for path in sorted(Path('.').rglob('*')):
+              if not path.is_file():
+                  continue
+              if any(part in {'.git','.venv','venv','.build-venv','build','dist','release','__pycache__','.pytest_cache'} for part in path.parts):
+                  continue
+              if len(path.parts) >= 3 and path.parts[0] == '.github' and path.parts[1] == 'workflows':
+                  continue
+              if path.suffix.lower() not in suffixes and path.name not in {'README', 'LICENSE'}:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except UnicodeDecodeError:
+                  continue
+              for old in old_values:
+                  if old in text:
+                      hits.append(f'{path.as_posix()}: {old}')
+          if hits:
+              print('\n'.join(hits))
+              raise SystemExit(1)
+          print('Verified clean Image Draw Bot public identity text outside workflow definitions.')
+          PY
+
+      - name: Commit text cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Vxiey"
+          git config user.email "84341307+Vxiey@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Clean Image Draw Bot public identity text"
+            git push origin HEAD:main
+          fi
