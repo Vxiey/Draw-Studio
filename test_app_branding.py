@@ -2,6 +2,7 @@ import sys
 import unittest
 from pathlib import Path
 from PIL import Image
+import tkinter as tk
 import AppBranding as branding
 
 ROOT = Path(__file__).resolve().parent
@@ -18,6 +19,20 @@ class BrandingTests(unittest.TestCase):
                 self.assertGreater(frame.getextrema()[3][1], 0)
         with Image.open(ROOT / branding.ICON_PNG) as png:
             self.assertEqual(png.size, (512,512))
+
+    def test_repeated_destroy_error_is_recognized_without_hiding_other_tcl_errors(self):
+        repeated = tk.TclError('can\'t invoke "destroy" command: application has been destroyed')
+        self.assertTrue(branding._already_destroyed_tcl_error(repeated))
+        self.assertTrue(branding._already_destroyed_tcl_error(tk.TclError('application has been destroyed')))
+        self.assertFalse(branding._already_destroyed_tcl_error(tk.TclError('bad window path name ".missing"')))
+
+    def test_destroy_wrapper_is_guarded_and_marks_teardown(self):
+        source = (ROOT / 'AppBranding.py').read_text(encoding='utf-8')
+        self.assertIn("getattr(root, '_image_draw_bot_destroying', False)", source)
+        self.assertIn("root._image_draw_bot_destroying = True", source)
+        self.assertIn("root._image_draw_bot_destroyed = True", source)
+        self.assertIn("except tk.TclError as error", source)
+        self.assertIn("if not _already_destroyed_tcl_error(error)", source)
 
     @unittest.skipUnless(sys.platform == 'win32', 'Windows Tk identity integration')
     def test_root_dialog_and_header_share_branding(self):
@@ -79,6 +94,9 @@ class BrandingTests(unittest.TestCase):
                 for icon_type in (0, 1):  # ICON_SMALL / ICON_BIG, WM_GETICON
                     self.assertTrue(user32.SendMessageW(hwnd, 0x007F, icon_type, 0))
         finally:
+            root.destroy()
+            # Regression: shutdown paths may converge after Tk has already been
+            # destroyed. A repeated branded destroy must be a harmless no-op.
             root.destroy()
         self.assertIsNone(root._image_draw_bot_taskbar_hwnd)
 
