@@ -50,7 +50,7 @@ public static class PaintModalAction {
         return finished;
     }
     public static void Invoke(InvokePattern pattern) { Run(() => pattern.Invoke(), 750); }
-    public static void Legacy(LegacyIAccessiblePattern pattern) { Run(() => pattern.DoDefaultAction(), 750); }
+    public static void Legacy(object pattern) { Run(() => pattern.GetType().GetMethod("DoDefaultAction").Invoke(pattern, null), 750); }
 }
 "@
 '''
@@ -83,8 +83,14 @@ if(!$activated) {
 }
 if(!$activated) {
     $pattern=$null
-    if($e.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern,[ref]$pattern)) {
-        [PaintModalAction]::Legacy([System.Windows.Automation.LegacyIAccessiblePattern]$pattern); $activated=$true
+    # .NET Framework UIAutomationClient does not expose this native pattern on
+    # all Windows installations. Skip unavailable wrappers instead of throwing.
+    $legacyType='System.Windows.Automation.LegacyIAccessiblePattern' -as [type]
+    if($legacyType) {
+        $legacyField=$legacyType.GetField('Pattern')
+        if($legacyField -and $e.TryGetCurrentPattern($legacyField.GetValue($null),[ref]$pattern)) {
+            [PaintModalAction]::Legacy($pattern); $activated=$true
+        }
     }
 }
 if(!$activated) {
