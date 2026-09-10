@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'tools/rebrand_image_draw_bot.py'
+      - 'tools/rebrand_image_draw_bot_v2.py'
       - '.github/workflows/rebrand-image-draw-bot.yml'
 
 permissions:
@@ -19,7 +19,7 @@ jobs:
           fetch-depth: 0
 
       - name: Apply rebrand migration
-        run: python tools/rebrand_image_draw_bot.py
+        run: python tools/rebrand_image_draw_bot_v2.py
 
       - name: Compile source
         run: python -m compileall -q .
