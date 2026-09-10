@@ -180,6 +180,51 @@ def rgb_controls(nodes):
     return result
 
 
+def edit_colors_dialog_open(nodes):
+    """Return True only when Paint's numeric Edit colors dialog is still exposed."""
+    try:
+        rgb_controls(nodes)
+    except ValueError:
+        return False
+    return True
+
+
+def close_edit_colors(handle, *, accept=False, cancelled=lambda:False, backend=automation,
+                      wait=time.sleep, max_attempts=3):
+    """Close Edit colors and prove it disappeared before canvas work continues.
+
+    Paint's current XAML dialog can return from InvokePattern before the modal is
+    actually removed from the UI tree.  The old preparation flow immediately took
+    a canvas screenshot after invoking Cancel, so its own Edit colors dialog could
+    cover the canvas and trigger a false covered/ambiguous-canvas stop.  This helper
+    retries only the already identified OK/Cancel button and requires the RGB fields
+    to disappear; it never clicks or guesses a canvas coordinate.
+    """
+    names=('ok',) if accept else ('cancel','avbryt')
+    attempts=max(1,min(5,int(max_attempts)))
+    last_nodes=None
+    for _ in range(attempts):
+        if cancelled():raise InterruptedError('Paint preparation cancelled.')
+        nodes=backend(handle,cancelled=cancelled);last_nodes=nodes
+        if not edit_colors_dialog_open(nodes):
+            wait(.12)
+            if cancelled():raise InterruptedError('Paint preparation cancelled.')
+            verify=backend(handle,cancelled=cancelled)
+            if not edit_colors_dialog_open(verify):return True
+            last_nodes=verify
+        try:button=find_control(last_nodes,names,kind='Button')
+        except ValueError:
+            wait(.08);continue
+        backend(handle,element=button,action='invoke',cancelled=cancelled)
+        wait(.12)
+    if cancelled():raise InterruptedError('Paint preparation cancelled.')
+    nodes=backend(handle,cancelled=cancelled)
+    if not edit_colors_dialog_open(nodes):
+        wait(.12);return True
+    action='OK' if accept else 'Cancel'
+    raise ValueError(f'Paint Edit colors did not close after {action}. Close the dialog and retry; no canvas input was sent.')
+
+
 def ensure_paint(enumerate_windows, *, cancelled=lambda:False, launch=None, wait=None):
     from PaintFullCalibration import choose_paint_window
     from threading import Event
@@ -200,15 +245,15 @@ def ensure_paint(enumerate_windows, *, cancelled=lambda:False, launch=None, wait
 
 
 def prepare_controls(handle, *, cancelled=lambda:False, backend=automation):
-    """Select Pencil/1 px, open Edit colors, capture numeric RGB controls, then dismiss with Cancel."""
+    """Select Pencil/1 px, capture RGB controls, then prove Edit colors is closed."""
     def scan():return backend(handle,cancelled=cancelled)
     def invoke(node):return backend(handle,element=node,action='invoke',cancelled=cancelled)
     nodes=scan()
-    # An already-open color dialog is dismissed without accepting changes.
-    try:rgb_controls(nodes)
-    except ValueError:pass
-    else:
-        invoke(find_control(nodes,('cancel','avbryt'),kind='Button'));nodes=scan()
+    # An already-open color dialog is dismissed without accepting changes. Do not
+    # continue until the modal is actually gone from the Paint UI tree.
+    if edit_colors_dialog_open(nodes):
+        close_edit_colors(handle,cancelled=cancelled,backend=backend)
+        nodes=scan()
     pencil=find_control(nodes,('pencil','penna','blyertspenna'),kind='Button')
     invoke(pencil)
     nodes=scan()
@@ -223,10 +268,12 @@ def prepare_controls(handle, *, cancelled=lambda:False, backend=automation):
         nodes=scan()
         try:
             controls=rgb_controls(nodes)
-            cancel=find_control(nodes,('cancel','avbryt'),kind='Button')
             break
         except ValueError:
             if time.monotonic()>deadline:raise ValueError('Paint Edit colors opened, but numeric RGB controls could not be calibrated. Keep the dialog in RGB mode and retry.')
-    invoke(cancel)
+    # Critical invariant: automatic preparation must return with the modal gone.
+    # Canvas detection/verification is never allowed to inspect Paint while the
+    # calibration dialog itself is covering the document.
+    close_edit_colors(handle,cancelled=cancelled,backend=backend)
     controls['OpenCustomColor']=center(opener)
     return controls

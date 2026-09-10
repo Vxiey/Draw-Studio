@@ -426,14 +426,36 @@ def start_picture_custom_palette(app) -> bool:
             import keyboard as keyboard_backend
 
         def progress(index, total, rgb):
-            if not monitor.activate(target):
-                raise InterruptedError("Paint lost focus while building the picture custom palette.")
+            # OK normally returns foreground ownership to Paint immediately, but
+            # current XAML Paint can leave Edit colors visible for another UI
+            # cycle. Give it a short cheap foreground grace period; only if the
+            # modal persists do we use the calibrated/UIA OK fallback.
+            active=False
+            for _ in range(8):
+                try:
+                    if monitor.active(target):active=True;break
+                except (OSError,ValueError,InterruptedError):
+                    pass
+                if app.stop.wait(.04):raise InterruptedError("Picture custom palette cancelled.")
+            if not active:
+                from PaintPreparation import close_edit_colors
+                close_edit_colors(handle,accept=True,cancelled=app.stop.is_set,wait=app.stop.wait)
+                if not monitor.activate(target):
+                    raise InterruptedError("Paint Edit colors did not return focus to the Paint document.")
+                if app.stop.wait(.12):raise InterruptedError("Picture custom palette cancelled.")
             app.events.put(("status", f"Custom color palette for picture: RGB {rgb} · {index}/{total}"))
 
         completed = apply_custom_rgb_sequence(
             mouse, keyboard_backend, controls, custom,
             cancelled=app.stop.is_set, wait=app.stop.wait, progress=progress,
         )
+        # Hard postcondition for the preparation action: never leave Edit colors
+        # over the document when control returns to Draw Studio.
+        from PaintPreparation import close_edit_colors
+        close_edit_colors(handle,accept=True,cancelled=app.stop.is_set,wait=app.stop.wait)
+        if not monitor.activate(target):
+            raise InterruptedError("Paint could not be reactivated after picture custom palette preparation.")
+        if app.stop.wait(.12):raise InterruptedError("Picture custom palette cancelled.")
         app.picture_custom_palette_state = dict(
             palette.as_dict(), image_id=source_id, prepared_count=completed,
             cache_file=str(cache_path(palette.image_fingerprint, palette.calibration_fingerprint)),
