@@ -5826,10 +5826,24 @@ class DrawBotApp:
         palette_path=Path(self.calibration_path)
         request={'image':self.original} if start_after else None
         self.paint_start_request=request
+        # Snapshot an explicit user-selected canvas on the UI thread. Paint's
+        # pale document border can be visually ambiguous, but a manual selection
+        # is already the user's hard CanvasGuard boundary and should not be
+        # discarded by a later automatic border guess.
+        selected_canvas_state=None
+        try:
+            if len(self.corners)==2 and self.target_window is not None and self.target_client_rect is not None:
+                selected_canvas_state={
+                    'handle':int(self.target_window[0]),
+                    'client_rect':tuple(map(int,self.target_client_rect)),
+                    'corners':tuple(tuple(map(int,p)) for p in self.corners),
+                }
+        except (TypeError,ValueError,OverflowError):
+            selected_canvas_state=None
         def work():
             try:
                 from TargetCapture import probe_handle_isolated
-                from PaintFullCalibration import choose_paint_window,detect_setup,save_setup
+                from PaintFullCalibration import choose_paint_window,detect_setup,save_setup,resolve_manual_canvas_override
                 from BrowserOneClick import _enumerate_windows
                 from ScreenGuard import WindowMonitor
                 from PIL import ImageGrab
@@ -5842,6 +5856,11 @@ class DrawBotApp:
                 meta=probe_handle_isolated(int(candidate['handle']))
                 exact_controls=prepare_controls(int(candidate['handle']),cancelled=self.stop.is_set)
                 rect=tuple(meta['client_rect'])
+                manual_canvas=None
+                if selected_canvas_state is not None:
+                    manual_canvas=resolve_manual_canvas_override(
+                        selected_canvas_state['corners'],selected_canvas_state['handle'],
+                        selected_canvas_state['client_rect'],int(candidate['handle']),rect)
                 # Exact RGB controls are independent from canvas detection. Save
                 # them as soon as Edit colors has been identified, so a clipped
                 # Paint canvas can fall back to manual area selection without
@@ -5851,11 +5870,12 @@ class DrawBotApp:
                 save_exact_colors('microsoft-paint',exact_controls,anchor=make_anchor(rect))
                 shot=ImageGrab.grab(bbox=rect,all_screens=True)
                 if shot.size!=(rect[2]-rect[0],rect[3]-rect[1]):raise ValueError('Paint window changed size. Try again.')
-                result=detect_setup(shot,screen_origin=rect[:2],cancelled=self.stop.is_set)
+                result=detect_setup(shot,screen_origin=rect[:2],cancelled=self.stop.is_set,canvas_box_override=manual_canvas)
                 if self.stop.is_set():raise InterruptedError()
                 fresh=probe_handle_isolated(int(candidate['handle']))
                 if tuple(fresh['client_rect'])!=rect:raise ValueError('Paint moved during calibration. Try again.')
                 result=save_setup(result,meta,palette_path)
+                result['manual_canvas_reused']=manual_canvas is not None
                 result['exact_colors_ready']=True
                 result['start_request']=request
                 self.events.put(('paint_auto_calibration_complete',result))
