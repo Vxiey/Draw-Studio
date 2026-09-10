@@ -4,7 +4,8 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from PIL import Image
 from PaintPreparation import (_INVOKE_ACTION, rgb_controls, prepare_controls, ensure_paint,
-                              find_control, find_custom_color_opener)
+                              find_control, find_custom_color_opener, close_edit_colors,
+                              edit_colors_dialog_open)
 from DrawBot import DrawBotApp
 
 
@@ -56,6 +57,10 @@ class PaintPreparationTests(unittest.TestCase):
         self.assertIn("SendWait('{ENTER}')",_INVOKE_ACTION)
         self.assertNotIn('catch [System.InvalidOperationException] {$e.GetCurrentPattern',_INVOKE_ACTION)
 
+    def test_dialog_open_detection_is_based_on_rgb_controls(self):
+        self.assertTrue(edit_colors_dialog_open(dialog('en')))
+        self.assertFalse(edit_colors_dialog_open([node('Pencil'),node('Size','Slider')]))
+
     def test_prepare_captures_controls_then_cancels_dialog(self):
         main=[node('Penna'),node('Storlek','Slider',(40,40,60,200)),node('Redigera färger',rect=(80,10,100,30))]
         state={'dialog':False};actions=[]
@@ -69,6 +74,42 @@ class PaintPreparationTests(unittest.TestCase):
         self.assertEqual(out['OpenCustomColor'],(90,20))
         self.assertEqual(out['GreenField'],(160,155))
         self.assertEqual(actions,[('invoke','Penna'),('size','Storlek'),('invoke','Redigera färger'),('invoke','Avbryt')])
+        self.assertFalse(state['dialog'])
+
+    def test_prepare_waits_until_edit_colors_actually_closes(self):
+        main=[node('Pencil'),node('Size','Slider',(40,40,60,200)),node('Edit colors',rect=(80,10,120,40))]
+        state={'dialog':False,'cancel_calls':0};actions=[]
+        def backend(handle,**kw):
+            if kw.get('action'):
+                name=kw['element']['name'];actions.append((kw['action'],name))
+                if name=='Edit colors':state['dialog']=True
+                if name=='Cancel':
+                    state['cancel_calls']+=1
+                    # Simulate current Paint returning from the first UIA invoke
+                    # while the XAML modal is still present for another cycle.
+                    if state['cancel_calls']>=2:state['dialog']=False
+            return dialog('en') if state['dialog'] else main
+        out=prepare_controls(42,backend=backend)
+        self.assertEqual(out['OpenCustomColor'],(100,25))
+        self.assertEqual(state['cancel_calls'],2)
+        self.assertFalse(state['dialog'])
+        self.assertEqual(actions.count(('invoke','Cancel')),2)
+
+    def test_close_edit_colors_refuses_to_claim_success_while_modal_remains(self):
+        def backend(handle,**kw):
+            return dialog('en')
+        with self.assertRaisesRegex(ValueError,'did not close'):
+            close_edit_colors(42,backend=backend,wait=lambda _s:None,max_attempts=2)
+
+    def test_close_edit_colors_can_confirm_pending_rgb_dialog(self):
+        state={'dialog':True};actions=[]
+        def backend(handle,**kw):
+            if kw.get('action'):
+                name=kw['element']['name'];actions.append((kw['action'],name))
+                if name=='OK':state['dialog']=False
+            return dialog('en') if state['dialog'] else [node('Pencil')]
+        self.assertTrue(close_edit_colors(42,accept=True,backend=backend,wait=lambda _s:None))
+        self.assertEqual(actions,[('invoke','OK')])
         self.assertFalse(state['dialog'])
 
     def test_prepare_accepts_current_english_edit_colors_button(self):
@@ -153,7 +194,7 @@ class PaintPreparationTests(unittest.TestCase):
                     'method':'test','confidence':.96,'palette_count':0}
         with patch('PaintPreparation.ensure_paint',return_value=candidate), \
              patch('BrowserOneClick._enumerate_windows',return_value=[candidate]), \
-             patch('ScreenGuard.WindowMonitor.activate',return_value=True), \
+             patch('ScreenGuard.WindowMonitor.activate',return_value=True) as activate, \
              patch('TargetCapture.probe_handle_isolated',return_value=meta), \
              patch('PaintPreparation.prepare_controls',return_value={'OpenCustomColor':(1,1)}), \
              patch('ExactColorTools.save'),patch('CalibrationAnchors.make_anchor',return_value={}), \
@@ -162,6 +203,7 @@ class PaintPreparationTests(unittest.TestCase):
              patch('PaintFullCalibration.save_setup',side_effect=lambda result,meta,path:result):
             self.assertTrue(DrawBotApp.auto_calibrate_paint_tools(app))
         self.assertEqual(captured['canvas_box_override'],(120,330,820,730))
+        self.assertGreaterEqual(activate.call_count,2)
         self.assertTrue(events)
         self.assertEqual(events[-1][0],'paint_auto_calibration_complete')
         self.assertTrue(events[-1][1]['manual_canvas_reused'])
