@@ -79,6 +79,30 @@ class PictureCustomPaletteTests(unittest.TestCase):
         self.assertFalse(mouse.armed);self.assertEqual(mouse.actions[-1],('disarm',))
         self.assertIn(('press','esc'),keyboard.actions)
 
+    def test_dialog_not_ready_prevents_all_numeric_input(self):
+        mouse=Mouse();keyboard=Keyboard()
+        controls={'OpenCustomColor':(10,10),'RedField':(20,20),'GreenField':(30,30),'BlueField':(40,40),'ConfirmColor':(50,50)}
+        def not_ready(): raise TimeoutError('Paint not ready')
+        with self.assertRaises(TimeoutError):
+            pcp.apply_custom_rgb_sequence(mouse,keyboard,controls,[(12,34,56)],
+                wait=lambda _:None,dialog_ready=not_ready)
+        self.assertFalse(any(a[0]=='write' or a==('press','ctrl+a') for a in keyboard.actions))
+        self.assertFalse(mouse.armed)
+
+    def test_unclosed_dialog_prevents_next_color_and_completion(self):
+        mouse=Mouse();keyboard=Keyboard();progress=[]
+        controls={'OpenCustomColor':(10,10),'RedField':(20,20),'GreenField':(30,30),'BlueField':(40,40),'ConfirmColor':(50,50)}
+        def still_open(): raise TimeoutError('Paint dialog still open')
+        with self.assertRaises(TimeoutError):
+            pcp.apply_custom_rgb_sequence(mouse,keyboard,controls,[(12,34,56),(7,8,9)],
+                wait=lambda _:None,dialog_ready=lambda:{'RedField':(22,22)},
+                dialog_closed=still_open,progress=lambda *a:progress.append(a))
+        self.assertEqual([a for a in keyboard.actions if a[0]=='write'],[('write','12'),('write','34'),('write','56')])
+        self.assertIn(('move',22,22),mouse.actions)
+        self.assertNotIn(('move',20,20),mouse.actions)
+        self.assertEqual(progress,[])
+        self.assertFalse(mouse.armed)
+
     def test_picture_palette_is_bounded_and_uses_production_dynamic_colors(self):
         fallback=((0,0,0),(255,255,255),(255,0,0),(0,0,255),(0,128,0),(128,128,128))
         with tempfile.TemporaryDirectory() as tmp, patch.object(pcp,'data_dir',return_value=Path(tmp)):

@@ -13,3 +13,13 @@ The color system includes:
 - human-readable color diagnostics
 
 Named colors are diagnostic/input helpers. They do **not** automatically add extra colors to a calibrated target palette.
+
+## Why can a photo look posterized?
+
+**Quantized target** shows the colors selected by the current plan. A limited target palette can replace many skin tones and shadows with the same pink, gray or white. This can happen before any strokes are drawn.
+
+Check the target profile: **Other drawing app** with **palette Unavailable / exact Unavailable** is not a calibrated Microsoft Paint preview. Choose Microsoft Paint and calibrate its RGB controls. For image-specific colors, use **Adaptive exact (recommended)** or **Exact custom + palette fallback**, with Faithful or Exact fidelity, then rebuild the preview. More colors can preserve more gradients but increase drawing time.
+
+**Custom color palette for picture** analyzes image colors and prepares Paint RGB input. The drawing planner still builds its own palette using the active workflow and color limit; the button does not force every source shade into the preview. Calibration alone does not undo quantization.
+
+The diagnostic **luminance +15%** measures brightness drift in the mapped colors; it is not a brightness adjustment setting. A pair such as **LightGray→White** describes a detected color substitution. Compare the rebuilt Quantized target and Simulated final before a full drawing. Neither is a guarantee of the actual Paint result.

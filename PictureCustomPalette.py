@@ -288,12 +288,13 @@ def build_picture_palette(image, palette_rgb: Iterable[Sequence[int]], *, max_co
 
 def apply_custom_rgb_sequence(mouse, keyboard_backend, controls: dict,
                               colors: Iterable[Sequence[int]], *, cancelled=lambda: False,
-                              wait=time.sleep, progress=None) -> int:
+                              wait=time.sleep, progress=None, dialog_ready=None, dialog_closed=None) -> int:
     """Type a bounded RGB sequence into Paint's calibrated Edit colors dialog."""
     required = ("OpenCustomColor", "RedField", "GreenField", "BlueField", "ConfirmColor")
     missing = [name for name in required if name not in controls]
     if missing:
         raise ValueError("Numeric Paint RGB controls are not calibrated: " + ", ".join(missing))
+    controls = dict(controls)
     values = tuple(_rgb(c) for c in colors)
     dialog_open = False
     completed = 0
@@ -312,6 +313,8 @@ def apply_custom_rgb_sequence(mouse, keyboard_backend, controls: dict,
                 raise InterruptedError("Picture custom palette cancelled.")
             click("OpenCustomColor", 0.16)
             dialog_open = True
+            if dialog_ready is not None:
+                controls.update(dialog_ready())
             for name, value in zip(("RedField", "GreenField", "BlueField"), rgb):
                 if cancelled():
                     raise InterruptedError("Picture custom palette cancelled.")
@@ -320,6 +323,8 @@ def apply_custom_rgb_sequence(mouse, keyboard_backend, controls: dict,
                 keyboard_backend.write(str(int(value)), delay=0.01)
                 wait(0.025)
             click("ConfirmColor", 0.12)
+            if dialog_closed is not None:
+                dialog_closed()
             dialog_open = False
             completed += 1
             if progress is not None:
@@ -407,10 +412,10 @@ def start_picture_custom_palette(app) -> bool:
         if not numeric_rgb_available(PROFILE_KEY):
             # This is deliberately independent from full Paint canvas detection.
             # A clipped/zoomed canvas must not prevent exact RGB calibration.
-            from PaintPreparation import prepare_controls
+            from PaintPreparation import calibrate_rgb_controls
             from CalibrationAnchors import make_anchor
             app.events.put(("status", "Custom color palette for picture: calibrating Paint Edit colors R/G/B controls…"))
-            exact_controls = prepare_controls(handle, cancelled=app.stop.is_set)
+            exact_controls = calibrate_rgb_controls(handle, cancelled=app.stop.is_set)
             meta = probe_handle_isolated(handle)
             save_exact_colors(PROFILE_KEY, exact_controls, anchor=make_anchor(tuple(meta["client_rect"])))
         controls = resolved_controls(PROFILE_KEY, tuple(meta["client_rect"]))
@@ -441,29 +446,38 @@ def start_picture_custom_palette(app) -> bool:
         if keyboard_backend is None:
             import keyboard as keyboard_backend
 
-        def progress(index, total, rgb):
-            # OK normally returns foreground ownership to Paint immediately, but
-            # current XAML Paint can leave Edit colors visible for another UI
-            # cycle. Give it a short cheap foreground grace period; only if the
-            # modal persists do we use the calibrated/UIA OK fallback.
-            active=False
-            for _ in range(8):
+        def dialog_ready():
+            # A fixed 160 ms delay is not proof that XAML has opened its dialog.
+            # Resolve fresh fields before allowing Ctrl+A or numeric input.
+            from PaintPreparation import automation, rgb_controls
+            deadline = time.monotonic() + 8.0
+            while True:
+                if app.stop.is_set():
+                    raise InterruptedError("Picture custom palette cancelled.")
+                nodes = automation(handle, cancelled=app.stop.is_set)
                 try:
-                    if monitor.active(target):active=True;break
-                except (OSError,ValueError,InterruptedError):
-                    pass
-                if app.stop.wait(.04):raise InterruptedError("Picture custom palette cancelled.")
-            if not active:
-                from PaintPreparation import close_edit_colors
-                close_edit_colors(handle,accept=True,cancelled=app.stop.is_set,wait=app.stop.wait)
-                if not monitor.activate(target):
-                    raise InterruptedError("Paint Edit colors did not return focus to the Paint document.")
-                if app.stop.wait(.12):raise InterruptedError("Picture custom palette cancelled.")
+                    return rgb_controls(nodes)
+                except ValueError:
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError("Paint RGB dialog is not ready. No RGB input was sent; keep Edit colors in RGB mode and retry.")
+                app.stop.wait(.20)
+
+        def dialog_closed():
+            # Foreground ownership alone does not prove the modal has closed.
+            from PaintPreparation import close_edit_colors
+            close_edit_colors(handle, accept=True, cancelled=app.stop.is_set, wait=app.stop.wait)
+            if not monitor.activate(target):
+                raise InterruptedError("Paint did not return to the document after Edit colors.")
+            if app.stop.wait(.20):
+                raise InterruptedError("Picture custom palette cancelled.")
+
+        def progress(index, total, rgb):
             app.events.put(("status", f"Custom color palette for picture: RGB {rgb} · {index}/{total}"))
 
         completed = apply_custom_rgb_sequence(
             mouse, keyboard_backend, controls, custom,
             cancelled=app.stop.is_set, wait=app.stop.wait, progress=progress,
+            dialog_ready=dialog_ready, dialog_closed=dialog_closed,
         )
         # Hard postcondition for the preparation action: never leave Edit colors
         # over the document when control returns to Image Draw Bot.

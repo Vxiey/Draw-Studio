@@ -1,3 +1,1 @@
-Image Draw Bot v1.0.144-rc5 Paint calibration release
-Load WindowsBase explicitly before compiling the modal action helper.
-Guard optional managed LegacyIAccessible wrapper before fallback activation.
+Build rc6: wait for Paint RGB dialog readiness between picture palette colors.
