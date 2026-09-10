@@ -68,13 +68,39 @@ def scope_visible(scope,key):
     }[scope]
 
 
+def _refresh_compact_layout(app):
+    layout=getattr(app,'_compact_ui_layout',None)
+    if layout is None:return
+    try:
+        layout.refresh()
+        app._compact_ui_layout_error=None
+    except Exception as exc:
+        # Compact presentation is optional. Never block profile switching or
+        # drawing because a cosmetic widget was destroyed during shutdown.
+        app._compact_ui_layout_error=f'{type(exc).__name__}: {exc}'
+
+
 def register_controls(app,entries):
     app._scoped_profile_controls=[(w,scope,dict(w.pack_info())) for w,scope in entries]
     app._profile_visibility_key=None
+    app._compact_ui_layout=None
+    root=getattr(app,'root',None)
+    if root is None or not callable(getattr(root,'winfo_children',None)):
+        return
+    try:
+        from UICompactLayout import install_compact_layout
+        app._compact_ui_layout=install_compact_layout(app,entries)
+        app._compact_ui_layout_error=None
+    except Exception as exc:
+        # Fail open to the original StudioUI layout. This layer only changes
+        # presentation and must never make the application unusable.
+        app._compact_ui_layout_error=f'{type(exc).__name__}: {exc}'
 
 
 def update_visibility(app,key):
-    if getattr(app,'_profile_visibility_key',None)==key:return
+    if getattr(app,'_profile_visibility_key',None)==key:
+        _refresh_compact_layout(app)
+        return
     entries=getattr(app,'_scoped_profile_controls',())
     # Restore in reverse sibling order, inserting before the next packed sibling.
     for widget,scope,options in reversed(entries):
@@ -86,3 +112,4 @@ def update_visibility(app,key):
         if next_widget is not None:args['before']=next_widget
         widget.pack(**args)
     app._profile_visibility_key=key
+    _refresh_compact_layout(app)
