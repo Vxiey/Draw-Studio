@@ -1,3 +1,13 @@
+# v1.0.143-rc3
+
+- Fix false `Paint canvas border is ambiguous or covered` failures in modern Microsoft Paint.
+- Treat an explicit user-selected Paint drawing area as the authoritative CanvasGuard boundary during Prepare Paint & draw.
+- Reuse that selection only for the same Paint window and same client size; pure window moves are rebased, while resize/target changes fall back to automatic detection.
+- Keep palette, Pencil/Fill/Eraser and Edit colors RGB calibration automatic even when visual canvas-border detection is unreliable.
+- Preserve the full auto-detected canvas envelope around interior obstructions so a covered canvas cannot be silently reduced to a smaller white sub-area.
+- Add a conservative inward safety margin for auto-detected visible Paint borders whose pale shadow/resize chrome is visually indistinguishable from pure white canvas.
+- Add regressions for manual canvas authority, moved-window rebasing, resize rejection, white border halos, compact/clipped canvases and covered-canvas rejection.
+
 # v1.0.143-rc2
 
 - Fix false `Paint canvas visible area is too small` failures on modern Paint.

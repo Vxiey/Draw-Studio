@@ -40,7 +40,7 @@ class Monitor:
 
 class LiveTargetMonitorV1025Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.143-rc2')
+        self.assertEqual(APP_VERSION,'1.0.143-rc3')
         self.assertEqual(FILE_VERSION,'1.0.143')
 
     def make_app(self):
