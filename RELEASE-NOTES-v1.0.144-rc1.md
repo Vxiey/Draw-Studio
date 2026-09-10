@@ -1,22 +1,22 @@
 # Image Draw Bot v1.0.144-rc1 — Automatic Image Drawing
 
-This release completes the public rebrand from **Draw Studio** to **Image Draw Bot** while preserving upgrade compatibility.
+This release publishes **Image Draw Bot** as a Windows desktop app for automatic image drawing in Microsoft Paint, Gartic Phone, Skribbl.io and other drawing apps.
 
-## Rebrand
+## Product identity
 
 - Product name: **Image Draw Bot**
 - Tagline: **Automatic Image Drawing**
 - Repository: `Vxiey/Image-Draw-Bot`
 - Windows executable: `ImageDrawBot.exe`
-- Installer/ZIP/checksum/manifest artifacts use the `ImageDrawBot-` prefix.
-- UI, calibration windows, launcher text, Windows file metadata and release titles use the new brand.
+- Installer, ZIP, checksum and manifest artifacts use the `ImageDrawBot-` prefix.
+- UI, calibration windows, launcher text, Windows file metadata and release titles use the Image Draw Bot identity.
 
-## Compatibility
+## Release package
 
-- Inno Setup AppId is unchanged, so installed Draw Studio copies upgrade in place.
-- Existing `%LOCALAPPDATA%\DrawBotStudio` settings/calibrations are copied to `%LOCALAPPDATA%\ImageDrawBot` on first frozen run; the old directory remains untouched as a fallback.
-- The new updater recognizes both `ImageDrawBot.exe` and legacy `DrawStudio.exe` installations.
-- A legacy-named Setup alias is published for older updater clients during the transition.
+- Windows installer for normal installation and in-app updates.
+- Portable Windows ZIP containing the `ImageDrawBot` folder and `ImageDrawBot.exe`.
+- SHA-256 checksum file and release manifest for verification.
+- Local-only runtime data; no telemetry is included.
 
 ## Paint behavior
 
