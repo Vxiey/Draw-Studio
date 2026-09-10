@@ -35,12 +35,44 @@ def _already_destroyed_tcl_error(error):
     )
 
 
+def _install_destroy_guard(root):
+    """Make branded root destruction idempotent before any optional UI setup."""
+    if sys.platform != 'win32' or getattr(root, '_image_draw_bot_destroy_wrapped', False):
+        return
+    original_destroy = root.destroy
+
+    def destroy():
+        if getattr(root, '_image_draw_bot_destroying', False):
+            return
+        root._image_draw_bot_destroying = True
+        try:
+            from TaskbarIdentity import clear_window_identity
+            try:
+                clear_window_identity(root)
+            except Exception:
+                logging.getLogger(__name__).exception('Taskbar identity cleanup failed')
+            try:
+                original_destroy()
+            except tk.TclError as error:
+                # Shutdown paths can converge after Tk/CTk has already torn
+                # down the interpreter. Treat only that exact state as a
+                # successful no-op; unrelated Tcl errors must still surface.
+                if not _already_destroyed_tcl_error(error):
+                    raise
+        finally:
+            root._image_draw_bot_destroyed = True
+
+    root.destroy = destroy
+    root._image_draw_bot_destroy_wrapped = True
+
+
 def configure_root(root):
     """Apply the same artwork to this Tcl interpreter and future toplevels.
 
     Images are retained on their own root, never in a process-global Tk cache.
     Failure to load decorative artwork must not prevent starting the app.
     """
+    _install_destroy_guard(root)
     if getattr(root, '_image_draw_bot_branding', False):
         return root
     try:
@@ -53,30 +85,6 @@ def configure_root(root):
     except Exception:
         return root
     ico = resource_path(ICON_ICO)
-    if sys.platform == 'win32':
-        # Release property-store values while the native window still exists.
-        original_destroy = root.destroy
-        def destroy():
-            if getattr(root, '_image_draw_bot_destroying', False):
-                return
-            root._image_draw_bot_destroying = True
-            try:
-                from TaskbarIdentity import clear_window_identity
-                try:
-                    clear_window_identity(root)
-                except Exception:
-                    logging.getLogger(__name__).exception('Taskbar identity cleanup failed')
-                try:
-                    original_destroy()
-                except tk.TclError as error:
-                    # Shutdown paths can converge after Tk/CTk has already torn
-                    # down the interpreter. Treat only that exact state as a
-                    # successful no-op; unrelated Tcl errors must still surface.
-                    if not _already_destroyed_tcl_error(error):
-                        raise
-            finally:
-                root._image_draw_bot_destroyed = True
-        root.destroy = destroy
 
     def apply(window):
         try:
