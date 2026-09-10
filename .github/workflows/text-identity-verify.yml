@@ -43,7 +43,7 @@ jobs:
               path = Path(name)
               if path.exists():
                   text = path.read_text(encoding='utf-8')
-                  updated = re.sub(r'^# v1\.0\.144-rc1\n\n.*?(?=\n# v1\.0\.143-rc4\n)', clean_block + '\n', text, count=1, flags=re.S)
+                  updated = re.sub(r'^# v1\.0\.144-rc1\n\n.*?(?=\n# v1\.0\.143-rc4\n)', lambda match: clean_block + '\n', text, count=1, flags=re.S)
                   if updated != text:
                       path.write_text(updated, encoding='utf-8')
                       changed.append(name)
