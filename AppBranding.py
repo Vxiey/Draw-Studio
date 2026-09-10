@@ -1,6 +1,7 @@
 """One visual identity for Tk windows, taskbar grouping and the app header."""
 import sys
 import logging
+import tkinter as tk
 
 from RuntimePaths import resource_path
 
@@ -25,6 +26,15 @@ def set_windows_app_id():
         pass
 
 
+def _already_destroyed_tcl_error(error):
+    """Return True only for Tk's harmless repeated/interpreter teardown error."""
+    message = str(error).lower()
+    return (
+        'application has been destroyed' in message
+        or ('can\'t invoke "destroy" command' in message and 'destroyed' in message)
+    )
+
+
 def configure_root(root):
     """Apply the same artwork to this Tcl interpreter and future toplevels.
 
@@ -47,13 +57,25 @@ def configure_root(root):
         # Release property-store values while the native window still exists.
         original_destroy = root.destroy
         def destroy():
-            from TaskbarIdentity import clear_window_identity
+            if getattr(root, '_image_draw_bot_destroying', False):
+                return
+            root._image_draw_bot_destroying = True
             try:
-                clear_window_identity(root)
-            except Exception:
-                logging.getLogger(__name__).exception('Taskbar identity cleanup failed')
+                from TaskbarIdentity import clear_window_identity
+                try:
+                    clear_window_identity(root)
+                except Exception:
+                    logging.getLogger(__name__).exception('Taskbar identity cleanup failed')
+                try:
+                    original_destroy()
+                except tk.TclError as error:
+                    # Shutdown paths can converge after Tk/CTk has already torn
+                    # down the interpreter. Treat only that exact state as a
+                    # successful no-op; unrelated Tcl errors must still surface.
+                    if not _already_destroyed_tcl_error(error):
+                        raise
             finally:
-                original_destroy()
+                root._image_draw_bot_destroyed = True
         root.destroy = destroy
 
     def apply(window):
