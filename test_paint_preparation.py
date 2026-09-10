@@ -2,6 +2,7 @@ import threading
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
+from PIL import Image
 from PaintPreparation import (_INVOKE_ACTION, rgb_controls, prepare_controls, ensure_paint,
                               find_control, find_custom_color_opener)
 from DrawBot import DrawBotApp
@@ -127,6 +128,43 @@ class PaintPreparationTests(unittest.TestCase):
         app,_=self.app();app.auto_calibrate_paint_tools=lambda **kw:kw
         self.assertEqual(DrawBotApp.start_full_drawing(app),{'start_after':True})
         self.assertFalse(DrawBotApp._strict_safety_required(app))
+
+    def test_auto_prepare_reuses_matching_selected_canvas(self):
+        value=lambda x:SimpleNamespace(get=lambda:x)
+        class Stop:
+            def is_set(self):return False
+            def wait(self,seconds):return False
+        events=[];captured={}
+        app=SimpleNamespace(
+            activity=None,closing=False,game=value('Microsoft Paint'),original=object(),
+            calibration_path='paint-colors.json',paint_start_request=None,stop=Stop(),
+            corners=[(100,300),(800,700)],target_window=(7,(0,0,1000,800)),
+            target_client_rect=(0,0,1000,800),status=SimpleNamespace(set=lambda text:None),
+            events=SimpleNamespace(put=lambda item:events.append(item)),
+        )
+        def begin_worker(name,work):
+            self.assertEqual(name,'paint-auto-calibration');work();return True
+        app.begin_worker=begin_worker
+        candidate={'handle':7,'rect':(20,30,1020,830),'title':'Untitled - Paint'}
+        meta={'handle':7,'rect':(20,30,1020,830),'client_rect':(20,30,1020,830),'dpi':96}
+        def detect(shot,**kwargs):
+            captured.update(kwargs)
+            return {'canvas_box':kwargs.get('canvas_box_override'),'tools':{},'positions':[],'rgbs':[],
+                    'method':'test','confidence':.96,'palette_count':0}
+        with patch('PaintPreparation.ensure_paint',return_value=candidate), \
+             patch('BrowserOneClick._enumerate_windows',return_value=[candidate]), \
+             patch('ScreenGuard.WindowMonitor.activate',return_value=True), \
+             patch('TargetCapture.probe_handle_isolated',return_value=meta), \
+             patch('PaintPreparation.prepare_controls',return_value={'OpenCustomColor':(1,1)}), \
+             patch('ExactColorTools.save'),patch('CalibrationAnchors.make_anchor',return_value={}), \
+             patch('PIL.ImageGrab.grab',return_value=Image.new('RGB',(1000,800),'white')), \
+             patch('PaintFullCalibration.detect_setup',side_effect=detect), \
+             patch('PaintFullCalibration.save_setup',side_effect=lambda result,meta,path:result):
+            self.assertTrue(DrawBotApp.auto_calibrate_paint_tools(app))
+        self.assertEqual(captured['canvas_box_override'],(120,330,820,730))
+        self.assertTrue(events)
+        self.assertEqual(events[-1][0],'paint_auto_calibration_complete')
+        self.assertTrue(events[-1][1]['manual_canvas_reused'])
 
 
 class WindowsScriptSyntaxTests(unittest.TestCase):
