@@ -8,7 +8,7 @@ updates. Profiles/settings are stored separately from the installed program.
 
 ## Portable ZIP
 
-`ImageDrawBot-<version>-Windows-x64.zip` contains a `DrawStudio` folder with
+`ImageDrawBot-<version>-Windows-x64.zip` contains an `ImageDrawBot` folder with
 `ImageDrawBot.exe` and its supporting files. Extract everything, then launch the
 EXE from that folder. Moving only the EXE or running it inside the ZIP will not
 work reliably. Using the in-app installer from a portable build performs a
@@ -24,6 +24,6 @@ on Windows, or download the installer/portable release instead.
 
 Each release includes `ImageDrawBot-<version>-SHA256.txt` and a manifest with file
 sizes, version metadata and checksums. Hash verification checks file integrity;
-it does not provide a trusted publisher signature. Published rc3 is unsigned.
+it does not provide a trusted publisher signature. Published v1.0.144-rc1 is unsigned.
 
-[Downloads](https://github.com/Vxiey/Image-Draw-Bot/releases/tag/v1.0.133-rc3)
+[Downloads](https://github.com/Vxiey/Image-Draw-Bot/releases/tag/v1.0.144-rc1)
