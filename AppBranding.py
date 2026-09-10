@@ -39,7 +39,13 @@ def _install_destroy_guard(root):
     """Make branded root destruction idempotent before any optional UI setup."""
     if sys.platform != 'win32' or getattr(root, '_image_draw_bot_destroy_wrapped', False):
         return
-    original_destroy = root.destroy
+    # Some deterministic unit-test roots intentionally implement only the Tk
+    # methods needed by the subsystem under test. Branding must remain optional
+    # for those objects rather than turning a missing destroy method into a
+    # startup/shutdown failure.
+    original_destroy = getattr(root, 'destroy', None)
+    if not callable(original_destroy):
+        return
 
     def destroy():
         if getattr(root, '_image_draw_bot_destroying', False):
