@@ -24,7 +24,7 @@ def patch_customtkinter_scroll_guard() -> bool:
     original = getattr(CTkScrollableFrame, '_check_if_valid_scroll', None)
     if not callable(original):
         return False
-    if getattr(original, '_drawstudio_safe_scroll_guard', False):
+    if getattr(original, '_imagedrawbot_safe_scroll_guard', False):
         _PATCHED = True
         return True
 
@@ -36,8 +36,8 @@ def patch_customtkinter_scroll_guard() -> bool:
         except (AttributeError, RuntimeError):
             return False
 
-    guarded._drawstudio_safe_scroll_guard = True
-    guarded._drawstudio_original = original
+    guarded._imagedrawbot_safe_scroll_guard = True
+    guarded._imagedrawbot_original = original
     CTkScrollableFrame._check_if_valid_scroll = guarded
     _PATCHED = True
     return True
