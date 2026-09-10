@@ -5855,6 +5855,15 @@ class DrawBotApp:
                 if self.stop.wait(.35):raise InterruptedError()
                 meta=probe_handle_isolated(int(candidate['handle']))
                 exact_controls=prepare_controls(int(candidate['handle']),cancelled=self.stop.is_set)
+                # Edit colors is a modal Paint window. prepare_controls() now
+                # proves that it has disappeared, but explicitly return focus to
+                # the Paint document before taking any canvas/ribbon screenshot.
+                # This prevents our own RGB calibration dialog from being treated
+                # as an overlay covering the selected drawing area.
+                if not WindowMonitor().activate(target):
+                    raise ValueError('Paint Edit colors closed, but Paint could not be reactivated. Bring Paint into view and retry.')
+                if self.stop.wait(.15):raise InterruptedError()
+                meta=probe_handle_isolated(int(candidate['handle']))
                 rect=tuple(meta['client_rect'])
                 manual_canvas=None
                 if selected_canvas_state is not None:
