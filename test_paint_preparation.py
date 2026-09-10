@@ -200,6 +200,7 @@ class PaintPreparationTests(unittest.TestCase):
         app.begin_worker=begin_worker
         candidate={'handle':7,'rect':(20,30,1020,830),'title':'Untitled - Paint'}
         meta={'handle':7,'rect':(20,30,1020,830),'client_rect':(20,30,1020,830),'dpi':96}
+        exact={'OpenCustomColor':(1,1),'ConfirmColor':(2,2),'RedField':(3,3),'GreenField':(4,4),'BlueField':(5,5)}
         def detect(shot,**kwargs):
             captured.update(kwargs)
             return {'canvas_box':kwargs.get('canvas_box_override'),'tools':{},'positions':[],'rgbs':[],
@@ -208,7 +209,9 @@ class PaintPreparationTests(unittest.TestCase):
              patch('BrowserOneClick._enumerate_windows',return_value=[candidate]), \
              patch('ScreenGuard.WindowMonitor.activate',return_value=True) as activate, \
              patch('TargetCapture.probe_handle_isolated',return_value=meta), \
-             patch('PaintPreparation.prepare_controls',return_value={'OpenCustomColor':(1,1)}), \
+             patch('PaintPreparation.prepare_tool_controls',return_value=True), \
+             patch('PaintPreparation.calibrate_rgb_controls',return_value=exact), \
+             patch('ExactColorTools.numeric_rgb_available',return_value=False), \
              patch('ExactColorTools.save'),patch('CalibrationAnchors.make_anchor',return_value={}), \
              patch('PIL.ImageGrab.grab',return_value=Image.new('RGB',(1000,800),'white')), \
              patch('PaintFullCalibration.detect_setup',side_effect=detect), \
