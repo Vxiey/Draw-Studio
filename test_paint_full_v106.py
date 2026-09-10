@@ -1,7 +1,7 @@
 import tempfile,unittest
 from pathlib import Path
 from PIL import Image,ImageDraw
-from PaintFullCalibration import detect_setup,save_setup,choose_paint_window
+from PaintFullCalibration import detect_setup,save_setup,choose_paint_window,resolve_manual_canvas_override
 from PaintTools import build_tool_actions,load_tool_calibration
 
 class PaintFullTests(unittest.TestCase):
@@ -16,9 +16,31 @@ class PaintFullTests(unittest.TestCase):
         self.assertEqual(r['palette_count'],20)
         self.assertEqual(len(set(r['rgbs'])),20)
         self.assertEqual(r['tools']['Fill'],(-1612,128))
-        self.assertEqual(r['canvas_box'],(-1843,267,-77,1034))
+        self.assertEqual(r['canvas_box'],(-1835,275,-85,1026))
         self.assertEqual(r['canvas_visibility'],'full')
         self.assertEqual(r['canvas_clipped_edges'],[])
+        self.assertEqual(r['canvas_source'],'auto-detected')
+
+    def test_manual_canvas_override_is_authoritative(self):
+        box=(140,310,860,760)
+        r=detect_setup(self.screenshot(),canvas_box_override=box)
+        self.assertEqual(r['canvas_box'],box)
+        self.assertEqual(r['canvas_visibility'],'manual-selected')
+        self.assertEqual(r['canvas_source'],'manual-selection')
+        self.assertEqual(r['canvas_clipped_edges'],[])
+        self.assertGreaterEqual(r['confidence'],.95)
+
+    def test_manual_canvas_override_rejects_toolbar_or_outside_window(self):
+        im=self.screenshot()
+        for box in ((100,80,800,600),(-20,300,800,700),(100,300,2000,700)):
+            with self.assertRaises(ValueError):detect_setup(im,canvas_box_override=box)
+
+    def test_manual_canvas_rebases_only_same_window_same_client_size(self):
+        old=(0,20,1920,1048);cur=(30,50,1950,1078);corners=[(100,300),(800,700)]
+        self.assertEqual(resolve_manual_canvas_override(corners,7,old,7,cur),(130,330,830,730))
+        self.assertIsNone(resolve_manual_canvas_override(corners,7,old,8,cur))
+        self.assertIsNone(resolve_manual_canvas_override(corners,7,old,7,(30,50,2050,1078)))
+        self.assertIsNone(resolve_manual_canvas_override([(1,1)],7,old,7,cur))
 
     def test_clipped_canvas_uses_safe_visible_viewport(self):
         im=self.screenshot()
@@ -46,58 +68,43 @@ class PaintFullTests(unittest.TestCase):
         self.assertLess(r['canvas_box'][3],im.height)
 
     def test_compact_visible_canvas_is_accepted(self):
-        im=self.screenshot()
-        d=ImageDraw.Draw(im)
-        d.rectangle((75,225,1844,995),fill=(241,243,245))
-        d.rectangle((700,280,1120,720),fill='white')
+        im=self.screenshot();d=ImageDraw.Draw(im)
+        d.rectangle((75,225,1844,995),fill=(241,243,245));d.rectangle((700,280,1120,720),fill='white')
         r=detect_setup(im)
         self.assertEqual(r['canvas_visibility'],'viewport-compact')
         l,t,rr,b=r['canvas_box']
-        self.assertGreater(l,700)
-        self.assertGreater(t,280)
-        self.assertLess(rr,1120)
-        self.assertLess(b,720)
-        self.assertGreater(rr-l,350)
-        self.assertGreater(b-t,350)
-        self.assertGreaterEqual(r['confidence'],.85)
+        self.assertGreater(l,700);self.assertGreater(t,280);self.assertLess(rr,1120);self.assertLess(b,720)
+        self.assertGreater(rr-l,350);self.assertGreater(b-t,350);self.assertGreaterEqual(r['confidence'],.85)
 
     def test_edge_resize_handle_does_not_split_blank_canvas(self):
-        im=self.screenshot()
-        d=ImageDraw.Draw(im)
-        d.rectangle((930,988,990,995),fill=(190,190,190))
+        im=self.screenshot();d=ImageDraw.Draw(im);d.rectangle((930,988,990,995),fill=(190,190,190))
         r=detect_setup(im)
         self.assertGreater(r['canvas_box'][2]-r['canvas_box'][0],1600)
         self.assertGreater(r['canvas_box'][3]-r['canvas_box'][1],700)
 
     def test_light_border_segment_does_not_false_ambiguous(self):
-        im=self.screenshot()
-        d=ImageDraw.Draw(im)
-        # Simulate modern Paint's pale shadow/resize chrome just outside one
-        # visible document edge.  It should not invalidate an otherwise blank
-        # verified canvas.
+        im=self.screenshot();d=ImageDraw.Draw(im)
         d.rectangle((69,300,74,500),fill='white')
         r=detect_setup(im)
         self.assertEqual(r['canvas_visibility'],'full')
         self.assertGreater(r['canvas_box'][2]-r['canvas_box'][0],1600)
 
-    def test_mostly_white_outside_border_is_still_rejected(self):
-        im=self.screenshot()
-        d=ImageDraw.Draw(im)
-        # A nearly-white outside band with only sparse workspace evidence is
-        # genuinely ambiguous; do not accept it as a safe document boundary.
+    def test_indistinguishable_white_halo_is_inset_safely(self):
+        im=self.screenshot();d=ImageDraw.Draw(im)
+        # Pure white adjacent to the document is indistinguishable from canvas in
+        # a screenshot. Auto detection may envelope it, but the conservative
+        # visible-edge inset must keep the final drawable boundary inside the
+        # known document edge rather than drawing into the halo.
         d.rectangle((69,225,74,995),fill='white')
-        for y in range(225,996,50):
-            d.rectangle((69,y,74,min(995,y+1)),fill=(241,243,245))
-        with self.assertRaisesRegex(ValueError,'border is ambiguous'):
-            detect_setup(im)
+        for y in range(225,996,50):d.rectangle((69,y,74,min(995,y+1)),fill=(241,243,245))
+        r=detect_setup(im)
+        self.assertGreaterEqual(r['canvas_box'][0],77)
+        self.assertGreater(r['canvas_box'][2]-r['canvas_box'][0],1600)
 
     def test_truly_tiny_visible_area_is_rejected(self):
-        im=self.screenshot()
-        d=ImageDraw.Draw(im)
-        d.rectangle((75,225,1844,995),fill=(241,243,245))
-        d.rectangle((850,400,930,470),fill='white')
-        with self.assertRaisesRegex(ValueError,'too small'):
-            detect_setup(im)
+        im=self.screenshot();d=ImageDraw.Draw(im)
+        d.rectangle((75,225,1844,995),fill=(241,243,245));d.rectangle((850,400,930,470),fill='white')
+        with self.assertRaisesRegex(ValueError,'too small'):detect_setup(im)
 
     def test_scaled_reference(self):
         im=self.screenshot()
