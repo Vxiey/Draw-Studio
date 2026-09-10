@@ -3,7 +3,7 @@
 ## Start here
 
 - [README and downloads](README.md)
-- [Current release: v1.0.143-rc3](RELEASE-NOTES-v1.0.143-rc3.md)
+- [Current release: v1.0.143-rc4](RELEASE-NOTES-v1.0.143-rc4.md)
 - [Automatic Paint setup and RGB calibration](docs/PAINT-AUTOMATIC-PREPARATION.md)
 - [In-app updates](docs/IN-APP-UPDATES.md)
 - [Windows installer, portable ZIP and source layout](docs/RELEASE-STRUCTURE.md)

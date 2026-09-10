@@ -13,7 +13,7 @@ from Version import APP_VERSION, FILE_VERSION
 
 class ResourceSchedulerV1044Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.143-rc3')
+        self.assertEqual(APP_VERSION,'1.0.143-rc4')
         self.assertEqual(FILE_VERSION,'1.0.143')
 
     def test_modes_validate(self):

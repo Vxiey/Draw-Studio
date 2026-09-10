@@ -1,3 +1,13 @@
+# v1.0.143-rc4
+
+- Fix Paint drawing startup when the automatic RGB calibration opens **Edit colors** over the canvas.
+- Require the Edit colors modal to be fully closed before canvas/ribbon verification or drawing preparation can continue.
+- Re-scan the Paint UI after Cancel/OK and retry only the already identified modal control when current XAML Paint closes asynchronously.
+- Reactivate and re-probe the Paint document after RGB calibration before taking any canvas screenshot.
+- Apply the same modal-closure invariant to **Custom color palette for picture**, including a bounded foreground grace period and UIA-confirm fallback only when the Paint modal persists.
+- Never report Paint preparation as ready while Edit colors RGB controls are still visible.
+- Add Windows regressions for delayed modal dismissal, stuck-modal rejection, confirm closure, and Paint reactivation.
+
 # v1.0.143-rc3
 
 - Fix false `Paint canvas border is ambiguous or covered` failures in modern Microsoft Paint.
