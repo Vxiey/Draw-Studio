@@ -1,4 +1,4 @@
-name: Draw Studio CI
+name: Image Draw Bot CI
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: draw-studio-ci-${{ github.workflow }}-${{ github.ref }}
+  group: image-draw-bot-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -63,6 +63,6 @@ jobs:
         if: runner.os == 'Windows'
         run: python -m unittest discover -v
 
-      - name: Run DrawBot Windows self-test
+      - name: Run Image Draw Bot Windows self-test
         if: runner.os == 'Windows'
         run: python DrawBot.py --self-test
