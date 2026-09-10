@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="Image Draw Bot — Automatic Image Drawing">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="0.55" stop-color="#10233f"/>
+      <stop offset="1" stop-color="#163b63"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#83d8ff"/>
+      <stop offset="1" stop-color="#7cf3b0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <g opacity="0.18" stroke="#8bd8ff" stroke-width="2">
+    <path d="M-120 610 C 120 430, 240 500, 410 320 S 720 130, 920 260 1220 360, 1400 120" fill="none"/>
+    <path d="M-80 120 C 160 250, 250 80, 460 190 S 800 390, 1060 250 1280 190, 1410 310" fill="none"/>
+  </g>
+  <rect x="86" y="82" width="1108" height="476" rx="40" fill="#121d33" opacity="0.92" stroke="#4d83bd" stroke-width="3"/>
+  <g transform="translate(140 155)">
+    <rect width="150" height="150" rx="28" fill="#1d2f4e" stroke="#56a4eb" stroke-width="4"/>
+    <circle cx="114" cy="38" r="15" fill="#ffd464"/>
+    <path d="M24 122 L70 72 L104 122 Z" fill="#5cc48a"/>
+    <path d="M64 122 L106 84 L134 122 Z" fill="#5aa6e8"/>
+    <path d="M25 132 H128" stroke="#d8ecff" stroke-width="6" stroke-linecap="round"/>
+    <path d="M28 29 C 56 45, 78 31, 114 65" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="28" cy="29" r="6" fill="#ffffff"/>
+    <circle cx="55" cy="42" r="6" fill="#ffffff"/>
+    <circle cx="84" cy="35" r="6" fill="#ffffff"/>
+    <circle cx="114" cy="65" r="6" fill="#ffffff"/>
+  </g>
+  <text x="330" y="238" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="92" font-weight="800" fill="#f8fcff">Image Draw Bot</text>
+  <text x="335" y="310" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="43" font-weight="500" fill="url(#accent)">Automatic Image Drawing</text>
+  <text x="335" y="376" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="31" fill="#c5d8ea">Microsoft Paint • Gartic Phone • Skribbl.io</text>
+  <rect x="335" y="445" width="585" height="56" rx="20" fill="#1c2d48" stroke="#4782be" stroke-width="2"/>
+  <text x="363" y="481" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="25" fill="#e4eef8">smart strokes • fills • previews • safe automation</text>
+</svg>
