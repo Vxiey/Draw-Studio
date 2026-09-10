@@ -18,6 +18,48 @@ def _run(mask):
     return best
 
 
+def _border_band_has_workspace(white, side, *, left, right, top, bottom, width, trim, toolbar_end):
+    """Verify a visible canvas edge using an outside band, not one brittle pixel line.
+
+    Current Paint can draw a light canvas shadow, anti-aliased border or resize
+    handle immediately outside the document.  A single outside row/column can
+    therefore contain enough pure-white pixels to look like more canvas even
+    though grey workspace is present a few pixels farther out.  We accept the
+    edge when the outside band contains substantial workspace overall or a
+    continuous non-white separator along most of the edge.
+    """
+    h,w=white.shape
+    trim=max(0,int(trim));width=max(1,int(width))
+    y0=min(bottom,top+trim);y1=max(y0+1,bottom-trim)
+    x0=min(right,left+trim);x1=max(x0+1,right-trim)
+    if side=='left':
+        if left<=0:return True
+        band=white[y0:y1,max(0,left-width):left]
+        line_axis=1
+    elif side=='right':
+        if right>=w:return True
+        band=white[y0:y1,right:min(w,right+width)]
+        line_axis=1
+    elif side=='top':
+        if top<=toolbar_end:return True
+        band=white[max(toolbar_end,top-width):top,x0:x1]
+        line_axis=0
+    elif side=='bottom':
+        if bottom>=h:return True
+        band=white[bottom:min(h,bottom+width),x0:x1]
+        line_axis=0
+    else:
+        raise ValueError(f'Unknown Paint canvas edge: {side}')
+    if band.size==0:return False
+    nonwhite=np.logical_not(band)
+    density=float(np.mean(nonwhite))
+    line_density=np.mean(nonwhite,axis=line_axis)
+    thickness=band.shape[1] if line_axis==1 else band.shape[0]
+    separator_threshold=max(.04,min(.20,.75/max(1,thickness)))
+    separator_support=float(np.mean(line_density>=separator_threshold)) if line_density.size else 0.
+    return density>=.14 or separator_support>=.80
+
+
 def _detect_visible_canvas(white, *, toolbar_end, w, h, scale, screen_origin, ratio):
     """Return a safe visible Paint drawing area, including compact/clipped viewports.
 
@@ -64,15 +106,19 @@ def _detect_visible_canvas(white, *, toolbar_end, w, h, scale, screen_origin, ra
     if right>=w-edge_tol:clipped.append('right')
     if bottom>=h-edge_tol:clipped.append('bottom')
 
-    # A visible Paint document border should be surrounded by non-canvas pixels.
-    # For a side clipped by the client viewport there is no outside sample, so
-    # that edge is protected by the larger inset below instead.
-    edges=[]
-    if left>edge_tol:edges.append(white[top:bottom,max(0,left-1)])
-    if right<w-edge_tol:edges.append(white[top:bottom,min(w-1,right)])
-    if top>toolbar_end:edges.append(white[max(0,top-1),left:right])
-    if bottom<h-edge_tol:edges.append(white[min(h-1,bottom),left:right])
-    if any(float(np.mean(edge))>.12 for edge in edges if edge.size):
+    # Verify visible borders with a small outside band.  A one-pixel test is too
+    # brittle for modern Paint because its light shadow/resize chrome can be
+    # nearly white.  Clipped edges have no outside band and are protected by the
+    # larger safe inset below.
+    band_width=max(3,round(6*scale));border_trim=max(4,round(12*scale))
+    visible_sides=[]
+    if left>edge_tol:visible_sides.append('left')
+    if right<w-edge_tol:visible_sides.append('right')
+    if top>toolbar_end:visible_sides.append('top')
+    if bottom<h-edge_tol:visible_sides.append('bottom')
+    if any(not _border_band_has_workspace(white,side,left=left,right=right,top=top,bottom=bottom,
+                                           width=band_width,trim=border_trim,toolbar_end=toolbar_end)
+           for side in visible_sides):
         raise ValueError('Paint canvas border is ambiguous or covered. Clear Paint or select the drawing area manually.')
 
     normal_inset=max(2,round(2*scale))
@@ -148,7 +194,7 @@ def detect_setup(image,screen_origin=(0,0),cancelled=lambda:False):
     clipped=bool(clipped_edges)
     return {'tools':tools,'positions':positions,'rgbs':rgbs,'canvas_box':box,'palette_count':len(rgbs),
             'confidence':.85 if compact else (.87 if clipped else .90),
-            'method':'modern-paint-grid-and-icons-v4',
+            'method':'modern-paint-grid-and-icons-v5',
             'canvas_visibility':'viewport-compact' if compact else ('viewport-clipped' if clipped else 'full'),
             'canvas_clipped_edges':list(clipped_edges)}
 
