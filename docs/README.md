@@ -17,7 +17,7 @@ Image Draw Bot converts pictures into mouse paths for Microsoft Paint and calibr
 
 ## Development and publishing
 
-- [Upcoming v1.0.144-rc1 source changes](../RELEASE-NOTES-v1.0.144-rc1.md)
+- [v1.0.144-rc1 release notes](../RELEASE-NOTES-v1.0.144-rc1.md)
 - [Release publishing](PUBLISHING.md)
 - [Release naming](RELEASE-NAMING.md)
 - [GitHub discovery and social preview](GITHUB-SEO-CHECKLIST.md)

@@ -24,18 +24,17 @@ Image Draw Bot is a source-available Windows desktop app for automatic image dra
 
 ## Download for Windows
 
-The latest published build is **v1.0.143-rc4**, distributed under the previous
-Draw Studio name. The source on `main` uses **Image Draw Bot v1.0.144-rc1**;
-its renamed Windows packages will appear on the [releases page](https://github.com/Vxiey/Image-Draw-Bot/releases) after publication.
+Download **Image Draw Bot v1.0.144-rc1** for Windows 10/11 x64.
+The installer and portable ZIP include Python and use the Image Draw Bot name.
 
 | Download | How to use it |
 | --- | --- |
-| [Windows installer — recommended](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.143-rc4/DrawStudio-1.0.143-rc4-Windows-x64-Setup.exe) | Published v1.0.143-rc4. Run Setup; Python is included. |
-| [Portable Windows ZIP](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.143-rc4/DrawStudio-1.0.143-rc4-Windows-x64.zip) | Published v1.0.143-rc4. Extract the entire ZIP and run the included EXE. Keep its supporting files together. |
-| [SHA-256 checksums](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.143-rc4/DrawStudio-1.0.143-rc4-SHA256.txt) | Verify the downloaded files. |
+| [Windows installer — recommended](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc1/ImageDrawBot-1.0.144-rc1-Windows-x64-Setup.exe) | Run Setup, then open Image Draw Bot. Python is included. |
+| [Portable Windows ZIP](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc1/ImageDrawBot-1.0.144-rc1-Windows-x64.zip) | Extract the entire ZIP and run ImageDrawBot/ImageDrawBot.exe. Keep its supporting files together. |
+| [SHA-256 checksums](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc1/ImageDrawBot-1.0.144-rc1-SHA256.txt) | Verify the downloaded files. |
 
 [All releases](https://github.com/Vxiey/Image-Draw-Bot/releases) ·
-[Upcoming version notes](RELEASE-NOTES-v1.0.144-rc1.md) ·
+[Release notes](RELEASE-NOTES-v1.0.144-rc1.md) ·
 [Setup and troubleshooting](README-INDEX.md) · [Frequently asked questions](docs/FAQ.md)
 
 ## Core features

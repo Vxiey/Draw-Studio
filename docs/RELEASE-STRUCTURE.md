@@ -25,6 +25,6 @@ on Windows, or download the installer/portable release instead.
 Each release includes `ImageDrawBot-<version>-SHA256.txt` and a manifest with file
 sizes, version metadata and checksums. Hash verification checks file integrity;
 it does not provide a trusted publisher signature. Published Windows downloads are unsigned.
-The `ImageDrawBot-` naming applies to upcoming packages; historical releases retain their original asset names.
+The `ImageDrawBot-` naming applies to v1.0.144-rc1 and later packages; historical releases retain their original asset names.
 
 [Downloads](https://github.com/Vxiey/Image-Draw-Bot/releases)

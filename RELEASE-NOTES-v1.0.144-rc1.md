@@ -1,7 +1,5 @@
 # Image Draw Bot v1.0.144-rc1 — Automatic Image Drawing
 
-Upcoming source version; Windows packages are not yet published.
-
 This version introduces **Image Draw Bot** as a Windows desktop app for automatic image drawing in Microsoft Paint, Gartic Phone, Skribbl.io and other drawing apps.
 
 ## Product identity

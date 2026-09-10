@@ -16,7 +16,7 @@ Increment `APP_VERSION`/`FILE_VERSION`, synchronize release metadata/tests, and 
 
 Published versions are not overwritten. Draft upload retries must target the same commit. Release tags must match `APP_VERSION`.
 
-The first updater-enabled release was `1.0.133-rc2`; `1.0.140-rc1` strengthened installed-build in-place update and automatic relaunch behavior. The upcoming `1.0.144-rc1` packages use the same verified release workflow;
+The first updater-enabled release was `1.0.133-rc2`; `1.0.140-rc1` strengthened installed-build in-place update and automatic relaunch behavior. The `1.0.144-rc1` packages use the same verified release workflow;
 a version in source code is not an available update until its Release is published.
 
 References: [GitHub release asset digests](https://github.blog/changelog/2025-06-03-releases-now-expose-digests-for-release-assets/) and [Inno Setup command-line parameters](https://jrsoftware.org/ishelp/topic_setupcmdline.htm).
