@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="-6 -6 162 162" role="img" aria-label="Image Draw Bot">
+<title>Image Draw Bot</title>
+  <g>
+    <rect width="150" height="150" rx="28" fill="#1d2f4e" stroke="#56a4eb" stroke-width="4"/>
+    <circle cx="114" cy="38" r="15" fill="#ffd464"/>
+    <path d="M24 122 L70 72 L104 122 Z" fill="#5cc48a"/>
+    <path d="M64 122 L106 84 L134 122 Z" fill="#5aa6e8"/>
+    <path d="M25 132 H128" stroke="#d8ecff" stroke-width="6" stroke-linecap="round"/>
+    <path d="M28 29 C 56 45, 78 31, 114 65" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="28" cy="29" r="6" fill="#ffffff"/>
+    <circle cx="55" cy="42" r="6" fill="#ffffff"/>
+    <circle cx="84" cy="35" r="6" fill="#ffffff"/>
+    <circle cx="114" cy="65" r="6" fill="#ffffff"/>
+  </g>
+</svg>

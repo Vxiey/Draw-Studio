@@ -179,8 +179,9 @@ def build_ui(a, quality, speed):
     # ---- Top bar ---------------------------------------------------------
     header = frame(root)
     header.pack(fill='x', padx=22, pady=(18, 10))
-    logo = label(header, '✦', size=22, bold=True, width=42, height=42,
-                 fg_color=ACCENT_DARK, corner_radius=12, anchor='center')
+    from AppBranding import header_image
+    a.brand_icon = header_image(42)
+    logo = label(header, '', image=a.brand_icon, width=42, height=42, anchor='center')
     logo.pack(side='left', padx=(0, 11))
     title = frame(header)
     title.pack(side='left')

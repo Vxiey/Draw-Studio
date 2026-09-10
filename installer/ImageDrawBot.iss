@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.144-rc1"
+#define MyAppVersion "1.0.144-rc2"
 #endif
 
 [Setup]
@@ -22,6 +22,8 @@ OutputBaseFilename=ImageDrawBot-{#MyAppVersion}-Windows-x64-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\assets\image-draw-bot-icon.ico
+UninstallDisplayIcon={app}\ImageDrawBot.exe
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayName=Image Draw Bot {#MyAppVersion}
@@ -34,8 +36,8 @@ RestartApplications=no
 Source: "..\dist\ImageDrawBot\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Image Draw Bot"; Filename: "{app}\ImageDrawBot.exe"
-Name: "{autodesktop}\Image Draw Bot"; Filename: "{app}\ImageDrawBot.exe"; Tasks: desktopicon
+Name: "{group}\Image Draw Bot"; Filename: "{app}\ImageDrawBot.exe"; IconFilename: "{app}\ImageDrawBot.exe"; AppUserModelID: "Vxiey.ImageDrawBot"
+Name: "{autodesktop}\Image Draw Bot"; Filename: "{app}\ImageDrawBot.exe"; IconFilename: "{app}\ImageDrawBot.exe"; AppUserModelID: "Vxiey.ImageDrawBot"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked

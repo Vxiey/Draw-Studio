@@ -95,7 +95,9 @@ def main(argv=None):
     import argparse,traceback
     p=argparse.ArgumentParser(add_help=False);p.add_argument('--profile',default='generic');p.add_argument('--log',default='');args,_=p.parse_known_args(argv)
     try:
-        enable_dpi_awareness();root=tk.Tk();App(root,args.profile);root.mainloop();return 0
+        from AppBranding import configure_root, set_windows_app_id
+        set_windows_app_id()
+        enable_dpi_awareness();root=configure_root(tk.Tk());App(root,args.profile);root.mainloop();return 0
     except Exception:
         if args.log:
             try:Path(args.log).write_text(traceback.format_exc(),encoding='utf-8')

@@ -293,7 +293,9 @@ def main(argv=None):
     log_path=Path(args.log) if args.log else Path(args.path).with_name('ImageDrawBot-palette-calibration.log')
     try:
         enable_dpi_awareness()
-        root=tk.Tk()
+        from AppBranding import configure_root, set_windows_app_id
+        set_windows_app_id()
+        root=configure_root(tk.Tk())
         CalibrationApp(root,path=Path(args.path),profile=str(args.profile))
         root.mainloop()
         return 0

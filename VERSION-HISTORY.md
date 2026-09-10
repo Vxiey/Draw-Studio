@@ -1,3 +1,9 @@
+# v1.0.144-rc2
+
+- Unified application, window, header, taskbar, installer and shortcut icons.
+- Multi-resolution Windows ICO and a shared 512-pixel UI master from the same SVG artwork.
+- Stable Windows taskbar application identity.
+
 # v1.0.144-rc1
 
 - Image Draw Bot — Automatic Image Drawing public release candidate.

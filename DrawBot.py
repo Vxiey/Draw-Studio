@@ -9772,6 +9772,8 @@ def create_root():
     a plain tkinter.Tk. TkinterDnD's wrapper can be mixed into CTk so drag/drop
     remains available without replacing the CTk root implementation.
     """
+    from AppBranding import configure_root, set_windows_app_id
+    set_windows_app_id()
     try:
         import customtkinter as ctk
         try:
@@ -9788,14 +9790,14 @@ def create_root():
                 def __init__(self,*args,**kwargs):
                     ctk.CTk.__init__(self,*args,**kwargs)
                     self.TkdndVersion=TkinterDnD._require(self)
-            return ImageDrawBotRoot()
+            return configure_root(ImageDrawBotRoot())
         except (ImportError,RuntimeError,tk.TclError):
-            return ctk.CTk()
+            return configure_root(ctk.CTk())
     try:
         from tkinterdnd2 import TkinterDnD
-        return TkinterDnD.Tk()
+        return configure_root(TkinterDnD.Tk())
     except (ImportError,RuntimeError,tk.TclError):
-        return tk.Tk()
+        return configure_root(tk.Tk())
 
 
 def main():
