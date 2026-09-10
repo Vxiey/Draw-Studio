@@ -16,6 +16,10 @@
 | Python not found | Use packaged Setup/ZIP, or install 64-bit Python 3.10+ for source use |
 | GPU unavailable | CPU fallback remains available; check compatible backend and graphics driver |
 
+## Picture colors saved, but the preview still looks wrong
+
+Update to rc8, run **Custom color palette for picture** again, then **Build preview**. rc7 and earlier could leave the old preview visible; Pixel Accurate also ignored image-specific colors. rc8 shares the prepared RGB palette with both the preview and runtime selection. Check Microsoft Paint is selected and RGB calibration is ready. A limited-color photo remains an approximation even after these fixes.
+
 ## Paint closes or stops responding during picture palette preparation
 
 Use v1.0.144-rc7 or later. This release waits for RGB fields before typing and adds each color with +, waits at least 750 ms and closes Edit colors once after the batch. It also avoids Pencil/size preparation for the picture-palette button. These fixes address timing problems; they do not prove the cause of every Paint crash.

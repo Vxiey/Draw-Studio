@@ -12,7 +12,7 @@ With an image loaded, this action selects up to 24 representative image colors a
 
 Leave the mouse alone during preparation. If the Add button or RGB fields cannot be identified, preparation stops. Inspect the slots under **Custom colors / Anpassade färger** after the first run on your Paint version. This action does not clear existing custom colors, and should not be treated as a guarantee that Paint preserves them across restarts.
 
-RGB calibration is saved separately from canvas detection. Saving the picture palette does not force every original image shade into the drawing: the drawing workflow and color limit still determine the plan. See [Color Engine](Color-Engine).
+RGB calibration is saved separately from canvas detection. From rc8, the completed picture palette is used in both Pixel Accurate and normal color planning for the same loaded image. After preparation, press **Build preview**; the old plan is invalidated. Older palette analysis caches are rebuilt after updating. If exact colors become unavailable, the prepared palette stops with an error instead of substituting standard toolbar colors. The limited palette still cannot preserve every original photo shade. See [Color Engine](Color-Engine).
 
 ## When setup fails
 

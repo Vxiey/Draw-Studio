@@ -1,6 +1,6 @@
 # Updates and release history
 
-Current published release: [v1.0.144-rc7](https://github.com/Vxiey/Image-Draw-Bot/releases/tag/v1.0.144-rc7). Custom color palette for picture now saves colors with Paint’s + button, waits at least 750 ms after each addition and keeps Edit colors open for the batch. It includes rc5/rc6 calibration fixes and the earlier Get started guide, setting help and Windows icon updates.
+Current published release: [v1.0.144-rc8](https://github.com/Vxiey/Image-Draw-Bot/releases/tag/v1.0.144-rc8). Pixel Accurate and normal color planning now use the prepared image RGB palette. Preparing picture colors refreshes calibration status and invalidates the previous preview. Re-run Custom color palette for picture after updating, then Build preview. The + saving and 750 ms pauses from rc7 remain.
 
 ## Update the installed app
 
