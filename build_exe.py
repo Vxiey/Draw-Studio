@@ -45,6 +45,7 @@ def main():
         '--name', 'ImageDrawBot',
         '--icon', str(base / 'assets' / 'image-draw-bot-icon.ico'),
         '--hidden-import', 'AppBranding',
+        '--hidden-import', 'GettingStarted',
         '--hidden-import', 'TaskbarIdentity',
         '--add-data', str(base / 'assets' / 'image-draw-bot-icon.png') + ';assets',
         '--add-data', str(base / 'assets' / 'image-draw-bot-icon.ico') + ';assets',

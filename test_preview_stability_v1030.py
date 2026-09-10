@@ -5,7 +5,7 @@ from Version import APP_VERSION, FILE_VERSION
 
 class PreviewStabilityV1030Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.144-rc3')
+        self.assertEqual(APP_VERSION,'1.0.144-rc4')
         self.assertEqual(FILE_VERSION,'1.0.144')
 
     def test_extreme_preview_is_bounded_and_cancellable(self):

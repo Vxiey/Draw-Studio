@@ -47,6 +47,9 @@ class ToolTip:
         self.widget=widget; self.text=str(text); self.delay=int(delay); self.job=None; self.window=None
         widget.bind('<Enter>', self._enter, add='+'); widget.bind('<Leave>', self._leave, add='+')
         widget.bind('<ButtonPress>', self._leave, add='+')
+        widget.bind('<Destroy>', self._leave, add='+')
+        widget.bind('<FocusIn>', self._enter, add='+')
+        widget.bind('<FocusOut>', self._leave, add='+')
     def _enter(self, _event=None):
         self._cancel()
         try:self.job=self.widget.after(self.delay,self._show)
@@ -67,15 +70,21 @@ class ToolTip:
         if self.window is not None:return
         try:
             x=self.widget.winfo_rootx()+18; y=self.widget.winfo_rooty()+self.widget.winfo_height()+7
-            win=tk.Toplevel(self.widget); win.wm_overrideredirect(True); win.wm_geometry(f'+{x}+{y}')
+            win=tk.Toplevel(self.widget); win.wm_overrideredirect(True); win.wm_geometry(f'{x:+d}{y:+d}')
             label=tk.Label(win,text=self.text,justify='left',background='#202c3d',foreground='#f4f7fb',
                            relief='solid',borderwidth=1,font=('Segoe UI',9),padx=8,pady=6,wraplength=360)
             label.pack(); self.window=win
+            win.update_idletasks()
+            left=self.widget.winfo_vrootx(); top=self.widget.winfo_vrooty()
+            right=left+self.widget.winfo_vrootwidth(); bottom=top+self.widget.winfo_vrootheight()
+            x=max(left,min(x,right-win.winfo_reqwidth()-8))
+            y=max(top,min(y,bottom-win.winfo_reqheight()-8))
+            win.wm_geometry(f'{x:+d}{y:+d}')
         except Exception:self.window=None
 
 
 def tooltip(widget, text):
-    ToolTip(widget,text); return widget
+    widget._image_draw_bot_tooltip = ToolTip(widget,text); return widget
 
 
 def button(parent, text, command, primary=False, danger=False, **kwargs):
@@ -155,11 +164,24 @@ def build_ui(a, quality, speed):
         row.pack(fill='x', pady=5)
         text = frame(row)
         text.pack(side='left', fill='x', expand=True)
-        label(text, title, bold=True, size=11).pack(anchor='w')
+        from GettingStarted import explain
+        from tkinter import messagebox
+        explanation = explain(title, help_text)
+        heading = frame(text)
+        heading.pack(fill='x')
+        title_label = label(heading, title, bold=True, size=11, wraplength=145)
+        title_label.pack(side='left')
+        tooltip(title_label, explanation)
+        help_button = ctk.CTkButton(heading, text='?', width=24, height=24,
+            fg_color=FIELD, hover_color=LINE,
+            command=lambda: messagebox.showinfo(title, explanation, parent=root))
+        help_button.pack(side='left', padx=5)
+        tooltip(help_button, 'Click for an explanation and practical advice.')
         if help_text:
             label(text, help_text, muted=True, size=10, wraplength=185).pack(anchor='w', pady=(2, 0))
         widget = menu(row, var, values, width=width)
         widget.pack(side='right', padx=(8, 0))
+        tooltip(widget, explanation)
         return widget
 
     def numeric_row(parent, title, var, help_text='', width=82):
@@ -167,13 +189,26 @@ def build_ui(a, quality, speed):
         row.pack(fill='x', pady=5)
         text = frame(row)
         text.pack(side='left', fill='x', expand=True)
-        label(text, title, bold=True, size=11).pack(anchor='w')
+        from GettingStarted import explain
+        from tkinter import messagebox
+        explanation = explain(title, help_text)
+        heading = frame(text)
+        heading.pack(fill='x')
+        title_label = label(heading, title, bold=True, size=11, wraplength=145)
+        title_label.pack(side='left')
+        tooltip(title_label, explanation)
+        help_button = ctk.CTkButton(heading, text='?', width=24, height=24,
+            fg_color=FIELD, hover_color=LINE,
+            command=lambda: messagebox.showinfo(title, explanation, parent=root))
+        help_button.pack(side='left', padx=5)
+        tooltip(help_button, 'Click for an explanation and practical advice.')
         if help_text:
             label(text, help_text, muted=True, size=10, wraplength=190).pack(anchor='w', pady=(2, 0))
         field = entry(row, var, width)
         field.pack(side='right', padx=(8, 0))
         field.bind('<FocusOut>', a.options_changed)
         field.bind('<Return>', a.options_changed)
+        tooltip(field, explanation)
         return field
 
     # ---- Top bar ---------------------------------------------------------
@@ -198,7 +233,7 @@ def build_ui(a, quality, speed):
     profile_pill.pack(side='left', padx=(8, 0))
 
     btn(header, 'ℹ  About', a.show_about, width=76, height=34).pack(side='right')
-    guide_btn=btn(header, '❔  Quick guide', a.show_welcome, width=112, height=34); guide_btn.pack(side='right', padx=(0, 8)); tooltip(guide_btn,'Open the first-run guide and recommended safety order.')
+    guide_btn=btn(header, '❔  Get started', a.show_welcome, width=112, height=34); guide_btn.pack(side='right', padx=(0, 8)); tooltip(guide_btn,'Learn target setup, drawing modes, previews and troubleshooting.')
     wizard_btn=btn(header, '🧭  Setup wizard', a.show_beginner_setup_wizard, width=126, height=34); wizard_btn.pack(side='right', padx=(0, 8)); tooltip(wizard_btn,'Step 20: show exactly what is missing before Start. No mouse input is used.')
     tools_button = button(header, '🧰  Tools', lambda: None, width=78, height=34)
     tools_button.pack(side='right', padx=(0, 8))

@@ -1,3 +1,8 @@
+## v1.0.144-rc4 — Getting started and contextual help
+
+- Six-section guide with target-specific setup, modes, preview and troubleshooting.
+- Clickable setting help and improved tooltip placement and lifecycle.
+
 ## v1.0.144-rc3 — Windows taskbar identity
 
 - Set the taskbar group icon and relaunch metadata on the native app window.

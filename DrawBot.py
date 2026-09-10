@@ -8942,48 +8942,11 @@ class DrawBotApp:
 
     def show_welcome(self):
         if self.closing or self.activity:return
-        import customtkinter as ctk
-        from ReleaseState import mark_welcome_seen
-        window=ctk.CTkToplevel(self.root)
-        window.title('Welcome to Image Draw Bot')
-        window.geometry('760x720');window.minsize(700,660);window.transient(self.root);window.grab_set()
-        window.configure(fg_color='#101319')
-        outer=ctk.CTkFrame(window,fg_color='#1a202b',corner_radius=20)
-        outer.pack(fill='both',expand=True,padx=22,pady=22)
-        ctk.CTkLabel(outer,text=f'Image Draw Bot {APP_VERSION}',font=('Segoe UI',28,'bold'),text_color='#f0f4fb').pack(anchor='w',padx=28,pady=(26,3))
-        ctk.CTkLabel(outer,text='From image to brush strokes — with a safe, test-first workflow.',font=('Segoe UI',13),text_color='#a6b2c5').pack(anchor='w',padx=28,pady=(0,20))
-        steps=(
-            ('1', 'Choose profile + image', 'Pick the target app profile, then select, paste or drag in an image. A direct drop on the preview canvas can one-shot start supported/non-Paint targets when setup is already safe; otherwise it only imports.'),
-            ('2', 'Calibrate + select canvas', 'Read colors/tools when required. Select ONLY the drawable canvas; CanvasGuard treats it as a hard boundary.'),
-            ('3', 'Run a small test', 'Use Test mouse and Small test first. This catches wrong tools, target focus and calibration before a full drawing.'),
-            ('4', 'Verify safely', 'Run Lock setup → Safety preflight → Fast Dry run. Dry run moves through representative routes without clicking.'),
-            ('5', 'Preview + start', 'Check Drawing preview / Safety map, then Unlock full drawing → Start drawing. Esc stops immediately; F6 pauses/resumes.'),
-        )
-        for number,title,body in steps:
-            row=ctk.CTkFrame(outer,fg_color='#252e3e',corner_radius=14);row.pack(fill='x',padx=28,pady=4)
-            ctk.CTkLabel(row,text=number,width=38,height=38,corner_radius=11,fg_color='#315c50',font=('Segoe UI',15,'bold'),text_color='#f0f4fb').pack(side='left',padx=14,pady=10)
-            text=ctk.CTkFrame(row,fg_color='transparent');text.pack(side='left',fill='x',expand=True,pady=8)
-            ctk.CTkLabel(text,text=title,font=('Segoe UI',14,'bold'),text_color='#f0f4fb').pack(anchor='w')
-            ctk.CTkLabel(text,text=body,font=('Segoe UI',11),text_color='#a6b2c5',justify='left',wraplength=550).pack(anchor='w')
-        ctk.CTkLabel(outer,text='Privacy: Image Draw Bot has no telemetry or bug-report server. Diagnostics and safety reports stay local. GitHub is contacted only when you explicitly use an image URL or press Check for updates.',font=('Segoe UI',11),text_color='#a6b2c5',wraplength=620,justify='left').pack(anchor='w',padx=28,pady=(14,8))
-        def done():
-            try:mark_welcome_seen()
-            except OSError as error:log_event(f'Could not save welcome state: {error!r}')
-            try:window.grab_release()
-            except tk.TclError:pass
-            window.destroy()
-        window.protocol('WM_DELETE_WINDOW',done)
-        ctk.CTkButton(outer,text='Get started',command=done,height=44,fg_color='#98edce',hover_color='#b2f6de',text_color='#15382d',font=('Segoe UI',13,'bold')).pack(anchor='e',padx=28,pady=(6,24))
+        from GettingStarted import show_guide
+        show_guide(self)
 
     def help(self):
-        messagebox.showinfo('How to use Image Draw Bot',
-            '1. Select an image from your computer, paste an image, or load a direct image URL.\n\n'
-            '2. Open the target drawing application. Read/calibrate colors if needed, then select the drawing area.\n\n'
-            '3. For photos/portraits, use Auto or Portrait / shaded. For complex NVIDIA-GPU images use GPU enhanced + Auto CUDA + High throughput and choose a VRAM budget. High precision and a 1–2 px brush are good starting points.\n\n'
-            '4. For Microsoft Paint, use Auto (recommended) and calibrate Pencil + the 100% opacity point. Start drawing and switch to the target application during the countdown.\n\n'
-            'Safety order: Small test → Lock setup → Safety preflight → Fast Dry run → Unlock → Start drawing.\n\n'
-            'F6 pauses/resumes. Esc stops. Do not move the mouse while drawing. CanvasGuard remains active in every profile.\n\n'
-            'Recalibrate after changing zoom, display scaling or palette layout. Small safe window moves can be rebased automatically.')
+        self.show_welcome()
 
     def _handle_event(self,kind,value):
         if getattr(self,'pending_clear_drawing',None) is not None:
