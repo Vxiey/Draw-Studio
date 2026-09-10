@@ -32,7 +32,7 @@ def _run(command, timeout=8):
         raise InterruptedError('The target-window check took too long and was stopped.') from error
     try:
         log_dir=BASE/'logs';log_dir.mkdir(parents=True,exist_ok=True)
-        (log_dir/'DrawStudio-target-probe.log').write_text(
+        (log_dir/'ImageDrawBot-target-probe.log').write_text(
             f'Command: {command!r}\nExit: {result.returncode}\n\nSTDOUT:\n{result.stdout or ""}\n\nSTDERR:\n{result.stderr or ""}',
             encoding='utf-8')
     except OSError:pass

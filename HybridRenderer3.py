@@ -1,9 +1,9 @@
-"""Step 29 — Hybrid Renderer 3.0 for Draw Studio.
+"""Step 29 — Hybrid Renderer 3.0 for Image Draw Bot.
 
 Hybrid Renderer 3.0 is a deterministic orchestration layer.  It does not create
 native input, screen coordinates or calibration state.  Instead it analyses the
 source image with bounded Pillow/NumPy statistics and routes each specialised
-mode into Draw Studio's existing, tested geometry engines:
+mode into Image Draw Bot's existing, tested geometry engines:
 
 * Pixel Art -> Pixel Accurate / full-resolution PixelMap
 * Icon / Logo -> Quick Sketch safe Fill + visible contour

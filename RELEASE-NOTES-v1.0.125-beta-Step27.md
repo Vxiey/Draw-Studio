@@ -1,11 +1,11 @@
-# Draw Studio v1.0.125-beta — Step 27: Export / Import Profiles
+# Image Draw Bot v1.0.125-beta — Step 27: Export / Import Profiles
 
-Step 27 adds portable, validated profile sharing without weakening Draw Studio's existing profile isolation or native-input safety gates.
+Step 27 adds portable, validated profile sharing without weakening Image Draw Bot's existing profile isolation or native-input safety gates.
 
 ## New
 
 - Export the currently selected profile as `.drawprofile` or JSON.
-- Import portable Draw Studio profiles.
+- Import portable Image Draw Bot profiles.
 - Exported profiles include target identity, renderer settings, CPU/GPU/RAM resource limits, saved canvas metadata, palette calibration, tool calibration and exact-color calibration when available.
 - Schema/version metadata with migration of the initial schema-0 prototype to schema 1.
 - Strict pre-import validation for format, schema, settings, canvas coordinates and calibration payloads.
@@ -26,7 +26,7 @@ The portable format deliberately excludes machine/runtime state such as:
 - target window handles and target geometry runtime state
 - target lock, preflight, dry-run and full-draw authorization
 
-Imported calibration never counts as a completed safety check. Draw Studio reloads the destination profile in a disarmed configuration-only state, and the normal target/calibration/safety verification remains required before drawing.
+Imported calibration never counts as a completed safety check. Image Draw Bot reloads the destination profile in a disarmed configuration-only state, and the normal target/calibration/safety verification remains required before drawing.
 
 ## Validation
 

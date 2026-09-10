@@ -1,7 +1,7 @@
 """Parse drag/drop payloads for direct game-canvas image drops.
 
 Browser drags are not identical to File Explorer drags. Depending on Chrome,
-Edge, Windows and TkDND, Draw Studio may receive a local file path, a file://
+Edge, Windows and TkDND, Image Draw Bot may receive a local file path, a file://
 URI, plain URL text or a small HTML fragment containing an image URL. This
 module normalizes those forms without performing network access.
 """

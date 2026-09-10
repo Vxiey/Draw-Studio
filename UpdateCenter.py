@@ -7,7 +7,7 @@ from typing import Iterable
 
 from Version import APP_VERSION, BUILD_CHANNEL
 
-GITHUB_REPOSITORY = "Vxiey/Draw-Studio"
+GITHUB_REPOSITORY = "Vxiey/Image-Draw-Bot"
 GITHUB_RELEASES_API = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases?per_page=100"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPOSITORY}/releases"
 
@@ -102,7 +102,7 @@ def check_for_updates(*, request_get=None, timeout=(4, 8)) -> dict:
         request_get = requests.get
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": f"DrawStudio/{APP_VERSION}",
+        "User-Agent": f"ImageDrawBot/{APP_VERSION}",
         "X-GitHub-Api-Version": "2026-03-10",
     }
     try:
@@ -123,7 +123,7 @@ def check_for_updates(*, request_get=None, timeout=(4, 8)) -> dict:
             "release_url": GITHUB_RELEASES_PAGE,
             "release_name": "",
             "prerelease": False,
-            "message": "No published Draw Studio release was found yet.",
+            "message": "No published Image Draw Bot release was found yet.",
         }
 
     latest = normalize_tag(release.get("tag_name"))
@@ -147,24 +147,34 @@ def check_for_updates(*, request_get=None, timeout=(4, 8)) -> dict:
 
 
 def installer_asset(release):
-    """Only the exact Windows installer for this release is eligible."""
+    """Return one verified installer, preferring the Image Draw Bot name.
+
+    DrawStudio is accepted only as a transition bridge for pre-v1.0.144 clients.
+    """
     from urllib.parse import urlparse,unquote
     version=normalize_tag(release.get('tag_name'))
     if parse_version(version) is None:return None
-    name=f'DrawStudio-{version}-Windows-x64-Setup.exe'
+    names=(f'ImageDrawBot-{version}-Windows-x64-Setup.exe',
+           f'DrawStudio-{version}-Windows-x64-Setup.exe')
+    repositories=('Vxiey/Image-Draw-Bot','Vxiey/Draw-Studio')
     hits=[]
-    for asset in release.get('assets') or ():
-        if not isinstance(asset,dict) or asset.get('name')!=name:continue
-        url=str(asset.get('browser_download_url') or '')
-        parsed=urlparse(url)
-        expected=f'/{GITHUB_REPOSITORY}/releases/download/{release["tag_name"]}/{name}'
-        if parsed.scheme!='https' or parsed.netloc!='github.com' or unquote(parsed.path)!=expected or parsed.query or parsed.fragment:continue
-        digest=str(asset.get('digest') or '')
-        if not re.fullmatch(r'sha256:[0-9a-fA-F]{64}',digest):continue
-        size=asset.get('size')
-        if type(size) is not int or not 0<size<=2*1024**3:continue
-        hits.append(dict(name=name,url=url,sha256=digest[7:].lower(),size=size,version=version))
-    return hits[0] if len(hits)==1 else None
+    for rank,name in enumerate(names):
+        for asset in release.get('assets') or ():
+            if not isinstance(asset,dict) or asset.get('name')!=name:continue
+            url=str(asset.get('browser_download_url') or '')
+            parsed=urlparse(url)
+            valid_paths={f'/{repo}/releases/download/{release["tag_name"]}/{name}' for repo in repositories}
+            if parsed.scheme!='https' or parsed.netloc!='github.com' or unquote(parsed.path) not in valid_paths or parsed.query or parsed.fragment:continue
+            digest=str(asset.get('digest') or '')
+            if not re.fullmatch(r'sha256:[0-9a-fA-F]{64}',digest):continue
+            size=asset.get('size')
+            if type(size) is not int or not 0<size<=2*1024**3:continue
+            hits.append((rank,dict(name=name,url=url,sha256=digest[7:].lower(),size=size,version=version)))
+    if not hits:return None
+    hits.sort(key=lambda item:item[0])
+    best_rank=hits[0][0]
+    best=[item for rank,item in hits if rank==best_rank]
+    return best[0] if len(best)==1 else None
 
 
 def download_installer(asset, *, directory=None, request_get=None, cancelled=lambda:False, progress=lambda done,total:None):
@@ -192,7 +202,7 @@ def download_installer(asset, *, directory=None, request_get=None, cancelled=lam
     try:
         total=0;digest=hashlib.sha256();deadline=time.monotonic()+1800
         with os.fdopen(fd,'wb') as output:
-            response=request_get(asset['url'],stream=True,timeout=(5,15),headers={'User-Agent':f'DrawStudio/{APP_VERSION}'})
+            response=request_get(asset['url'],stream=True,timeout=(5,15),headers={'User-Agent':f'ImageDrawBot/{APP_VERSION}'})
             response.raise_for_status()
             final=urlparse(str(getattr(response,'url',asset['url'])))
             if final.scheme!='https' or final.hostname not in ('github.com','release-assets.githubusercontent.com','objects.githubusercontent.com'):
@@ -234,7 +244,7 @@ def installer_launch_args(path, *, executable=None):
             '/VERYSILENT',
             '/SUPPRESSMSGBOXES',
             '/CLOSEAPPLICATIONS',
-            '/RELAUNCHDRAWSTUDIO',
+            '/RELAUNCHIMAGEDRAWBOT',
             '/DIR='+str(current.parent),
         ])
     return args

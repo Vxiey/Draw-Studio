@@ -12,12 +12,12 @@ During the RC phase, new renderer features are frozen. Changes should be limited
 
 - `Version.py`, `version_info.txt` and Inno Setup version consistency
 - fixed Inno Setup `AppId` and per-user installation policy
-- Update Center repository consistency (`Vxiey/Draw-Studio`)
+- Update Center repository consistency (`Vxiey/Image-Draw-Bot`)
 - RC channel/version validation
 - build workflow hardening hooks
 - repeated start/stop/disarm lifecycle soak
 - repeated built-in profile-storage isolation soak
-- Windows ZIP integrity and required `DrawStudio.exe`
+- Windows ZIP integrity and required `ImageDrawBot.exe`
 - rejection of logs, dumps, bytecode, tests and one-time patch files in Windows packages
 - SHA-256 verification
 - release manifest validation
@@ -30,12 +30,12 @@ The permanent Windows workflow now:
 
 1. runs the Step 30 source gate,
 2. runs the complete unit-test discovery suite,
-3. runs Draw Studio's non-interactive self-test,
+3. runs Image Draw Bot's non-interactive self-test,
 4. builds the PyInstaller onedir application,
 5. builds the per-user Inno Setup installer,
 6. validates ZIP/installer/checksum/manifest artifacts,
 7. silently installs the RC into an isolated temporary directory,
-8. runs the installed `DrawStudio.exe --self-test`,
+8. runs the installed `ImageDrawBot.exe --self-test`,
 9. silently uninstalls it,
 10. uploads only validated release artifacts.
 
@@ -43,7 +43,7 @@ A GitHub tag must exactly match `v{APP_VERSION}` before `build_release.py` will 
 
 ## Update hardening
 
-The manual Update Center points to the active repository `Vxiey/Draw-Studio`. RC-channel update selection accepts release-candidate/stable builds instead of treating older beta-channel releases as RC updates. Network access remains explicit: checking for updates happens only when the user asks for it, and the updater still does not auto-download or auto-install anything.
+The manual Update Center points to the active repository `Vxiey/Image-Draw-Bot`. RC-channel update selection accepts release-candidate/stable builds instead of treating older beta-channel releases as RC updates. Network access remains explicit: checking for updates happens only when the user asks for it, and the updater still does not auto-download or auto-install anything.
 
 ## Installer hardening
 

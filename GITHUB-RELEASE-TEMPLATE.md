@@ -1,8 +1,8 @@
-# Draw Studio {{VERSION}}
+# Image Draw Bot {{VERSION}}
 
 ## Release candidate
 
-This is a Draw Studio release-candidate build. The versioned feature roadmap is frozen while RC validation is in progress.
+This is a Image Draw Bot release-candidate build. The versioned feature roadmap is frozen while RC validation is in progress.
 
 ## Download
 
@@ -16,7 +16,7 @@ Before publication, the release workflow must pass:
 
 - release source gate
 - complete regression discovery
-- Draw Studio self-test
+- Image Draw Bot self-test
 - PyInstaller build validation
 - Windows ZIP integrity validation
 - Inno Setup build validation
@@ -26,7 +26,7 @@ Before publication, the release workflow must pass:
 ## Requirements
 
 - Windows 10/11 x64
-- Same privilege level for Draw Studio and the target application; normally both non-admin
+- Same privilege level for Image Draw Bot and the target application; normally both non-admin
 - For Gartic Phone: Google Chrome with **Artist Tools for Gartic Phone** installed and enabled
 
 ## Safety

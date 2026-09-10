@@ -1,4 +1,4 @@
-"""Vendor-neutral GPU hardware discovery for Draw Studio.
+"""Vendor-neutral GPU hardware discovery for Image Draw Bot.
 
 Step 22 expands the original NVIDIA-only probe so the hardware auto tuner can
 see NVIDIA, AMD and Intel adapters without assuming CUDA == GPU.  Discovery is

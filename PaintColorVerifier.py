@@ -1,4 +1,4 @@
-"""Perceptual Paint custom-color verification for Draw Studio v1.0.124-beta."""
+"""Perceptual Paint custom-color verification for Image Draw Bot v1.0.124-beta."""
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence

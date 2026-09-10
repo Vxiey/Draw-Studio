@@ -9,8 +9,8 @@ from Version import APP_VERSION, FILE_VERSION
 
 class Step10Tests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(APP_VERSION,'1.0.143-rc4')
-        self.assertEqual(FILE_VERSION,'1.0.143')
+        self.assertEqual(APP_VERSION,'1.0.144-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.144')
 
     def test_recovery_snapshot_never_restores_armed_state(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -33,14 +33,14 @@ class Step10Tests(unittest.TestCase):
 
     def test_diagnostics_excludes_recovery_image_and_sanitizes(self):
         with tempfile.TemporaryDirectory() as tmp:
-            base=Path(tmp);(base/'logs').mkdir();(base/'logs'/'DrawStudio-session.log').write_text(r'path=C:\Users\Felix\Desktop\secret.png token=abc123')
+            base=Path(tmp);(base/'logs').mkdir();(base/'logs'/'ImageDrawBot-session.log').write_text(r'path=C:\Users\Felix\Desktop\secret.png token=abc123')
             (base/'settings.json').write_text(json.dumps({'quality':'High detail','corners':[[1,2],[3,4]]}))
             out=base/'diag'
             with patch.object(DP,'DIAGNOSTICS_DIR',out),patch.object(DP,'data_dir',lambda:base),patch.object(DP,'diagnostics_summary',lambda:{'available':True,'has_cached_image':True}):
                 path=DP.create_diagnostics_package({'profile':'Microsoft Paint'})
                 with zipfile.ZipFile(path) as z:
                     names=set(z.namelist());self.assertNotIn('recovery/last-image.png',names)
-                    log=z.read('logs/DrawStudio-session.log').decode();self.assertNotIn('Felix',log);self.assertNotIn('abc123',log)
+                    log=z.read('logs/ImageDrawBot-session.log').decode();self.assertNotIn('Felix',log);self.assertNotIn('abc123',log)
                     settings=json.loads(z.read('settings-summary.json'));self.assertNotIn('corners',settings['settings.json'])
 
 if __name__=='__main__':unittest.main()

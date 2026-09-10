@@ -1,6 +1,6 @@
-# Publishing Draw Studio
+# Publishing Image Draw Bot
 
-Draw Studio release publishing is intentionally gated and local-first. The release tools do not upload user runtime data, screenshots, calibration state or diagnostics.
+Image Draw Bot release publishing is intentionally gated and local-first. The release tools do not upload user runtime data, screenshots, calibration state or diagnostics.
 
 ## Source verification
 
@@ -32,7 +32,7 @@ This validates source metadata, builds the PyInstaller application, runs the fro
 For RC releases the workflow also performs a silent installer round trip in an isolated temporary directory:
 
 1. silent install,
-2. run installed `DrawStudio.exe --self-test`,
+2. run installed `ImageDrawBot.exe --self-test`,
 3. silent uninstall.
 
 A failure in any gate blocks publication.

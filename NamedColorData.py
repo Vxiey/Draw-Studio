@@ -1,4 +1,4 @@
-"""Static named-color vocabulary for Draw Studio.
+"""Static named-color vocabulary for Image Draw Bot.
 
 Generated into the source tree so runtime does not depend on Matplotlib, Tcl/Tk
 or platform colour databases. CSS4 names are the canonical compact vocabulary;

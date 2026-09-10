@@ -1,4 +1,4 @@
-"""Explicit Start Drawing state tracking for Draw Studio v1.0.119-beta."""
+"""Explicit Start Drawing state tracking for Image Draw Bot v1.0.119-beta."""
 from __future__ import annotations
 
 import time

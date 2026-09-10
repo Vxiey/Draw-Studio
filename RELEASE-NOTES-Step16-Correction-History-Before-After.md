@@ -1,4 +1,4 @@
-# Draw Studio — Step 16 Correction History + Before/After Metrics
+# Image Draw Bot — Step 16 Correction History + Before/After Metrics
 
 Adds local per-profile correction history with compact before/after metrics. The UI can show recent correction results without storing image data.
 

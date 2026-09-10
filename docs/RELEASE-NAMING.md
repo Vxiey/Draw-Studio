@@ -1,15 +1,15 @@
 # Release naming policy
 
-Draw Studio releases, generated archives, GitHub release notes and build-trigger files use versioned feature names only.
+Image Draw Bot releases, generated archives, GitHub release notes and build-trigger files use versioned feature names only.
 
 ## Current format
 
 Use:
 
 ```text
-Draw-Studio-<version>-<feature-focus>.zip
-DrawStudio-<version>-Windows-x64.zip
-DrawStudio-<version>-Windows-x64-Setup.exe
+Image-Draw-Bot-<version>-<feature-focus>.zip
+ImageDrawBot-<version>-Windows-x64.zip
+ImageDrawBot-<version>-Windows-x64-Setup.exe
 RELEASE-NOTES-v<version>.md
 RELEASE-NOTES-v<version>-<feature-focus>.md
 ```
@@ -19,7 +19,7 @@ Do not add roadmap sequence labels to new release titles, artifact names, ZIP na
 ## Examples
 
 ```text
-Draw-Studio-1.0.136-beta-Accuracy-Renderer-Upgrade.zip
+Image-Draw-Bot-1.0.136-beta-Accuracy-Renderer-Upgrade.zip
 RELEASE-NOTES-v1.0.136-beta-Accuracy-Renderer-Upgrade.md
 .github/release-build-trigger
 ```

@@ -2,7 +2,7 @@
 
 v1.0.6 adds a small, explicit capability layer instead of pretending every
 website/app exposes tools in the same place.  Known profiles declare the tools
-Draw Studio can use, but every native click position is still calibrated by the
+Image Draw Bot can use, but every native click position is still calibrated by the
 user and anchored to the selected target window.
 """
 from __future__ import annotations

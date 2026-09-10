@@ -1,6 +1,6 @@
 """Isolated Windows mouse probe.
 
-This helper is intentionally launched in a separate process by Draw Studio.
+This helper is intentionally launched in a separate process by Image Draw Bot.
 If a native Win32/ctypes call fails catastrophically, the GUI process survives
 and can report the helper's exit code and log instead of disappearing.
 """

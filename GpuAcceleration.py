@@ -1,9 +1,9 @@
-"""Optional NVIDIA CUDA acceleration for Draw Studio portrait preprocessing.
+"""Optional NVIDIA CUDA acceleration for Image Draw Bot portrait preprocessing.
 
 v1.0.6 keeps the heavy analysis stage on CUDA where possible. CuPy launches
 CUDA kernels on the selected NVIDIA device; fused RawKernels handle portrait
 enhancement and saliency+Sobel work. A configurable CuPy memory-pool limit
-controls how much VRAM Draw Studio may retain. CPU remains a safe fallback.
+controls how much VRAM Image Draw Bot may retain. CPU remains a safe fallback.
 """
 from __future__ import annotations
 
@@ -216,7 +216,7 @@ def cuda_context(mode: str = "Auto", vram_budget: str = "Auto", performance: str
     """Return the selected CuPy module plus configured AccelerationInfo.
 
     Public Block-D bridge for CUDA-only planners. It uses the same device
-    selection and memory-pool budget as the rest of Draw Studio; callers must
+    selection and memory-pool budget as the rest of Image Draw Bot; callers must
     treat ``None`` as a normal CPU-fallback condition.
     """
     validate_acceleration_mode(mode); validate_vram_budget(vram_budget); validate_gpu_performance(performance)
@@ -268,7 +268,7 @@ def plan_vram_allocation(info: AccelerationInfo, width: int, height: int, arrays
 
     The planner never consumes the last part of the configured budget.  That
     headroom is important on Windows because the desktop compositor and the
-    target drawing app may allocate VRAM while Draw Studio is analysing.
+    target drawing app may allocate VRAM while Image Draw Bot is analysing.
     """
     full_mb=estimate_workspace_mb(width,height,arrays)
     budget=max(96,int(info.vram_budget_mb or info.free_vram_mb or 0))

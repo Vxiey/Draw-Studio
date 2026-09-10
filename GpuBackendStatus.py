@@ -1,4 +1,4 @@
-"""Verified GPU/CPU analysis backend status for Draw Studio v1.0.119-beta.
+"""Verified GPU/CPU analysis backend status for Image Draw Bot v1.0.119-beta.
 
 The helper is local-only and cached. It distinguishes configured VRAM from an
 actually usable CuPy/CUDA backend and performs a tiny one-time arithmetic probe

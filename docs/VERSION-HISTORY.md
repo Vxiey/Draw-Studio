@@ -1,3 +1,12 @@
+# v1.0.144-rc1
+
+- Full public rebrand from **Draw Studio** to **Image Draw Bot — Automatic Image Drawing**.
+- GitHub repository, UI titles, Windows metadata, installer, EXE and release artifacts use the Image Draw Bot identity.
+- Frozen installs use `%LOCALAPPDATA%\ImageDrawBot`; existing `DrawBotStudio` data is copied forward automatically with a safe legacy fallback.
+- Installer AppId remains unchanged for in-place upgrades and stale Draw Studio shortcuts/EXE files are removed.
+- Updater accepts both ImageDrawBot and legacy DrawStudio installer/executable names during the transition.
+- Sketch/single-color Paint modes continue to bypass Edit colors.
+
 # v1.0.143-rc4
 
 - Fix Paint drawing startup when the automatic RGB calibration opens **Edit colors** over the canvas.
@@ -101,7 +110,7 @@ v1.0.97-beta: Single-color sketch for games, including Gartic.
 
 v1.0.96-beta: sketch/subject-focus conflict no longer blocks drawing.
 
-# Draw Studio Version History
+# Image Draw Bot Version History
 
 This file is the quick answer to “what changed?” for each beta/source ZIP. It is shipped in the source package and bundled into the Windows build from v1.0.68 onward.
 
@@ -150,7 +159,7 @@ This file is the quick answer to “what changed?” for each beta/source ZIP. I
 
 | Version | Name | What changed |
 |---|---|---|
-| 1.0.80-beta | Browser One-Click Mode | Choose a supported browser game and add an image; Draw Studio discovers/reuses the game window, auto-detects canvas/palette, runs auto brush + visual preflight, then starts without manual calibration. |
+| 1.0.80-beta | Browser One-Click Mode | Choose a supported browser game and add an image; Image Draw Bot discovers/reuses the game window, auto-detects canvas/palette, runs auto brush + visual preflight, then starts without manual calibration. |
 | 1.0.79-beta | Smart Recovery / Resume | Saves active color + exact unfinished path on recoverable browser stops; next explicit Start recalibrates/preflights and resumes without redrawing completed paths. |
 | 1.0.78-beta | Stroke Delivery Verification | Verifies browser strokes after delivery and retries only a suspected missed/partial stroke once with safer spacing. |
 | 1.0.77-beta | Real-Speed Time Budget | Learns completed browser paths/second and adapts 30/60/90-second path, color and detail budgets while prioritizing large outlines/forms. |
@@ -186,7 +195,7 @@ These entries are generated from the historical markdown notes in `docs/history/
 | 1.0.54 | v1.0.54-beta – Edge Behavior Step 8 | `docs/history/EDGE-BEHAVIOR-v1.0.54.md` |
 | 1.0.53 | v1.0.53-beta – Stroke Clip Step 7 | `docs/history/STROKE-CLIP-v1.0.53.md` |
 | 1.0.52 | v1.0.52-beta – Safe Fill Mask Step 6 | `docs/history/SAFE-FILL-MASK-v1.0.52.md` |
-| 1.0.51 | Draw Studio v1.0.51-beta – Edge Detection Step 5 | `docs/history/CANVAS-EDGE-DETECTION-v1.0.51.md` |
+| 1.0.51 | Image Draw Bot v1.0.51-beta – Edge Detection Step 5 | `docs/history/CANVAS-EDGE-DETECTION-v1.0.51.md` |
 | 1.0.50 | v1.0.50-beta — Anchor Transform Step 4 | `docs/history/ANCHOR-TRANSFORM-v1.0.50.md` |
 | 1.0.49 | Canvas Anchor Detection — v1.0.49 | `docs/history/CANVAS-ANCHORS-v1.0.49.md` |
 | 1.0.48 | Canvas Polygon — v1.0.48 | `docs/history/CANVAS-POLYGON-v1.0.48.md` |
@@ -200,43 +209,43 @@ These entries are generated from the historical markdown notes in `docs/history/
 | 1.0.40 | Auto Paint Calibration — v1.0.40 | `docs/history/AUTO-PAINT-CALIBRATION-v1.0.40.md` |
 | 1.0.39 | Better Fill Engine v1.0.39 | `docs/history/BETTER-FILL-v1.0.39.md` |
 | 1.0.38 | Adaptive Detail Engine — v1.0.38-beta | `docs/history/ADAPTIVE-DETAIL-v1.0.38.md` |
-| 1.0.37 | Draw Studio v1.0.37-beta – Smart Stroke Optimizer | `docs/history/STROKE-OPTIMIZER-v1.0.37.md` |
-| 1.0.35 | Draw Studio v1.0.35-beta – Adaptive Color Verification + Auto-Recovery | `docs/history/ADAPTIVE-COLOR-v1.0.35.md` |
-| 1.0.34 | Draw Studio v1.0.34-beta – Smart Custom Palette + Color Batching | `docs/history/CUSTOM-PALETTE-v1.0.34.md` |
-| 1.0.33 | Draw Studio v1.0.33-beta – Color Engine v2 | `docs/history/COLOR-ENGINE-v1.0.33.md` |
-| 1.0.32 | Draw Studio v1.0.32-beta — Paint Pencil / opacity safety | `docs/history/PAINT-PENCIL-OPACITY-FIX-v1.0.32.md` |
-| 1.0.31 | Draw Studio v1.0.31-beta — Color Calibration Stability | `docs/history/COLOR-CALIBRATION-STABILITY-v1.0.31.md` |
-| 1.0.30 | Draw Studio v1.0.30-beta — Preview Stability Fix | `docs/history/PREVIEW-STABILITY-v1.0.30.md` |
-| 1.0.29 | Draw Studio v1.0.29-beta — Step 11 UI Icons + Profile Experience | `docs/history/UI-PROFILES-v1.0.29.md` |
-| 1.0.28 | Draw Studio v1.0.28-beta — Step 10 Safe Recovery + Diagnostics | `docs/history/SAFE-RECOVERY-DIAGNOSTICS-v1.0.28.md` |
-| 1.0.27 | Draw Studio v1.0.27-beta — Step 9 Performance Profiler + Benchmark | `docs/history/PERFORMANCE-PROFILER-v1.0.27.md` |
-| 1.0.26 | Draw Studio v1.0.26-beta — Step 8: Renderer v2 / Better Shapes | `docs/history/BETTER-SHAPES-v1.0.26.md` |
-| 1.0.25 | Draw Studio v1.0.25-beta — Step 7: Live Target Monitoring | `docs/history/LIVE-TARGET-MONITORING-v1.0.25.md` |
-| 1.0.24 | Draw Studio v1.0.24-beta — Step 6: Target Lock + Calibration Fingerprint | `docs/history/TARGET-LOCK-v1.0.24.md` |
-| 1.0.23 | Draw Studio v1.0.23-beta — Step 5: Dry Run / No-click Plan Test | `docs/history/DRY-RUN-v1.0.23.md` |
-| 1.0.22 | Draw Studio v1.0.22-beta — Step 4: Planning Watchdog + Fallback | `docs/history/PLANNING-WATCHDOG-v1.0.22.md` |
-| 1.0.21 | Draw Studio v1.0.21-beta — Step 3: Progressive Renderer | `docs/history/PROGRESSIVE-RENDERER-v1.0.21.md` |
-| 1.0.20 | Draw Studio v1.0.20 beta — Step 2: Time Budget + Target Stroke Count | `docs/history/TIME-BUDGET-TARGET-STROKES-v1.0.20.md` |
-| 1.0.19 | Draw Studio v1.0.19 beta — Step 1: Preflight Lock | `docs/history/PREFLIGHT-LOCK-v1.0.19.md` |
-| 1.0.18 | Draw Studio v1.0.18-beta — Start Failsafe | `docs/history/START-FAILSAFE-v1.0.18.md` |
-| 1.0.17 | Draw Studio v1.0.17 beta – Skribbl Fast Renderer | `docs/history/SKRIBBL-FAST-RENDERER-v1.0.17.md` |
-| 1.0.16 | Draw Studio v1.0.16 beta – Manual Preview and Start Guard | `docs/history/PREVIEW-START-SAFETY-v1.0.16.md` |
-| 1.0.15 | Draw Studio v1.0.15 – Drawing Start Diagnostics | `docs/history/DRAW-START-DIAGNOSTICS-v1.0.15.md` |
-| 1.0.14 | Draw Studio v1.0.14 – Real CPU/GPU/RAM Workload Allocation | `docs/history/RESOURCE-ALLOCATION-v1.0.14.md` |
-| 1.0.13 | Draw Studio v1.0.13 — CPU / GPU / RAM Allocation | `docs/history/RESOURCE-ALLOCATION-v1.0.13.md` |
-| 1.0.12 | Draw Studio v1.0.12 — Smart Continuous Paths | `docs/history/SMART-PATHS-v1.0.12.md` |
-| 1.0.11 | Draw Studio v1.0.11 — Manual Preview + Stability Defaults | `docs/history/MANUAL-PREVIEW-PERFORMANCE-v1.0.11.md` |
-| 1.0.10 | Draw Studio v1.0.11 — Preview Planning Fix | `docs/history/PREVIEW-PLANNING-v1.0.10.md` |
-| 1.0.9 | Draw Studio 1.0.9 beta — Modern UI / UX Redesign | `docs/history/MODERN-UI-v1.0.9.md` |
-| 1.0.8 | Draw Studio v1.0.8 — Advanced Color Rendering | `docs/history/ADVANCED-COLOR-v1.0.8.md` |
-| 1.0.7 | Draw Studio v1.0.7 — Auto Fill + Smart Tool Control | `docs/history/AUTO-FILL-SMART-TOOLS-v1.0.7.md` |
-| 1.0.6 | Draw Studio v1.0.6 — GPU Acceleration | `docs/history/GPU-ACCELERATION-v1.0.6.md` |
-| 1.0.6 | Draw Studio v1.0.6 — Tool capabilities and Background Fill | `docs/history/TOOLS-AND-AUTOFILL-v1.0.6.md` |
+| 1.0.37 | Image Draw Bot v1.0.37-beta – Smart Stroke Optimizer | `docs/history/STROKE-OPTIMIZER-v1.0.37.md` |
+| 1.0.35 | Image Draw Bot v1.0.35-beta – Adaptive Color Verification + Auto-Recovery | `docs/history/ADAPTIVE-COLOR-v1.0.35.md` |
+| 1.0.34 | Image Draw Bot v1.0.34-beta – Smart Custom Palette + Color Batching | `docs/history/CUSTOM-PALETTE-v1.0.34.md` |
+| 1.0.33 | Image Draw Bot v1.0.33-beta – Color Engine v2 | `docs/history/COLOR-ENGINE-v1.0.33.md` |
+| 1.0.32 | Image Draw Bot v1.0.32-beta — Paint Pencil / opacity safety | `docs/history/PAINT-PENCIL-OPACITY-FIX-v1.0.32.md` |
+| 1.0.31 | Image Draw Bot v1.0.31-beta — Color Calibration Stability | `docs/history/COLOR-CALIBRATION-STABILITY-v1.0.31.md` |
+| 1.0.30 | Image Draw Bot v1.0.30-beta — Preview Stability Fix | `docs/history/PREVIEW-STABILITY-v1.0.30.md` |
+| 1.0.29 | Image Draw Bot v1.0.29-beta — Step 11 UI Icons + Profile Experience | `docs/history/UI-PROFILES-v1.0.29.md` |
+| 1.0.28 | Image Draw Bot v1.0.28-beta — Step 10 Safe Recovery + Diagnostics | `docs/history/SAFE-RECOVERY-DIAGNOSTICS-v1.0.28.md` |
+| 1.0.27 | Image Draw Bot v1.0.27-beta — Step 9 Performance Profiler + Benchmark | `docs/history/PERFORMANCE-PROFILER-v1.0.27.md` |
+| 1.0.26 | Image Draw Bot v1.0.26-beta — Step 8: Renderer v2 / Better Shapes | `docs/history/BETTER-SHAPES-v1.0.26.md` |
+| 1.0.25 | Image Draw Bot v1.0.25-beta — Step 7: Live Target Monitoring | `docs/history/LIVE-TARGET-MONITORING-v1.0.25.md` |
+| 1.0.24 | Image Draw Bot v1.0.24-beta — Step 6: Target Lock + Calibration Fingerprint | `docs/history/TARGET-LOCK-v1.0.24.md` |
+| 1.0.23 | Image Draw Bot v1.0.23-beta — Step 5: Dry Run / No-click Plan Test | `docs/history/DRY-RUN-v1.0.23.md` |
+| 1.0.22 | Image Draw Bot v1.0.22-beta — Step 4: Planning Watchdog + Fallback | `docs/history/PLANNING-WATCHDOG-v1.0.22.md` |
+| 1.0.21 | Image Draw Bot v1.0.21-beta — Step 3: Progressive Renderer | `docs/history/PROGRESSIVE-RENDERER-v1.0.21.md` |
+| 1.0.20 | Image Draw Bot v1.0.20 beta — Step 2: Time Budget + Target Stroke Count | `docs/history/TIME-BUDGET-TARGET-STROKES-v1.0.20.md` |
+| 1.0.19 | Image Draw Bot v1.0.19 beta — Step 1: Preflight Lock | `docs/history/PREFLIGHT-LOCK-v1.0.19.md` |
+| 1.0.18 | Image Draw Bot v1.0.18-beta — Start Failsafe | `docs/history/START-FAILSAFE-v1.0.18.md` |
+| 1.0.17 | Image Draw Bot v1.0.17 beta – Skribbl Fast Renderer | `docs/history/SKRIBBL-FAST-RENDERER-v1.0.17.md` |
+| 1.0.16 | Image Draw Bot v1.0.16 beta – Manual Preview and Start Guard | `docs/history/PREVIEW-START-SAFETY-v1.0.16.md` |
+| 1.0.15 | Image Draw Bot v1.0.15 – Drawing Start Diagnostics | `docs/history/DRAW-START-DIAGNOSTICS-v1.0.15.md` |
+| 1.0.14 | Image Draw Bot v1.0.14 – Real CPU/GPU/RAM Workload Allocation | `docs/history/RESOURCE-ALLOCATION-v1.0.14.md` |
+| 1.0.13 | Image Draw Bot v1.0.13 — CPU / GPU / RAM Allocation | `docs/history/RESOURCE-ALLOCATION-v1.0.13.md` |
+| 1.0.12 | Image Draw Bot v1.0.12 — Smart Continuous Paths | `docs/history/SMART-PATHS-v1.0.12.md` |
+| 1.0.11 | Image Draw Bot v1.0.11 — Manual Preview + Stability Defaults | `docs/history/MANUAL-PREVIEW-PERFORMANCE-v1.0.11.md` |
+| 1.0.10 | Image Draw Bot v1.0.11 — Preview Planning Fix | `docs/history/PREVIEW-PLANNING-v1.0.10.md` |
+| 1.0.9 | Image Draw Bot 1.0.9 beta — Modern UI / UX Redesign | `docs/history/MODERN-UI-v1.0.9.md` |
+| 1.0.8 | Image Draw Bot v1.0.8 — Advanced Color Rendering | `docs/history/ADVANCED-COLOR-v1.0.8.md` |
+| 1.0.7 | Image Draw Bot v1.0.7 — Auto Fill + Smart Tool Control | `docs/history/AUTO-FILL-SMART-TOOLS-v1.0.7.md` |
+| 1.0.6 | Image Draw Bot v1.0.6 — GPU Acceleration | `docs/history/GPU-ACCELERATION-v1.0.6.md` |
+| 1.0.6 | Image Draw Bot v1.0.6 — Tool capabilities and Background Fill | `docs/history/TOOLS-AND-AUTOFILL-v1.0.6.md` |
 | 1.0.5 | Speed Optimization — v1.0.5 beta | `docs/history/SPEED-OPTIMIZATION-v1.0.5.md` |
 | 1.0.4 | Human Mode — v1.0.4 beta | `docs/history/HUMAN-MODE-v1.0.4.md` |
 | 1.0.3 | Draw Quality Upgrade — v1.0.3 beta | `docs/history/DRAW-QUALITY-v1.0.3.md` |
 | 1.0.2 | Precision Upgrade — v1.0.2 beta | `docs/history/PRECISION-v1.0.2.md` |
-| 0.9.3 | Draw Studio 0.9.3 — Stability Code Audit | `docs/history/CODE-AUDIT-v0.9.3.md` |
+| 0.9.3 | Image Draw Bot 0.9.3 — Stability Code Audit | `docs/history/CODE-AUDIT-v0.9.3.md` |
 
 ## Safety note
 

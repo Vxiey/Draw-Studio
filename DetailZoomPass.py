@@ -1,4 +1,4 @@
-"""Adaptive Detail Zoom Pass for Draw Studio.
+"""Adaptive Detail Zoom Pass for Image Draw Bot.
 
 This is an *internal source-analysis zoom*, not browser/page zoom.  The pass
 revisits a bounded set of high-frequency source regions at 2x/4x analysis

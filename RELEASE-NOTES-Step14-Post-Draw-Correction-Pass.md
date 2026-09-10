@@ -1,4 +1,4 @@
-# Draw Studio Step 14 — Post-draw Correction Pass
+# Image Draw Bot Step 14 — Post-draw Correction Pass
 
 - Adds one bounded post-draw correction pass after a trusted Step 13 real-result snapshot.
 - Corrects missed coverage and high source-relative colour errors using the existing profile palette.

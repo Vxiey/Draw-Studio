@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 import sys
 import tempfile
@@ -26,13 +27,20 @@ def resource_path(name: str) -> Path:
 
 
 def data_dir() -> Path:
-    """Return a writable per-user data directory for frozen builds.
+    """Return the writable Image Draw Bot data directory.
 
-    Source builds intentionally keep their data next to the scripts so the ZIP
-    remains portable during beta testing. Frozen builds use LOCALAPPDATA.
+    Frozen builds migrate the legacy DrawBotStudio directory by copying it once.
+    If that copy is blocked, the old directory remains the safe fallback.
     """
     if is_frozen():
-        root = Path((os.environ.get("LOCALAPPDATA") or str(Path.home()))) / "DrawBotStudio"
+        base = Path((os.environ.get("LOCALAPPDATA") or str(Path.home())))
+        root = base / "ImageDrawBot"
+        legacy = base / "DrawBotStudio"
+        if not root.exists() and legacy.exists():
+            try:
+                shutil.copytree(legacy, root)
+            except OSError:
+                root = legacy
     else:
         root = source_dir()
     root.mkdir(parents=True, exist_ok=True)
@@ -82,7 +90,7 @@ def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None
 def helper_command(helper: str, *args: object) -> list[str]:
     """Build a helper command that works both from source and a frozen EXE.
 
-    In a PyInstaller build we re-launch the same DrawStudio.exe with an internal
+    In a PyInstaller build we re-launch the same ImageDrawBot.exe with an internal
     helper switch. This avoids depending on python.exe or loose .py files.
     """
     switches = {

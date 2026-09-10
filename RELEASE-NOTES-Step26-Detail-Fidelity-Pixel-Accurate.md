@@ -1,4 +1,4 @@
-# Draw Studio v1.0.124-beta — Step 26 Detail Fidelity & Pixel-Accurate Planning
+# Image Draw Bot v1.0.124-beta — Step 26 Detail Fidelity & Pixel-Accurate Planning
 
 ## Added
 

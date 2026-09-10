@@ -1,4 +1,4 @@
-"""Step 23 — vendor-neutral real-workload acceleration for Draw Studio.
+"""Step 23 — vendor-neutral real-workload acceleration for Image Draw Bot.
 
 This module consumes the Step 22 per-machine benchmark profile and routes real
 numeric work to the fastest measured backend *per workload*.  NVIDIA CUDA/CuPy,

@@ -1,4 +1,4 @@
-"""Region-aware colour quantization helpers for Draw Studio Step 4.
+"""Region-aware colour quantization helpers for Image Draw Bot Step 4.
 
 The colour reducer previously reasoned almost entirely about global colour mass.
 That is insufficient for textured objects: several nearby shades from one object

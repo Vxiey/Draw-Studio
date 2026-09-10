@@ -1,4 +1,4 @@
-"""Calibrated execution-cost model for Draw Studio v1.0.132-beta.
+"""Calibrated execution-cost model for Image Draw Bot v1.0.132-beta.
 
 The model estimates wall-clock *input* cost, not image-processing cost.  It
 reuses StrokeDelivery's profile-specific native spacing and DrawTimeCalibration's

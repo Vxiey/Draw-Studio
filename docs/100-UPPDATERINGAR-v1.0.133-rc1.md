@@ -1,4 +1,4 @@
-# 100 uppdateringar och småfixar — Draw Studio 1.0.133-rc1
+# 100 uppdateringar och småfixar — Image Draw Bot 1.0.133-rc1
 
 Jämförelsebas: den tidigare levererade 1.0.132-rc1. Nedan räknas konkreta
 beteendeändringar i koden; testfall, versionsbyten och dokumentation räknas inte

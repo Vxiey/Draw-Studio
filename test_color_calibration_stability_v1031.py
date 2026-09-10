@@ -11,8 +11,8 @@ class FakeRoot:
 
 class Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.143-rc4')
-        self.assertEqual(FILE_VERSION,'1.0.143')
+        self.assertEqual(APP_VERSION,'1.0.144-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.144')
 
     def test_palette_helper_command_source_build(self):
         cmd=helper_command('palette','--profile','microsoft-paint')

@@ -1,12 +1,12 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title Draw Studio - Build v1 release
+title Image Draw Bot - Build v1 release
 
 echo ============================================================
-echo Draw Studio - Windows release build
+echo Image Draw Bot - Windows release build
 echo ============================================================
-echo This runs tests, builds DrawStudio.exe and creates a release ZIP.
+echo This runs tests, builds ImageDrawBot.exe and creates a release ZIP.
 echo If Inno Setup 6 is installed, it can also create a per-user installer.
 echo.
 

@@ -24,7 +24,7 @@ PROFILE_UI={
  'Microsoft Paint': dict(icon='🎨', badge='Desktop app', prepare_title='Prepare Microsoft Paint',
      prepare_subtitle='Calibrate Paint tools/colors, select only the canvas, then test.',
      tool_button='🖌  Calibrate Paint tools', palette_button='🎨  Read Paint colors / palette',
-     area_button='▣  Select Paint canvas', tip='Best for high-quality local drawings. Match Draw Studio brush width to Paint.'),
+     area_button='▣  Select Paint canvas', tip='Best for high-quality local drawings. Match Image Draw Bot brush width to Paint.'),
  'Other drawing app': dict(icon='🧩', badge='Custom / generic', prepare_title='Prepare drawing app',
      prepare_subtitle='Calibrate the visible controls/palette, then select only the drawable area.',
      tool_button='🧰  Calibrate Brush / Fill', palette_button='🎨  Read colors / palette',

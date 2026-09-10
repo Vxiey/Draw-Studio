@@ -1,4 +1,4 @@
-# Draw Studio 1.0.140-rc1
+# Image Draw Bot 1.0.140-rc1
 
 This release integrates the drawing-engine correctness and performance work completed in v1.0.134 through v1.0.140 and restores the Windows release/update chain so installed builds can discover and install newer versions.
 
@@ -14,7 +14,7 @@ This release integrates the drawing-engine correctness and performance work comp
 
 - Update Center accepts only the exact versioned Windows installer from this repository.
 - Downloaded installers are size-checked, SHA-256 verified and PE-header checked before launch.
-- Installed Draw Studio builds update the existing installation in place using the fixed application AppId.
+- Installed Image Draw Bot builds update the existing installation in place using the fixed application AppId.
 - In-app updates use a very-silent installer handoff, controlled application shutdown, and automatic relaunch after installation.
 - Portable/source runs never overwrite themselves in place; they use the normal installer flow.
 - A `Version.py` change merged to `main` automatically triggers the verified Windows release workflow.

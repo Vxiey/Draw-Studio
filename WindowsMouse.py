@@ -1,7 +1,7 @@
 """Small, explicit Win32 mouse backend.
 
 Cursor movement defaults to SetCursorPos for compatibility, including during drags.
-An explicit reliable mode can opt into absolute SendInput movement, but Draw Studio
+An explicit reliable mode can opt into absolute SendInput movement, but Image Draw Bot
 never forces the more aggressive backend merely because Microsoft Paint is active.
 """
 import ctypes
@@ -53,7 +53,7 @@ class WindowsMouse:
 
         self.api = ctypes.WinDLL('user32', use_last_error=True)
         self.held = False
-        # Input is opt-in. Merely creating Draw Studio or switching profiles can
+        # Input is opt-in. Merely creating Image Draw Bot or switching profiles can
         # never move/click the pointer. GuardedMouse arms input only after an
         # explicit Test mouse / Start drawing action has activated the target.
         self._input_armed = False
@@ -139,11 +139,11 @@ class WindowsMouse:
             code = ctypes.get_last_error()
             raise OSError(
                 f'Windows did not accept the mouse command (code {code}). '
-                'Run Paint and Draw Studio at the same privilege level and make sure the desktop is unlocked.'
+                'Run Paint and Image Draw Bot at the same privilege level and make sure the desktop is unlocked.'
             )
 
     def _send_absolute_move(self, x, y):
-        """Deliver one non-coalesced absolute move while a Draw Studio drag is held."""
+        """Deliver one non-coalesced absolute move while a Image Draw Bot drag is held."""
         nx, ny = normalize_position(int(x), int(y), self.desktop_rect())
         # MOVE | MOVE_NOCOALESCE | VIRTUALDESK | ABSOLUTE
         flags = 0x0001 | 0x2000 | 0x4000 | 0x8000
@@ -154,7 +154,7 @@ class WindowsMouse:
             code = ctypes.get_last_error()
             raise OSError(
                 f'Windows did not accept the drag movement (code {code}). '
-                'Run Paint and Draw Studio at the same privilege level and make sure the desktop is unlocked.'
+                'Run Paint and Image Draw Bot at the same privilege level and make sure the desktop is unlocked.'
             )
 
     def move(self, x, y):
@@ -199,7 +199,7 @@ class WindowsMouse:
         self._require_input_armed()
         down=self.buttons_down()
         if down:
-            raise InterruptedError('Stopped: release all mouse buttons before Draw Studio presses the brush.')
+            raise InterruptedError('Stopped: release all mouse buttons before Image Draw Bot presses the brush.')
         self._send(0x0002)  # MOUSEEVENTF_LEFTDOWN
         self.held = True
 

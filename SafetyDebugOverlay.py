@@ -1,4 +1,4 @@
-"""Safety debug overlay for Draw Studio v1.0.56.
+"""Safety debug overlay for Image Draw Bot v1.0.56.
 
 This module is deterministic and UI-only. It does not decide whether a stroke is
 safe; it records the already-resolved CanvasGuard/EdgeBehavior outcome and

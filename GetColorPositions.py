@@ -24,7 +24,7 @@ class CalibrationApp:
         self.path=path;self.is_paint=profile=='microsoft-paint';self.profile_key=str(profile);self.preset=PRESETS.get(profile);self.max_colors=96 if str(profile)=='gartic-phone' else 64
         self.map_names=None;self.map_indices=None;self.pending=[];self.rgbs=[];self.job=None;self.snapshot=None
         self.anchor=None;self.anchor_handle=None
-        root.configure(bg=BG);root.title('Draw Studio · Read color palette');root.geometry('760x780');root.minsize(650,620)
+        root.configure(bg=BG);root.title('Image Draw Bot · Read color palette');root.geometry('760x780');root.minsize(650,620)
         style=ttk.Style(root)
         try: style.theme_use('clam')
         except tk.TclError: pass
@@ -38,7 +38,7 @@ class CalibrationApp:
         body=ttk.Frame(root,style='Palette.TFrame');body.pack(fill='both',expand=True,padx=16,pady=16)
         ttk.Label(body,text='🎨  Read colors from your application',font=('Segoe UI',18,'bold'),style='Palette.TLabel').pack(anchor='w')
         ttk.Label(body,text='1. Select palette area   →   2. Review colors   →   3. Save',wraplength=650,style='Palette.TLabel').pack(anchor='w',pady=8)
-        self.status=tk.StringVar(value='Select only the area where Draw Studio should look for color swatches. No mouse input is generated during detection.')
+        self.status=tk.StringVar(value='Select only the area where Image Draw Bot should look for color swatches. No mouse input is generated during detection.')
         self.count=tk.StringVar(value='No palette loaded')
         self.auto=ttk.Button(body,text='▣  Select color sampling area',command=self.start_scan,style='Palette.TButton');self.auto.pack(fill='x',pady=8)
         self.preview=ttk.Label(body,text='The selected sampling area appears here',anchor='center');self.preview.pack(fill='x',pady=8)
@@ -279,7 +279,7 @@ class CalibrationApp:
 def main(argv=None):
     """Run palette calibration as an isolated helper process.
 
-    Keeping this window out of the main Draw Studio process prevents a Tk/native
+    Keeping this window out of the main Image Draw Bot process prevents a Tk/native
     calibration crash from taking down the drawing workspace.
     """
     import argparse
@@ -290,7 +290,7 @@ def main(argv=None):
     parser.add_argument('--profile',default='generic')
     parser.add_argument('--log',default='')
     args,_unknown=parser.parse_known_args(argv)
-    log_path=Path(args.log) if args.log else Path(args.path).with_name('DrawStudio-palette-calibration.log')
+    log_path=Path(args.log) if args.log else Path(args.path).with_name('ImageDrawBot-palette-calibration.log')
     try:
         enable_dpi_awareness()
         root=tk.Tk()

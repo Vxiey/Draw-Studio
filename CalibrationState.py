@@ -1,4 +1,4 @@
-"""Truthful, profile-scoped calibration state reporting for Draw Studio Step 9."""
+"""Truthful, profile-scoped calibration state reporting for Image Draw Bot Step 9."""
 from __future__ import annotations
 
 from pathlib import Path

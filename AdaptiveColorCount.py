@@ -1,4 +1,4 @@
-"""Adaptive exact-colour count selection for Draw Studio Step 5.
+"""Adaptive exact-colour count selection for Image Draw Bot Step 5.
 
 This module decides how many colours are *worth keeping* when the user selects
 ``Exact color count = Auto``.  The recommendation is image-complexity aware and

@@ -1,4 +1,4 @@
-"""Crash-safe deterministic render resume helpers for Draw Studio v1.0.79.
+"""Crash-safe deterministic render resume helpers for Image Draw Bot v1.0.79.
 
 Schema 2 keeps the existing completed-color checkpoint and can additionally
 identify the next *uncompleted path* inside the active browser color batch.

@@ -1,4 +1,4 @@
-"""Named-colour parsing and diagnostics for Draw Studio.
+"""Named-colour parsing and diagnostics for Image Draw Bot.
 
 This module deliberately sits *above* the rendering palette. Named colours are
 accepted as user/UI input and used for human-readable diagnostics, but they are
@@ -203,7 +203,7 @@ def _nearest_cached(rgb: tuple[int, int, int], extended: bool) -> tuple[str, tup
 
 
 def nearest_named_color(rgb: Sequence[int], *, extended: bool = False) -> dict:
-    """Return nearest readable named colour using Draw Studio's OKLab metric."""
+    """Return nearest readable named colour using Image Draw Bot's OKLab metric."""
     rgb3 = _rgb3(rgb)
     name, named_rgb, delta = _nearest_cached(rgb3, bool(extended))
     return {
@@ -247,10 +247,10 @@ def composite_rgba(r: int, g: int, b: int, a, background=(255, 255, 255)) -> tup
 
 
 def parse_named_color_text(text: str, *, background=(255, 255, 255)) -> tuple[int, int, int]:
-    """Parse named/CSS-like text not covered by Draw Studio's legacy hex path.
+    """Parse named/CSS-like text not covered by Image Draw Bot's legacy hex path.
 
     Supported forms: named colours, ``#RGB``, ``#RGBA``, ``rgb(r,g,b)``,
-    ``rgba(r,g,b,a)`` and ``argb(a,r,g,b)``. Eight-digit legacy Draw Studio hex
+    ``rgba(r,g,b,a)`` and ``argb(a,r,g,b)``. Eight-digit legacy Image Draw Bot hex
     remains ``AARRGGBB`` and is intentionally handled by ``Colors.normalize_rgb``.
     """
     if not isinstance(text, str):

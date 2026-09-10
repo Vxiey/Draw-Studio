@@ -1,4 +1,4 @@
-"""Property-based lossless raster tests for Draw Studio planners.
+"""Property-based lossless raster tests for Image Draw Bot planners.
 
 These tests intentionally use the independent RasterIdentity oracle rather than
 Pillow so planner correctness is checked against exact integer pixels.

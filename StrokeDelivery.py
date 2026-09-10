@@ -1,4 +1,4 @@
-"""Deterministic native stroke-delivery policies for Draw Studio.
+"""Deterministic native stroke-delivery policies for Image Draw Bot.
 
 v1.0.75 splits browser delivery by game. The module controls only native input
 spacing/timing; renderer geometry, CanvasGuard and target safety are unchanged.

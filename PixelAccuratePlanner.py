@@ -1,4 +1,4 @@
-"""Pixel-accurate analysis core for Draw Studio Step 26.
+"""Pixel-accurate analysis core for Image Draw Bot Step 26.
 
 Step 26 is deliberately analysis-first. Every target pixel survives into a
 PixelMap before any path optimisation. Step 23 routes palette matching and edge analysis through the fastest measured

@@ -1,4 +1,4 @@
-"""Golden-image regression suite for Draw Studio Step 17.
+"""Golden-image regression suite for Image Draw Bot Step 17.
 
 The suite keeps a tiny deterministic set of local synthetic problem images that
 exercise the bugs fixed in Steps 1-16: banana yellow drifting to pink/orange,
@@ -188,7 +188,7 @@ def ensure_local_golden_images(directory: str | Path | None = None, *, overwrite
         "screen_capture": False,
         "network": False,
         "user_image_data": False,
-        "description": "Synthetic Draw Studio golden-image regression fixtures.",
+        "description": "Synthetic Image Draw Bot golden-image regression fixtures.",
         "cases": rows,
     }
     atomic_write_text(root / "manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))

@@ -1,4 +1,4 @@
-"""Crash-safe local session checkpointing for Draw Studio.
+"""Crash-safe local session checkpointing for Image Draw Bot.
 
 Only local app state is cached. The cached source image is never included in
 reports/diagnostics automatically. Recovery never restores an armed/validated

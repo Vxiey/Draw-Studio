@@ -95,7 +95,7 @@ class WindowMonitor:
         self.api.GetWindowThreadProcessId(handle,ctypes.byref(pid))
         excluded={int(value) for value in excluded_pids if value is not None}
         if pid.value==os.getpid() or pid.value in excluded:
-            raise ValueError('You selected the Draw Studio window. Move it aside and select the target application.')
+            raise ValueError('You selected the Image Draw Bot window. Move it aside and select the target application.')
         # Probe points slightly inside the rectangle. Borders, resize handles and
         # shadows can belong to another HWND even though the drawing surface is
         # entirely inside the intended top-level window.

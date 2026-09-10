@@ -1,4 +1,4 @@
-"""Deterministic canvas corner/triangle anchor detection for Draw Studio v1.0.49.
+"""Deterministic canvas corner/triangle anchor detection for Image Draw Bot v1.0.49.
 
 No AI/ML is used here.  The detector relies on geometry, colour contrast,
 connected components and triangle-shape checks.  It is intentionally

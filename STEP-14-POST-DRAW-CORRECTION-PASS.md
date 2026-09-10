@@ -21,4 +21,4 @@ Step 14 adds one bounded correction pass after a real drawing finishes and Step 
 
 ## Safety model
 
-The correction pass uses the normal Draw Studio execution layer. Existing CanvasGuard, color selection, profile isolation, stroke delivery and safety report systems remain active. Correction data stored after a draw is compact metadata only: path counts, pixel counts, trust state and before/after accuracy numbers.
+The correction pass uses the normal Image Draw Bot execution layer. Existing CanvasGuard, color selection, profile isolation, stroke delivery and safety report systems remain active. Correction data stored after a draw is compact metadata only: path counts, pixel counts, trust state and before/after accuracy numbers.

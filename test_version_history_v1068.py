@@ -7,8 +7,8 @@ import VersionHistory
 
 class VersionHistoryIndexTests(unittest.TestCase):
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION,'1.0.143-rc4')
-        self.assertEqual(FILE_VERSION,'1.0.143')
+        self.assertEqual(APP_VERSION,'1.0.144-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.144')
 
     def test_version_history_files_exist(self):
         root = Path(__file__).resolve().parent
@@ -37,7 +37,7 @@ class VersionHistoryIndexTests(unittest.TestCase):
 
     def test_local_version_history_reader(self):
         text = VersionHistory.read_version_history()
-        self.assertIn('Draw Studio Version History', text)
+        self.assertIn('Image Draw Bot Version History', text)
         self.assertIn(APP_VERSION, text)
 
 

@@ -1,4 +1,4 @@
-# Draw Studio 1.0.143-rc2
+# Image Draw Bot 1.0.143-rc2
 
 ## Microsoft Paint — compact visible canvas fix
 

@@ -1,4 +1,4 @@
-"""Live deadline scheduler for Draw Studio Step 8.
+"""Live deadline scheduler for Image Draw Bot Step 8.
 
 The planning pass already chooses a safe, high-value subset of the drawing.  This
 module is the *runtime* guard that keeps that plan honest while the mouse is

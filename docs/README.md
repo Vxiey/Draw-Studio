@@ -1,6 +1,6 @@
-# Draw Studio documentation
+# Image Draw Bot documentation
 
-This directory contains technical and historical documentation for Draw Studio.
+This directory contains technical and historical documentation for Image Draw Bot.
 
 For normal installation and first-use instructions, start with the repository `README.md`.
 

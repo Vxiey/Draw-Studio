@@ -1,4 +1,4 @@
-"""Adaptive local-detail planning for Draw Studio v1.0.38.
+"""Adaptive local-detail planning for Image Draw Bot v1.0.38.
 
 Pure image helpers only: no UI, mouse input, screen capture or native calls.
 The engine protects high-contrast edges/local structure while simplifying flat

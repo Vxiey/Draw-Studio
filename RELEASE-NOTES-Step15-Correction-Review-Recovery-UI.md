@@ -1,4 +1,4 @@
-# Draw Studio v1.0.124 beta — Step 15 Correction Review + Recovery UI
+# Image Draw Bot v1.0.124 beta — Step 15 Correction Review + Recovery UI
 
 This build adds a post-draw review card and guarded recovery actions for Step 13
 real-result verification and Step 14 post-draw correction.

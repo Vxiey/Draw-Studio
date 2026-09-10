@@ -1,4 +1,4 @@
-# Draw Studio history
+# Image Draw Bot history
 
 Historical release notes and version records are kept so older profile, renderer, calibration and release decisions can be audited without changing current behavior.
 

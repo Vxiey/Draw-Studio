@@ -154,7 +154,7 @@ def build_correction_review_state(options: dict[str, Any] | None, *, can_snapsho
     elif post and not post_available:
         state = "verification_unavailable"; tone = "warning"; title = "Real-result verification unavailable"
         reason = str(post.get("reason") or corr.get("reason") or "safe canvas snapshot was unavailable")
-        summary = "Draw Studio could not score the final canvas, so it did not trust automatic correction decisions."
+        summary = "Image Draw Bot could not score the final canvas, so it did not trust automatic correction decisions."
         next_step = "Inspect the canvas manually. Use full retry only after re-running the safety chain."
     elif low_trust or blank or unexpected or not corr_safe:
         state = "manual_review_required"; tone = "danger"; title = "Manual review required"

@@ -1,4 +1,4 @@
-"""Automatic target-canvas clearing for Draw Studio v1.0.114.
+"""Automatic target-canvas clearing for Image Draw Bot v1.0.114.
 
 The module is deliberately deterministic and profile-aware.  It never guesses a
 native UI coordinate: browser/game Clear, Brush and Eraser controls must come

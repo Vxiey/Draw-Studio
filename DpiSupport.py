@@ -1,4 +1,4 @@
-"""Windows DPI helpers used by Draw Studio.
+"""Windows DPI helpers used by Image Draw Bot.
 
 v1.0.116 centralises DPI detection so target capture, browser discovery and
 live safety checks all use the same physical-pixel rules.  The functions are

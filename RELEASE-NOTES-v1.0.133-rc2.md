@@ -1,6 +1,6 @@
-# Draw Studio 1.0.133-rc2
+# Image Draw Bot 1.0.133-rc2
 
-Check updates now discovers a newer eligible GitHub release, downloads its Windows installer, verifies the published SHA-256 digest and size, and starts the normal installer. Draw Studio saves settings and closes after launch; the installer offers to reopen the app. Installed builds retain their installation directory. Portable/source builds use the normal installation wizard.
+Check updates now discovers a newer eligible GitHub release, downloads its Windows installer, verifies the published SHA-256 digest and size, and starts the normal installer. Image Draw Bot saves settings and closes after launch; the installer offers to reopen the app. Installed builds retain their installation directory. Portable/source builds use the normal installation wizard.
 
 Only an explicit Check updates action triggers this flow. Stop cancels pending downloads/installation handoff. Draft releases, older versions, incorrect asset names and unverified installers are rejected. Failed downloads never overwrite the running application. This uses full versioned installers, not binary delta patches.
 

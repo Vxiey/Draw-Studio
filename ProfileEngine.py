@@ -2,7 +2,7 @@
 
 This module is pure planning policy.  It never touches Tk, the mouse, files,
 calibration, target windows or native input.  A policy only rewrites renderer
-options before validation/planning; Draw Studio's existing safety gates remain
+options before validation/planning; Image Draw Bot's existing safety gates remain
 independent and authoritative.
 """
 from __future__ import annotations

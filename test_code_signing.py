@@ -18,10 +18,10 @@ class CodeSigningTests(unittest.TestCase):
     def test_dependencies_signed_and_upstream_signature_preserved(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
-            for name in ('DrawStudio.exe','python.dll','extension.pyd','data.txt'):(root/name).touch()
+            for name in ('ImageDrawBot.exe','python.dll','extension.pyd','data.txt'):(root/name).touch()
             with patch('CodeSigning.verify',return_value=True),patch('CodeSigning.sign_file') as sign:
                 self.assertEqual(sign_distribution(root,('tool','AA'*20)),3)
-                self.assertEqual([c.args[0].name for c in sign.call_args_list],['DrawStudio.exe'])
+                self.assertEqual([c.args[0].name for c in sign.call_args_list],['ImageDrawBot.exe'])
             with patch('CodeSigning.verify',side_effect=[False,False,True,True,True]),patch('CodeSigning.sign_file') as sign:
                 sign_distribution(root,('tool','AA'*20))
                 self.assertEqual(sign.call_count,3)

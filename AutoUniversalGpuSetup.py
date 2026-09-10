@@ -1,7 +1,7 @@
-"""Optional vendor-neutral OpenCL bootstrap for Draw Studio Step 22.
+"""Optional vendor-neutral OpenCL bootstrap for Image Draw Bot Step 22.
 
-AMD and Intel GPUs do not use Draw Studio's NVIDIA/CUDA bootstrap.  This helper
-installs only the Python OpenCL binding inside Draw Studio's .venv when an
+AMD and Intel GPUs do not use Image Draw Bot's NVIDIA/CUDA bootstrap.  This helper
+installs only the Python OpenCL binding inside Image Draw Bot's .venv when an
 AMD/Intel adapter is detected.  The vendor graphics driver must already provide
 an OpenCL runtime. Failure is non-fatal: CPU fallback always remains available.
 """
@@ -123,13 +123,13 @@ def ensure_universal_gpu_backend(*, python: str | None = None, force: bool = Fal
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser=argparse.ArgumentParser(description="Ensure Draw Studio AMD/Intel OpenCL benchmark backend is ready.")
+    parser=argparse.ArgumentParser(description="Ensure Image Draw Bot AMD/Intel OpenCL benchmark backend is ready.")
     parser.add_argument("--ensure",action="store_true")
     parser.add_argument("--force",action="store_true")
     parser.add_argument("--json",action="store_true")
     args=parser.parse_args(argv)
     if sys.prefix == getattr(sys,"base_prefix",sys.prefix):
-        message="Universal GPU setup must run inside Draw Studio's .venv. Run Start.bat first."
+        message="Universal GPU setup must run inside Image Draw Bot's .venv. Run Start.bat first."
         print(json.dumps({"ok":False,"status":"venv-required","message":message}) if args.json else message)
         return 4
     result=ensure_universal_gpu_backend(force=args.force)

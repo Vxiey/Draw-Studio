@@ -69,7 +69,7 @@ def _quality_profile(draw_quality: str) -> dict:
     raise ValueError("Draw quality must be Balanced, High likeness, Maximum likeness, GPU enhanced, or Pixel Accurate.")
 
 
-# Detail values currently exposed by Draw Studio are 6, 8, 9 and 10.  The
+# Detail values currently exposed by Image Draw Bot are 6, 8, 9 and 10.  The
 # helpers accept the full 1..10 range so saved/future settings remain safe.
 def portrait_sample_limit(detail: int, draw_quality: str = "Balanced") -> int:
     if not 1 <= int(detail) <= 10:

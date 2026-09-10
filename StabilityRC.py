@@ -1,4 +1,4 @@
-"""Release-candidate stability helpers for Draw Studio v1.0.81.
+"""Release-candidate stability helpers for Image Draw Bot v1.0.81.
 
 Pure helpers keep migration/cleanup behavior testable without Windows input.
 """

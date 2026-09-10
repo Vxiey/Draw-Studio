@@ -1,4 +1,4 @@
-"""Local performance auto tuner for Draw Studio v1.0.60-beta.
+"""Local performance auto tuner for Image Draw Bot v1.0.60-beta.
 
 The tuner benchmarks planning resources only. It never arms mouse input and it
 never contacts a network service. Results are stored locally in app data.

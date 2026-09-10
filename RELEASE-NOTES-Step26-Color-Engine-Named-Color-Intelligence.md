@@ -1,4 +1,4 @@
-# Draw Studio v1.0.124-beta — Step 26 Color Engine: Named Color Intelligence
+# Image Draw Bot v1.0.124-beta — Step 26 Color Engine: Named Color Intelligence
 
 This patch extends the existing Step 26 build with a named-colour intelligence layer while preserving the calibrated rendering pipeline.
 

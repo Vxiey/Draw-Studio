@@ -1,4 +1,4 @@
-"""Build Draw Studio on Windows with PyInstaller.
+"""Build Image Draw Bot on Windows with PyInstaller.
 
 Usage:
     py -3 build_exe.py            # recommended onedir build
@@ -42,8 +42,8 @@ def main():
     command = [
         str(builder), '-m', 'PyInstaller',
         '--noconfirm', '--clean', '--noupx', '--log-level', 'WARN', mode, '--windowed',
-        '--name', 'DrawStudio',
-        '--manifest', str(base / 'DrawStudio.manifest'),
+        '--name', 'ImageDrawBot',
+        '--manifest', str(base / 'ImageDrawBot.manifest'),
         '--version-file', str(base / 'version_info.txt'),
         '--hidden-import', 'PIL.ImageGrab',
         '--hidden-import', 'PIL.ImageTk',
@@ -240,16 +240,16 @@ def main():
     command.append(str(base / 'DrawBot.py'))
     subprocess.run(command, cwd=base, check=True)
 
-    output = base / 'dist' / ('DrawStudio.exe' if onefile else 'DrawStudio/DrawStudio.exe')
+    output = base / 'dist' / ('ImageDrawBot.exe' if onefile else 'ImageDrawBot/ImageDrawBot.exe')
     if not output.is_file() or output.read_bytes()[:2] != b'MZ':
         raise SystemExit('The build did not produce a valid Windows EXE.')
 
     print('\nDone!')
     print(f'EXE: {output}')
-    print(f'Built Draw Studio {APP_VERSION}.')
+    print(f'Built Image Draw Bot {APP_VERSION}.')
     print('Image analysis backend: CUDA bundle included + universal OpenCL benchmark.' if gpu_build else 'Image analysis backend: CPU renderer + universal OpenCL hardware benchmark; optional CUDA available in source mode.')
     print('Manifest: asInvoker (no automatic administrator prompt).')
-    print('Run Paint and Draw Studio at the same privilege level; normally both without administrator rights.')
+    print('Run Paint and Image Draw Bot at the same privilege level; normally both without administrator rights.')
     print('The EXE is unsigned, so Windows SmartScreen may show a warning.')
 
 

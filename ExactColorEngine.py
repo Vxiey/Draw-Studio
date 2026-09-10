@@ -1,4 +1,4 @@
-"""Exact/perceptual color analysis for Draw Studio v1.0.122-beta.
+"""Exact/perceptual color analysis for Image Draw Bot v1.0.122-beta.
 
 The module is intentionally UI-free.  It centralises source-colour statistics,
 representative-colour choice and perceptual candidate scoring so preview and

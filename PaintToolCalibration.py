@@ -25,7 +25,7 @@ class PaintToolCalibrationApp:
                 self.anchor=data.get('anchor')
         except (OSError,ValueError):pass
 
-        root.title('Draw Studio · Calibrate Paint tools');root.geometry('680x760');root.minsize(590,620)
+        root.title('Image Draw Bot · Calibrate Paint tools');root.geometry('680x760');root.minsize(590,620)
         try:root.configure(fg_color=BG)
         except Exception:root.configure(bg=BG)
         body=ctk.CTkScrollableFrame(root,fg_color=PANEL,corner_radius=18);body.pack(fill='both',expand=True,padx=16,pady=16)
@@ -39,7 +39,7 @@ class PaintToolCalibrationApp:
             ctk.CTkLabel(row,text=title,text_color=TEXT,font=('Segoe UI',13,'bold')).pack(side='left',padx=14,pady=14)
             label=ctk.CTkLabel(row,text='',text_color='#a6b2c5');label.pack(side='left',padx=8);self.labels[key]=label
             button(row,text='Capture position',command=lambda n=key:self.capture(n,3),width=145,height=38).pack(side='right',padx=12,pady=10)
-        ttk.Label(body,text='Brush is two-step: capture the Brushes dropdown button, then during the Brush preset countdown open that menu in Paint and hover over the exact solid brush preset you want Draw Studio to use.',wraplength=560).pack(anchor='w',pady=(4,10))
+        ttk.Label(body,text='Brush is two-step: capture the Brushes dropdown button, then during the Brush preset countdown open that menu in Paint and hover over the exact solid brush preset you want Image Draw Bot to use.',wraplength=560).pack(anchor='w',pady=(4,10))
         row=ctk.CTkFrame(body,fg_color=FIELD,corner_radius=12);row.pack(fill='x',pady=(12,6))
         ctk.CTkLabel(row,text='100% opacity point',text_color=TEXT,font=('Segoe UI',13,'bold')).pack(side='left',padx=14,pady=14)
         self.opacity_label=ctk.CTkLabel(row,text='',text_color='#a6b2c5');self.opacity_label.pack(side='left',padx=8)

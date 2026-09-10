@@ -1,4 +1,4 @@
-# Draw Studio v1.0.124-beta — Step 24 Adaptive Detail Zoom
+# Image Draw Bot v1.0.124-beta — Step 24 Adaptive Detail Zoom
 
 - Adds Auto / Off / 2x / 4x internal source-detail zoom.
 - Recovers thin lines, small color accents and high-frequency micro details lost by global downsampling.

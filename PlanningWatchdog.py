@@ -1,4 +1,4 @@
-"""Planning watchdog and fallback attempts for Draw Studio v1.0.22.
+"""Planning watchdog and fallback attempts for Image Draw Bot v1.0.22.
 
 The watchdog protects the safety boundary before mouse input is armed. It does
 not move the cursor and it never bypasses Start Guard/Preflight. It only builds a

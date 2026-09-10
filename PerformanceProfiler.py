@@ -1,4 +1,4 @@
-"""Lightweight planning profiler for Draw Studio v1.0.27.
+"""Lightweight planning profiler for Image Draw Bot v1.0.27.
 
 Profiler data is kept inside the plan options dictionary so it follows preview,
 watchdog fallback and final plans without touching mouse execution.

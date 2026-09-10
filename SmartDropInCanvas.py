@@ -171,7 +171,7 @@ def discover_canvas_target(profile_key: str, *, preferred_handle: int | None = N
         raise ValueError('Smart Canvas Drop currently supports Gartic Phone, Skribbl.io/Fast, SketchHeads and Sketchful.io.')
 
     # Reuse an explicitly selected target first. This avoids choosing another
-    # browser window when the user has already told Draw Studio which one to use.
+    # browser window when the user has already told Image Draw Bot which one to use.
     if preferred_handle:
         try:
             from TargetCapture import probe_handle_isolated

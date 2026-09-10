@@ -1,4 +1,4 @@
-"""Plan-level drawing-tool choice for Draw Studio v1.0.7."""
+"""Plan-level drawing-tool choice for Image Draw Bot v1.0.7."""
 from __future__ import annotations
 
 TOOL_STRATEGIES = ("Auto", "Precision first", "Speed first", "Respect selected")

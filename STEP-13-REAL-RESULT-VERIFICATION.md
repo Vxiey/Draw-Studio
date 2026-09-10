@@ -4,7 +4,7 @@ This step adds a safe post-draw verification pass for completed real drawings.
 
 The verifier compares the final canvas snapshot against the original source and,
 when available, against the simulated final/quantized target. It is read-only and
-in-memory only. Draw Studio does not save screenshots, crops, source pixels,
+in-memory only. Image Draw Bot does not save screenshots, crops, source pixels,
 image hashes, thumbnails, OCR output, telemetry, account data, or network data.
 
 Saved feedback contains only compact values such as Visual Accuracy, actual

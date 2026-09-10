@@ -1,6 +1,6 @@
 # Step 28 — More Drawing Targets
 
-Step 28 makes drawing-target support explicit and extensible while preserving Draw Studio's fail-closed calibration model.
+Step 28 makes drawing-target support explicit and extensible while preserving Image Draw Bot's fail-closed calibration model.
 
 ## Architecture
 

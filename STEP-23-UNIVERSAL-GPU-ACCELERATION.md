@@ -4,7 +4,7 @@ Step 23 turns the Step 22 hardware benchmark into real execution routing.
 
 ## Real workloads routed per machine
 
-Draw Studio now consults the saved Step 22 hardware profile for each workload:
+Image Draw Bot now consults the saved Step 22 hardware profile for each workload:
 
 - OKLab conversion
 - palette matching
@@ -35,7 +35,7 @@ NumPy and the rest of the drawing workflow continues.
 
 ## Integrated call sites
 
-Step 23 is connected to real Draw Studio paths, including:
+Step 23 is connected to real Image Draw Bot paths, including:
 
 - Pixel Accurate palette mapping
 - Pixel Accurate edge analysis

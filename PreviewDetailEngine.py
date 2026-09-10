@@ -1,4 +1,4 @@
-"""Detail-aware preview resampling for Draw Studio v1.0.113-beta.
+"""Detail-aware preview resampling for Image Draw Bot v1.0.113-beta.
 
 The final drawing plan remains untouched.  This module only improves bounded UI
 previews by preserving high-contrast micro-features that would otherwise be

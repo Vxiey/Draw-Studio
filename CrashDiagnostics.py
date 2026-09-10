@@ -18,9 +18,9 @@ _LOG_LOCK = threading.RLock()
 _MAX_LOG_BYTES = 2 * 1024 * 1024
 
 LOG_DIR = data_dir() / 'logs'
-CRASH_LOG = LOG_DIR / 'DrawStudio-crash.log'
-SESSION_LOG = LOG_DIR / 'DrawStudio-session.log'
-RUN_MARKER = LOG_DIR / 'DrawStudio-running.marker'
+CRASH_LOG = LOG_DIR / 'ImageDrawBot-crash.log'
+SESSION_LOG = LOG_DIR / 'ImageDrawBot-session.log'
+RUN_MARKER = LOG_DIR / 'ImageDrawBot-running.marker'
 PREVIOUS_RUN_UNCLEAN = False
 RUN_MARKER_OWNED = False
 
@@ -64,7 +64,7 @@ def install():
         _rotate_if_large(SESSION_LOG)
         _LOG_STREAM = CRASH_LOG.open('a', encoding='utf-8', buffering=1)
         _LOG_STREAM.write('\n' + '=' * 72 + '\n')
-        _LOG_STREAM.write(f'[{_stamp()}] Draw Studio start\n')
+        _LOG_STREAM.write(f'[{_stamp()}] Image Draw Bot start\n')
         _LOG_STREAM.write(f'Python: {sys.version.replace(chr(10), " ")}\n')
         _LOG_STREAM.write(f'Executable: {sys.executable}\n')
         _LOG_STREAM.write(f'Platform: {platform.platform()}\n')

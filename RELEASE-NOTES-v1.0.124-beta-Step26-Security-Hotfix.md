@@ -1,4 +1,4 @@
-# Draw Studio v1.0.124-beta Step 26 — Security Hotfix
+# Image Draw Bot v1.0.124-beta Step 26 — Security Hotfix
 
 This hotfix keeps the existing Step 26 Detail Fidelity, Pixel Accurate and Named Color Intelligence release intact while applying the URL-hostname validation security fix.
 

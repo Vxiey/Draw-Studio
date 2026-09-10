@@ -1,4 +1,4 @@
-"""Release Candidate Hardening for Draw Studio.
+"""Release Candidate Hardening for Image Draw Bot.
 
 This module contains deterministic, non-interactive release gates.  It does not
 move the mouse, activate target windows, download updates, or change user
@@ -15,7 +15,7 @@ import re
 import zipfile
 from typing import Iterable
 
-EXPECTED_REPOSITORY = "Vxiey/Draw-Studio"
+EXPECTED_REPOSITORY = "Vxiey/Image-Draw-Bot"
 RELEASE_GATE_SCHEMA = 1
 DEFAULT_SOAK_CYCLES = 5000
 FORBIDDEN_ARCHIVE_SUFFIXES = (".log", ".dmp", ".pyc", ".pyo", ".tmp")
@@ -103,7 +103,7 @@ def collect_source_gate_errors(root: Path, *, app_version: str, file_version: st
     root = Path(root)
     errors: list[str] = []
     version_info = _read(root / "version_info.txt")
-    installer = _read(root / "installer" / "DrawStudio.iss")
+    installer = _read(root / "installer" / "ImageDrawBot.iss")
     updater = _read(root / "UpdateCenter.py")
     build_release = _read(root / "build_release.py")
     workflow = _read(root / ".github" / "workflows" / "build-windows.yml")
@@ -123,7 +123,7 @@ def collect_source_gate_errors(root: Path, *, app_version: str, file_version: st
     _assert_contains(installer, "PrivilegesRequired=lowest", "installer", errors)
 
     _assert_contains(updater, f'GITHUB_REPOSITORY = "{expected_repository}"', "UpdateCenter", errors)
-    if "yesverynice12/Draw-Studio" in updater:
+    if "yesverynice12/Image-Draw-Bot" in updater:
         errors.append("UpdateCenter: stale legacy GitHub repository is still configured")
 
     _assert_contains(build_release, "run_source_release_gate", "build_release", errors)
@@ -267,11 +267,11 @@ def validate_windows_zip(path: Path) -> dict:
         if bad:
             raise ReleaseGateError(f"Windows ZIP integrity failed at {bad}")
         names = archive.namelist()
-        exe_name = next((name for name in names if name.replace("\\", "/") == "DrawStudio/DrawStudio.exe"), None)
+        exe_name = next((name for name in names if name.replace("\\", "/") == "ImageDrawBot/ImageDrawBot.exe"), None)
         if not exe_name:
-            raise ReleaseGateError("Windows ZIP is missing DrawStudio/DrawStudio.exe")
+            raise ReleaseGateError("Windows ZIP is missing ImageDrawBot/ImageDrawBot.exe")
         if archive.read(exe_name)[:2] != b"MZ":
-            raise ReleaseGateError("Packaged DrawStudio.exe is not a PE executable")
+            raise ReleaseGateError("Packaged ImageDrawBot.exe is not a PE executable")
         leaked = [name for name in names if _forbidden_archive_name(name)]
         if leaked:
             raise ReleaseGateError("Runtime/source-only files leaked into Windows ZIP: " + ", ".join(leaked[:8]))
@@ -359,10 +359,10 @@ def validate_windows_release(release_dir: Path, *, app_version: str | None = Non
     from Version import APP_VERSION, FILE_VERSION, BUILD_CHANNEL
     app_version = APP_VERSION if app_version is None else str(app_version)
     release = Path(release_dir)
-    zip_path = release / f"DrawStudio-{app_version}-Windows-x64.zip"
-    setup_path = release / f"DrawStudio-{app_version}-Windows-x64-Setup.exe"
-    checksum_path = release / f"DrawStudio-{app_version}-SHA256.txt"
-    manifest_path = release / f"DrawStudio-{app_version}-manifest.json"
+    zip_path = release / f"ImageDrawBot-{app_version}-Windows-x64.zip"
+    setup_path = release / f"ImageDrawBot-{app_version}-Windows-x64-Setup.exe"
+    checksum_path = release / f"ImageDrawBot-{app_version}-SHA256.txt"
+    manifest_path = release / f"ImageDrawBot-{app_version}-manifest.json"
 
     result = {"zip": validate_windows_zip(zip_path)}
     expected = [zip_path.name]
@@ -377,7 +377,7 @@ def validate_windows_release(release_dir: Path, *, app_version: str | None = Non
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
-    parser = argparse.ArgumentParser(description="Draw Studio release-candidate gates")
+    parser = argparse.ArgumentParser(description="Image Draw Bot release-candidate gates")
     parser.add_argument("--source-gate", action="store_true")
     parser.add_argument("--release-dir")
     parser.add_argument("--soak-cycles", type=int, default=DEFAULT_SOAK_CYCLES)

@@ -12,12 +12,12 @@ This step turns the current beta tree into a cleaner release-ready source packag
 
 ## Release artifact naming
 
-- Source package: `Draw-Studio-<version>-Source.zip`
-- Windows portable ZIP: `DrawStudio-<version>-Windows-x64.zip`
-- Optional CUDA portable ZIP: `DrawStudio-<version>-Windows-x64-CUDA.zip`
-- Optional installer: `DrawStudio-<version>-Windows-x64-Setup.exe`
-- Checksums: `DrawStudio-<version>-SHA256.txt`
-- Manifest: `DrawStudio-<version>-ReleaseManifest.json`
+- Source package: `Image-Draw-Bot-<version>-Source.zip`
+- Windows portable ZIP: `ImageDrawBot-<version>-Windows-x64.zip`
+- Optional CUDA portable ZIP: `ImageDrawBot-<version>-Windows-x64-CUDA.zip`
+- Optional installer: `ImageDrawBot-<version>-Windows-x64-Setup.exe`
+- Checksums: `ImageDrawBot-<version>-SHA256.txt`
+- Manifest: `ImageDrawBot-<version>-ReleaseManifest.json`
 
 ## Clean source tree rules
 
@@ -26,7 +26,7 @@ The publisher excludes or blocks:
 - `.git`, virtualenvs, build folders, `dist/`, `release/`
 - `logs/`, `safety-reports/`, `diagnostics/`, `reports/`
 - crash dumps, `.log`, `.tmp`, `.pyc`, `.spec`
-- nested generated `Draw-Studio-*.zip` / `DrawStudio-*.zip` artifacts
+- nested generated `Image-Draw-Bot-*.zip` / `ImageDrawBot-*.zip` artifacts
 
 ## Local validation
 
@@ -34,7 +34,7 @@ Run:
 
 ```powershell
 python ReleasePackage.py --check
-python ReleasePackage.py --source-zip release\Draw-Studio-1.0.124-beta-Source.zip --manifest release\DrawStudio-1.0.124-beta-ReleaseManifest.json
+python ReleasePackage.py --source-zip release\Image-Draw-Bot-1.0.124-beta-Source.zip --manifest release\ImageDrawBot-1.0.124-beta-ReleaseManifest.json
 python -m unittest test_step21_release_cleanup_v10144 -v
 python DrawBot.py --self-test
 ```

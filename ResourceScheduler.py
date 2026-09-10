@@ -1,4 +1,4 @@
-"""Adaptive phase scheduler for Draw Studio v1.0.44.
+"""Adaptive phase scheduler for Image Draw Bot v1.0.44.
 
 This module is pure planning logic: it never touches the mouse, screen or GUI.
 It decides which resource profile each planning phase should use and stores a

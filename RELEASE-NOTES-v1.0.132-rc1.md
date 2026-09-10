@@ -1,4 +1,4 @@
-# Draw Studio v1.0.132-rc1 — engine integration
+# Image Draw Bot v1.0.132-rc1 — engine integration
 
 This release candidate builds on the supplied v1.0.131-beta source. It reuses
 Hybrid Renderer 3.0, Pixel Stroke Engine, Extra Fast, the deadline scheduler,

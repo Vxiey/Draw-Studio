@@ -1,4 +1,4 @@
-"""Step 20 beginner setup wizard helpers for Draw Studio.
+"""Step 20 beginner setup wizard helpers for Image Draw Bot.
 
 Pure, deterministic checklist builder used by the GUI and tests.  It never uses
 Tk, native input, screenshots, files, network or telemetry.

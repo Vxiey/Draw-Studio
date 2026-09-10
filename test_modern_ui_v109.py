@@ -9,8 +9,8 @@ from Version import APP_VERSION, FILE_VERSION
 
 class ModernUIV109Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.143-rc4')
-        self.assertEqual(FILE_VERSION,'1.0.143')
+        self.assertEqual(APP_VERSION,'1.0.144-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.144')
 
     def test_not_ready_state(self):
         state=compute_workspace_state(image_loaded=False,target_name='Microsoft Paint',paint_tools_ready=False,

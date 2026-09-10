@@ -1,4 +1,4 @@
-"""CPU/GPU/RAM resource allocation helpers for Draw Studio v1.0.13.
+"""CPU/GPU/RAM resource allocation helpers for Image Draw Bot v1.0.13.
 
 The drawing cursor itself is deliberately single-stream: a target application can
 only receive one mouse path at a time.  This module controls the heavy planning
@@ -189,7 +189,7 @@ def resolve_planning_limits(detail: int, area: tuple[int, int] | list[int] | Non
                             ram_budget_mb: int = 512, preview: bool = False) -> dict:
     """Return image-planning resolution caps driven by CPU/RAM settings.
 
-    Older Draw Studio builds always capped planning to roughly 40-200 pixels on
+    Older Image Draw Bot builds always capped planning to roughly 40-200 pixels on
     the long edge depending on detail.  That is fast, but it gives modern CPUs
     and GPUs almost nothing to do.  This helper keeps Standard identical while
     letting High/Ultra/Extreme build larger source plans when the user allocates

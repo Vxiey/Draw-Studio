@@ -4,7 +4,7 @@ Step 27.5 sits between completed Step 27 and Step 28. **Step 28–30 keep their 
 
 ## Goal
 
-Make first-time and repeated target setup safer and faster without weakening Draw Studio's explicit drawing/start gates.
+Make first-time and repeated target setup safer and faster without weakening Image Draw Bot's explicit drawing/start gates.
 
 The new **One-click Setup + Verify** action is configuration-only. It can activate a target window for screenshots, but it never moves/clicks the mouse, presses keys, unlocks full drawing or starts a render.
 
@@ -24,7 +24,7 @@ Other/custom targets keep the existing manual calibration flow until a verified 
 1. Reuse the currently known browser handle when valid, otherwise discover the best supported game window.
 2. Reuse Layout Fingerprint v2 when the saved layout can still be verified, otherwise run Browser Auto Calibration.
 3. Save the detected canvas and a screen-verified, profile-owned palette.
-4. Hide Draw Studio and activate the same target again.
+4. Hide Image Draw Bot and activate the same target again.
 5. Take a fresh screenshot.
 6. Run `BrowserVisualPreflight` independently against the expected canvas and representative saved palette swatches.
 7. Require a valid canvas, at least three tested colors and the existing ~80% palette agreement rule for larger sample sets.
@@ -35,7 +35,7 @@ Other/custom targets keep the existing manual calibration flow until a verified 
 1. Discover the unique Paint window.
 2. Run the existing `PaintFullCalibration` detector on a blank visible Paint canvas.
 3. Save the verified 20-color palette plus Pencil/Fill tool positions.
-4. Hide Draw Studio and activate Paint again.
+4. Hide Image Draw Bot and activate Paint again.
 5. Take a new screenshot.
 6. Independently rerun `PaintFullCalibration.detect_setup`.
 7. Require 20 live colors, Pencil + Fill availability, >=85% setup confidence and no meaningful canvas reflow (maximum 6 px edge shift).

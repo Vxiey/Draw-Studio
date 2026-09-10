@@ -10,8 +10,8 @@ from Version import APP_VERSION, BUILD_CHANNEL, FILE_VERSION
 
 class ReleaseTests(unittest.TestCase):
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION,'1.0.143-rc4')
-        self.assertEqual(FILE_VERSION,'1.0.143')
+        self.assertEqual(APP_VERSION,'1.0.144-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.144')
         self.assertEqual(BUILD_CHANNEL,'rc')
 
     def test_first_run_state_roundtrip(self):
@@ -28,7 +28,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertFalse((root/'developer'/'report-server-example').exists())
 
     def test_manifest_is_non_elevated(self):
-        text=(Path(__file__).resolve().parent/'DrawStudio.manifest').read_text(encoding='utf-8')
+        text=(Path(__file__).resolve().parent/'ImageDrawBot.manifest').read_text(encoding='utf-8')
         self.assertIn('level="asInvoker"',text); self.assertIn('PerMonitorV2,PerMonitor',text)
 
     def test_release_builder_verifies_frozen_exe(self):

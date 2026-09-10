@@ -1,6 +1,6 @@
-# Draw Studio v1.0.128-beta — Step 29: Hybrid Renderer 3.0
+# Image Draw Bot v1.0.128-beta — Step 29: Hybrid Renderer 3.0
 
-Step 29 adds specialised deterministic drawing modes while keeping Draw Studio's existing input, calibration and CanvasGuard architecture unchanged.
+Step 29 adds specialised deterministic drawing modes while keeping Image Draw Bot's existing input, calibration and CanvasGuard architecture unchanged.
 
 ## New Hybrid Renderer 3.0
 

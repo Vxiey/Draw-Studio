@@ -1,4 +1,4 @@
-"""Pure execution-plan telemetry for Draw Studio.
+"""Pure execution-plan telemetry for Image Draw Bot.
 
 This module measures geometry and HybridCostModel estimates without changing
 path order, planner choices, target input, or saved user settings.

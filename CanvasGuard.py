@@ -1,4 +1,4 @@
-"""Hard canvas safety layer for Draw Studio v1.0.54.
+"""Hard canvas safety layer for Image Draw Bot v1.0.54.
 
 CanvasGuard is deterministic: no AI, no heuristic drawing outside of the
 selected canvas, and no profile-controlled off switch.  v1.0.48 upgraded the
@@ -146,7 +146,7 @@ def _convex_inset_polygon(polygon: Sequence[Sequence[float | int]], margin: floa
     """Inset a convex polygon by offsetting each edge inward.
 
     Returns None for degenerate/non-convex/collapsed input so callers can fall
-    back to centroid shrink.  Draw Studio canvas polygons are expected to be
+    back to centroid shrink.  Image Draw Bot canvas polygons are expected to be
     rectangles or mild quadrilaterals once anchor detection lands in later steps.
     """
     pts = list(_dedupe_polygon(polygon))

@@ -1,4 +1,4 @@
-"""Source-relative preview accuracy metrics for Draw Studio.
+"""Source-relative preview accuracy metrics for Image Draw Bot.
 
 The renderer has two different correctness questions:
 

@@ -1,4 +1,4 @@
-# Draw Studio 1.0.133-rc3
+# Image Draw Bot 1.0.133-rc3
 
 Fixes a Gartic Phone calibration conflict where Auto Setup could accept a white component extending beyond the visible canvas edge, followed by an execution safety stop.
 

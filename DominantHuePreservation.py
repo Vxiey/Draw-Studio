@@ -1,4 +1,4 @@
-"""Dominant hue preservation for Draw Studio Step 3.
+"""Dominant hue preservation for Image Draw Bot Step 3.
 
 Pure planning helpers used by both source-derived exact colour reduction and
 browser/game palette reduction.  The policy protects large chromatic families

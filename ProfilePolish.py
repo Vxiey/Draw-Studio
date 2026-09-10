@@ -1,4 +1,4 @@
-"""Step 19 final profile polish for Draw Studio.
+"""Step 19 final profile polish for Image Draw Bot.
 
 This module is intentionally pure: no Tk, no mouse, no file writes and no
 screen capture.  It centralizes the release-ready defaults, setup warnings and

@@ -1,4 +1,4 @@
-"""Advanced source-image colour measurement for Draw Studio.
+"""Advanced source-image colour measurement for Image Draw Bot.
 
 The engine measures real source pixels before Paint palette selection.  It keeps
 mean, median and dominant RGB statistics for each quantized colour region and

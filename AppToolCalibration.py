@@ -22,12 +22,12 @@ class AppToolCalibrationApp:
             self.anchor = data.get("anchor")
         except (OSError, ValueError):
             pass
-        root.title(f"Draw Studio · Calibrate {profile_name} tools"); root.geometry("680x650"); root.minsize(590, 560)
+        root.title(f"Image Draw Bot · Calibrate {profile_name} tools"); root.geometry("680x650"); root.minsize(590, 560)
         try: root.configure(fg_color=BG)
         except Exception: root.configure(bg=BG)
         body = ctk.CTkScrollableFrame(root, fg_color=PANEL, corner_radius=18); body.pack(fill="both", expand=True, padx=16, pady=16)
         ttk.Label(body, text=f"Calibrate {profile_name} tools", font=("Segoe UI",18,"bold")).pack(anchor="w")
-        ttk.Label(body, text="Draw Studio never guesses tool coordinates. During each countdown, switch to the target app and hover over the requested control. No clicks are generated while calibrating.", wraplength=560).pack(anchor="w", pady=(6,12))
+        ttk.Label(body, text="Image Draw Bot never guesses tool coordinates. During each countdown, switch to the target app and hover over the requested control. No clicks are generated while calibrating.", wraplength=560).pack(anchor="w", pady=(6,12))
         self.status = tk.StringVar(value="Capture Clear canvas for one-click automatic clearing. Brush + Eraser can be used as a fallback sweep. Keep the app window at the same size while drawing.")
         self.labels = {}
         for name in GENERIC_TOOLS:

@@ -1,4 +1,4 @@
-"""Time-budget and target-stroke controls for Draw Studio v1.0.20.
+"""Time-budget and target-stroke controls for Image Draw Bot v1.0.20.
 
 This module is intentionally pure and deterministic. It does not touch Tk,
 mouse input, files, network, GPU state or calibration.  DrawBot uses it to turn

@@ -1,4 +1,4 @@
-"""Browser One-Click orchestration for Draw Studio v1.0.80.
+"""Browser One-Click orchestration for Image Draw Bot v1.0.80.
 
 Normal browser flow: choose a supported game, import/drop an image, then Draw
 Studio discovers or reuses the matching browser window, auto-calibrates canvas

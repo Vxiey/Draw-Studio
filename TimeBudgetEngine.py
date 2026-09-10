@@ -1,4 +1,4 @@
-"""Deadline-aware time budgets for Draw Studio v1.0.119-beta.
+"""Deadline-aware time budgets for Image Draw Bot v1.0.119-beta.
 
 Pure planning helpers.  No mouse, GUI or network access.  The engine separates
 *game timer* from the smaller *usable render budget* and keeps a reserve so a

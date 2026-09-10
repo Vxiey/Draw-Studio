@@ -1,4 +1,4 @@
-"""Deterministic Safe Fill mask layer for Draw Studio v1.0.52.
+"""Deterministic Safe Fill mask layer for Image Draw Bot v1.0.52.
 
 This module is intentionally small and non-AI.  It protects bucket-fill plans
 before the mouse layer by requiring fill seeds, perimeters and row spans to stay

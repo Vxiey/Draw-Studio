@@ -6,7 +6,7 @@ account data, source image pixels, screenshots, prompts or remote services.
 
 ## What is learned
 
-After a clean completed real draw, Draw Studio records compact metrics only:
+After a clean completed real draw, Image Draw Bot records compact metrics only:
 
 - planned draw time versus actual wall-clock draw time
 - deadline pass/fail

@@ -1,7 +1,7 @@
 """Picture-driven custom RGB palette preparation for Microsoft Paint.
 
 This module is intentionally separate from the drawing engine.  It analyses the
-currently loaded source image with Draw Studio's existing DynamicColors planner,
+currently loaded source image with Image Draw Bot's existing DynamicColors planner,
 keeps only custom RGB values that materially improve over the calibrated Paint
 palette, enters those RGB values through the already calibrated Edit colors
 controls, and persists the resulting picture palette for reuse.
@@ -466,7 +466,7 @@ def start_picture_custom_palette(app) -> bool:
             cancelled=app.stop.is_set, wait=app.stop.wait, progress=progress,
         )
         # Hard postcondition for the preparation action: never leave Edit colors
-        # over the document when control returns to Draw Studio.
+        # over the document when control returns to Image Draw Bot.
         from PaintPreparation import close_edit_colors
         close_edit_colors(handle,accept=True,cancelled=app.stop.is_set,wait=app.stop.wait)
         if not monitor.activate(target):

@@ -208,7 +208,7 @@ def build_post_draw_correction_plan(*, original_source: Image.Image,
     """Plan one conservative source-relative correction pass.
 
     The returned ``groups`` and ``execution_groups`` are in source/planning pixel
-    coordinates and can be fed through the normal Draw Studio execution layer.
+    coordinates and can be fed through the normal Image Draw Bot execution layer.
     No returned value contains screenshot/canvas/source pixels.
     """
     if cancelled():

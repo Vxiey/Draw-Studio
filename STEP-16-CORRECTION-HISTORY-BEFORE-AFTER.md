@@ -1,10 +1,10 @@
 # Step 16 — Correction History + Before/After Metrics
 
-Step 16 adds local, profile-isolated correction history for Draw Studio.
+Step 16 adds local, profile-isolated correction history for Image Draw Bot.
 
 ## What it records
 
-After a real completed draw or correction-only retry, Draw Studio can store a compact history entry with:
+After a real completed draw or correction-only retry, Image Draw Bot can store a compact history entry with:
 
 - before-correction Visual Accuracy and source-relative metrics
 - after-correction Visual Accuracy when a trusted post-correction score exists
@@ -18,7 +18,7 @@ After a real completed draw or correction-only retry, Draw Studio can store a co
 
 No image data is persisted.
 
-Draw Studio does not save:
+Image Draw Bot does not save:
 
 - screenshots
 - crops

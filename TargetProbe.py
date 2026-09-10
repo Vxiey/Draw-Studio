@@ -1,6 +1,6 @@
 """Isolated Win32 target-window probe.
 
-The helper reads top-level window/client geometry outside the Draw Studio GUI
+The helper reads top-level window/client geometry outside the Image Draw Bot GUI
 process.  It supports either a selected area or an already-known HWND.
 """
 from __future__ import annotations

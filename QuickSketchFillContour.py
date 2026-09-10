@@ -1,7 +1,7 @@
-"""Step 25 — Quick Sketch Fill + Contour renderer for Draw Studio.
+"""Step 25 — Quick Sketch Fill + Contour renderer for Image Draw Bot.
 
 This renderer is a deterministic, deadline-aware specialization that builds on
-Draw Studio's existing color, Safe Fill Mask, Region Fill Engine, CanvasGuard,
+Image Draw Bot's existing color, Safe Fill Mask, Region Fill Engine, CanvasGuard,
 and connected-path systems.  It does not invent a second input engine.
 
 The policy is intentionally recognition-first:

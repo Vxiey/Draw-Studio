@@ -15,8 +15,8 @@ except ModuleNotFoundError:
 DATA=b'MZ'+b'verified-test-installer'*100
 
 def release():
-    name='DrawStudio-1.0.134-rc1-Windows-x64-Setup.exe'
-    return dict(tag_name='v1.0.134-rc1',assets=[dict(name=name,size=len(DATA),digest='sha256:'+hashlib.sha256(DATA).hexdigest(),browser_download_url='https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.134-rc1/'+name)])
+    name='ImageDrawBot-1.0.134-rc1-Windows-x64-Setup.exe'
+    return dict(tag_name='v1.0.134-rc1',assets=[dict(name=name,size=len(DATA),digest='sha256:'+hashlib.sha256(DATA).hexdigest(),browser_download_url='https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.134-rc1/'+name)])
 
 class Response:
     url='https://release-assets.githubusercontent.com/file'
@@ -75,7 +75,7 @@ class InstallerUpdateTests(unittest.TestCase):
     def test_installed_build_uses_silent_in_place_relaunch(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);setup=root/'setup.exe';setup.write_bytes(DATA)
-            executable=root/'DrawStudio.exe';(root/'unins000.exe').write_bytes(b'MZ')
+            executable=root/'ImageDrawBot.exe';(root/'unins000.exe').write_bytes(b'MZ')
             args=installer_launch_args(setup,executable=executable)
             self.assertIn('/DIR='+str(root),args)
             for flag in ('/VERYSILENT','/SUPPRESSMSGBOXES','/CLOSEAPPLICATIONS','/RELAUNCHDRAWSTUDIO','/NORESTART'):
@@ -84,7 +84,7 @@ class InstallerUpdateTests(unittest.TestCase):
 
     def test_portable_build_never_overwrites_itself_or_forces_silent_mode(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);setup=root/'setup.exe';executable=root/'DrawStudio.exe'
+            root=Path(tmp);setup=root/'setup.exe';executable=root/'ImageDrawBot.exe'
             args=installer_launch_args(setup,executable=executable)
             self.assertFalse(any(arg.startswith('/DIR=') for arg in args))
             self.assertNotIn('/VERYSILENT',args)
@@ -95,7 +95,7 @@ class InstallerUpdateTests(unittest.TestCase):
         from UpdateCenter import launch_installer
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);setup=root/'setup.exe';setup.write_bytes(DATA)
-            executable=root/'DrawStudio.exe';(root/'unins000.exe').write_bytes(b'MZ')
+            executable=root/'ImageDrawBot.exe';(root/'unins000.exe').write_bytes(b'MZ')
             calls=[];asset=installer_asset(release())
             launch_installer(setup,asset,executable=executable,launcher=lambda args:calls.append(args))
             self.assertIn('/DIR='+str(root),calls[0])

@@ -1,4 +1,4 @@
-"""Deterministic edge behavior policy for Draw Studio v1.0.54.
+"""Deterministic edge behavior policy for Image Draw Bot v1.0.54.
 
 Edge Behavior sits above CanvasGuard stroke clipping. It can decide how a
 near-edge path is represented, but it never disables source-canvas validation,

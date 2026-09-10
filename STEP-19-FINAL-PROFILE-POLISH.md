@@ -1,6 +1,6 @@
 # Step 19 — Paint/Gartic/Skribbl Final Profile Polish
 
-Draw Studio now centralizes release-ready profile presets in `ProfilePolish.py`.
+Image Draw Bot now centralizes release-ready profile presets in `ProfilePolish.py`.
 The core profiles — Microsoft Paint, Gartic Phone, Skribbl.io and Skribbl.io Fast — have one source of truth for:
 
 - safe default renderer strategy

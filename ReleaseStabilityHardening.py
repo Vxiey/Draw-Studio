@@ -1,4 +1,4 @@
-"""Release stability and crash/freeze hardening helpers for Draw Studio Step 18.
+"""Release stability and crash/freeze hardening helpers for Image Draw Bot Step 18.
 
 The helpers are deliberately pure/small so they can be unit-tested without a GUI,
 mouse hook or Windows-only APIs. DrawBot uses them to keep preview planning

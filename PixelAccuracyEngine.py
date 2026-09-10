@@ -1,4 +1,4 @@
-"""Pixel-accuracy simulation and correction engine for Draw Studio v1.0.90-beta.
+"""Pixel-accuracy simulation and correction engine for Image Draw Bot v1.0.90-beta.
 
 Block C consumes the lossless PixelMap + component-aware execution sequence from
 Block B.  It simulates the brush footprint in planning coordinates, measures

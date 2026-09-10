@@ -1,4 +1,4 @@
-"""Draw Studio: English desktop UI, image preview and cancellable drawing."""
+"""Image Draw Bot: English desktop UI, image preview and cancellable drawing."""
 import json
 import math
 import queue
@@ -2997,8 +2997,8 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                                     if speed_name=='Fast' else '')
                         if selected_tool=='Use current tool':
                             raise InterruptedError(
-                                f'{error} Draw Studio is set to Use current tool, so it cannot force Paint to use solid ink. '
-                                'Choose Auto (recommended) or Pencil in Draw Studio, calibrate Pencil, then retry.'+speed_hint
+                                f'{error} Image Draw Bot is set to Use current tool, so it cannot force Paint to use solid ink. '
+                                'Choose Auto (recommended) or Pencil in Image Draw Bot, calibrate Pencil, then retry.'+speed_hint
                             ) from error
                         raise InterruptedError(
                             f'{error} Automatic Paint tool selection was enabled. Recalibrate Paint tools because the saved tool position may no longer match this Paint version or window layout.'+speed_hint
@@ -3097,7 +3097,7 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                 f'Stopped on color batch {color_number}/{total_colors}: RGB {rgb} could not be verified after adaptive recovery. '
                 f'Closest rendered RGB was {actual} ({confidence:.0f}% match). Previously completed color batches remain painted. '
                 f'{(last or {}).get("reason","")} This is a verification stop, not a crash. '
-                + ('Run Auto Paint calibration and retry. If this color is outside the normal Paint palette, enable/calibrate Smart custom palette so Draw Studio can open Edit colors automatically.' if selected_tool!='Use current tool' else 'Verify the current Paint tool and selected color, then retry.'))
+                + ('Run Auto Paint calibration and retry. If this color is outside the normal Paint palette, enable/calibrate Smart custom palette so Image Draw Bot can open Edit colors automatically.' if selected_tool!='Use current tool' else 'Verify the current Paint tool and selected color, then retry.'))
 
         def visual_verify_color_batch(index, ordered_items, smart_group, color_number, total_colors):
             nonlocal visual_previous_snapshot
@@ -3730,7 +3730,7 @@ class DrawBotApp:
         # v1.0.69: Mobile Preview is opt-in and local-network only. The HTTP
         # server is not created/bound until the user explicitly starts it.
         self.mobile_preview_server = None
-        root.title('Draw Studio')
+        root.title('Image Draw Bot')
         root.geometry('1040x740')
         root.minsize(900, 660)
         try:
@@ -3842,7 +3842,7 @@ class DrawBotApp:
         self.hardware_benchmark_running = False
         self.mobile_preview_status = tk.StringVar(value='Mobile Preview is off · local network only.')
         self.mobile_preview_url = tk.StringVar(value='')
-        self.latest_release_url = 'https://github.com/Vxiey/Draw-Studio/releases'
+        self.latest_release_url = 'https://github.com/Vxiey/Image-Draw-Bot/releases'
         self.preview_mode = tk.StringVar(value='Manual')
         self.preview_detail_level = tk.StringVar(value='Detailed')
         self.tool_strategy = tk.StringVar(value='Auto')
@@ -4064,7 +4064,7 @@ class DrawBotApp:
         except Exception as error:
             log_event(f'Recovery snapshot could not be read: {error!r}');state=None
         if state:
-            text=('Draw Studio did not close normally and a local recovery checkpoint is available.\n\n'
+            text=('Image Draw Bot did not close normally and a local recovery checkpoint is available.\n\n'
                   'Recover the image/settings from the checkpoint? Drawing will remain completely DISARMED: target lock, small test, preflight, dry run and Start authorization are never restored.')
             if messagebox.askyesno('Safe session recovery',text,parent=self.root):
                 try:DrawBotApp._apply_recovery_snapshot(self,state)
@@ -4170,7 +4170,7 @@ class DrawBotApp:
         # Do not synchronously mutate traced Tk variables from inside Tk's own
         # exception callback. That was another path into the recursion loop.
         try:
-            self.root.after(25, lambda: self.status.set(f'UI error contained: {value}. See DrawStudio-session.log.') if not self.closing else None)
+            self.root.after(25, lambda: self.status.set(f'UI error contained: {value}. See ImageDrawBot-session.log.') if not self.closing else None)
         except (tk.TclError,AttributeError,RuntimeError):
             pass
 
@@ -4734,7 +4734,7 @@ class DrawBotApp:
         try:self.manual_drop_in_after=self.root.after(1000,self._expire_manual_drop_in)
         except (tk.TclError,RuntimeError,AttributeError):self.manual_drop_in_after=None
         DrawBotApp._refresh_manual_drop_in_ui(self)
-        self.status.set('Drop-In Start armed. Drop/select/paste/load the next image and Draw Studio will start drawing on the current canvas.')
+        self.status.set('Drop-In Start armed. Drop/select/paste/load the next image and Image Draw Bot will start drawing on the current canvas.')
         try:self.summary.set('Manual Drop-In Start is armed for one image import. It still uses CanvasGuard and target checks before mouse input. Paint keeps the full safety chain and is not auto-started.')
         except (tk.TclError,AttributeError):pass
         log_event('Manual Drop-In Start armed for next image import.')
@@ -5483,7 +5483,7 @@ class DrawBotApp:
                         if stream is not None:stream.close()
                 self.mouse_probe_process=None
 
-            probe_log=BASE/'logs'/'DrawStudio-mouse-probe.log'
+            probe_log=BASE/'logs'/'ImageDrawBot-mouse-probe.log'
             try:
                 probe_log.parent.mkdir(parents=True,exist_ok=True)
                 probe_log.write_text(
@@ -5663,7 +5663,7 @@ class DrawBotApp:
             return False
         target=getattr(self,'target_window',None)
         if not target:
-            if not automatic:self.status.set('Select/confirm the target canvas once. Draw Studio will auto-detect the palette immediately afterwards.')
+            if not automatic:self.status.set('Select/confirm the target canvas once. Image Draw Bot will auto-detect the palette immediately afterwards.')
             return False
         # begin_worker owns the busy state. Setting it before begin_worker used to
         # make the worker reject itself as already busy.
@@ -6044,7 +6044,7 @@ class DrawBotApp:
         if tools.get('Clear') is not None:
             self.canvas_clear_text.set('Auto clear ON · uses your anchored Clear canvas button before a full drawing.')
         elif tools.get('Eraser') is not None and tools.get('Brush') is not None:
-            self.canvas_clear_text.set('Auto clear ON · no Clear button saved, so Draw Studio will use a CanvasGuard-bounded Eraser sweep and restore Brush.')
+            self.canvas_clear_text.set('Auto clear ON · no Clear button saved, so Image Draw Bot will use a CanvasGuard-bounded Eraser sweep and restore Brush.')
         else:
             self.canvas_clear_text.set('Auto clear ON · calibrate Clear canvas, or both Brush + Eraser, before full drawing.')
 
@@ -6119,7 +6119,7 @@ class DrawBotApp:
             ui=profile_ui(selected)
             profile_tip=ui.get('tip','')
             self.profile_hint.set(hint + (f' {profile_tip}' if profile_tip else '') + (f' Tool model: {tool_note}' if tool_note else ''))
-            self.root.title(f'Draw Studio · {selected}')
+            self.root.title(f'Image Draw Bot · {selected}')
             self.status.set('Profile changed. Preview stayed Manual and mouse input is locked until you explicitly arm drawing.')
             self.set_busy(None)
             # Profile changes are never allowed to start preview planning. They only
@@ -6621,7 +6621,7 @@ class DrawBotApp:
                 pass
             overlay=SmartDropOverlay(self.root)
             self.smart_drop_overlay=overlay
-            overlay.title('Draw Studio — Game Canvas Drop')
+            overlay.title('Image Draw Bot — Game Canvas Drop')
             overlay.overrideredirect(True)
             # Important: the OS drop target exists only over the actual drawable
             # canvas, not over chat/toolbars/browser chrome.
@@ -6672,7 +6672,7 @@ class DrawBotApp:
                     loaded=self.load_source(
                         dropped_source.source,dropped_source.label,action=None,one_click_force=True)
                     if loaded is False:
-                        raise ValueError('The image could not be queued because Draw Studio is busy.')
+                        raise ValueError('The image could not be queued because Image Draw Bot is busy.')
                     self.status.set('Canvas image accepted. Loading → browser verification → automatic drawing start.')
                     return 'copy'
                 except Exception as error:
@@ -6703,7 +6703,7 @@ class DrawBotApp:
     def drop_image(self,event,drop_to_draw=False):
         """Import a local file or browser-dragged image/URL.
 
-        Normal window drops remain import-only. Dropping on one of Draw Studio's
+        Normal window drops remain import-only. Dropping on one of Image Draw Bot's
         preview canvases is a stronger gesture and may auto-start a supported
         browser target. Dropping on the dedicated game-canvas overlay always
         uses the separate one-shot Browser One-Click path.
@@ -6726,8 +6726,8 @@ class DrawBotApp:
                     # A direct preview-canvas drop is explicit one-shot
                     # authorization for the browser verification/start flow.
                     one_click_force=True
-                    self.status.set('Canvas drop accepted. Draw Studio will verify the browser canvas/palette and start drawing when safe.')
-                    log_event(f'Direct Draw Studio canvas drop authorized Browser One-Click: kind={dropped.kind!r}.')
+                    self.status.set('Canvas drop accepted. Image Draw Bot will verify the browser canvas/palette and start drawing when safe.')
+                    log_event(f'Direct Image Draw Bot canvas drop authorized Browser One-Click: kind={dropped.kind!r}.')
                 elif self.game.get()!='Microsoft Paint':
                     if DrawBotApp.arm_manual_drop_in(self):
                         action=DROP_IN_ACTION
@@ -6739,7 +6739,7 @@ class DrawBotApp:
             else:
                 loaded=self.load_source(dropped.source,dropped.label,action=action)
             if loaded is False:
-                raise ValueError('The image could not be queued because Draw Studio is busy.')
+                raise ValueError('The image could not be queued because Image Draw Bot is busy.')
         except (ValueError,tk.TclError,OSError) as error:
             self.status.set(str(error));return 'none'
         return 'copy'
@@ -6906,7 +6906,7 @@ class DrawBotApp:
     def record_screen(self):
         if len(self.corners)!=2:
             self.status.set('Select the drawing area first.');return
-        path=filedialog.asksaveasfilename(defaultextension='.gif',filetypes=[('Animated GIF','*.gif')],initialfile='DrawStudio-recording.gif')
+        path=filedialog.asksaveasfilename(defaultextension='.gif',filetypes=[('Animated GIF','*.gif')],initialfile='ImageDrawBot-recording.gif')
         if not path:return
         area=self.area()
         def work():
@@ -7453,7 +7453,7 @@ class DrawBotApp:
             qr_photo=ImageTk.PhotoImage(qr_image);qr_label.configure(image=qr_photo,text='');qr_label.image=qr_photo
         except Exception:
             qr_label.configure(text='QR code unavailable in this build. Copy the address above to your phone.',text_color='#a6b2c5',font=('Segoe UI',11),wraplength=500)
-        ctk.CTkLabel(card,text='Phone: connect to the same Wi-Fi/LAN, then scan the QR code or open the address. If Windows asks, allow Draw Studio on Private networks only.',font=('Segoe UI',11),text_color='#a6b2c5',wraplength=540,justify='left').pack(anchor='w',padx=22,pady=(0,14))
+        ctk.CTkLabel(card,text='Phone: connect to the same Wi-Fi/LAN, then scan the QR code or open the address. If Windows asks, allow Image Draw Bot on Private networks only.',font=('Segoe UI',11),text_color='#a6b2c5',wraplength=540,justify='left').pack(anchor='w',padx=22,pady=(0,14))
         row=ctk.CTkFrame(card,fg_color='transparent');row.pack(fill='x',padx=22,pady=(0,18))
         ctk.CTkButton(row,text='Copy address',command=self._copy_mobile_preview_url,fg_color='#315c50',hover_color='#3e7465').pack(side='left')
         def open_local():
@@ -7469,7 +7469,7 @@ class DrawBotApp:
 
     def export_preview(self):
         if not self.plan:self.status.set('Select an image first.');return
-        path=filedialog.asksaveasfilename(defaultextension='.png',filetypes=[('PNG image','*.png')],initialfile='DrawStudio-preview.png')
+        path=filedialog.asksaveasfilename(defaultextension='.png',filetypes=[('PNG image','*.png')],initialfile='ImageDrawBot-preview.png')
         if path:
             try:self.plan['preview'].save(path);self.status.set('Preview saved.')
             except OSError as error:self.status.set(f'Could not save: {error}')
@@ -7564,11 +7564,11 @@ class DrawBotApp:
                 modes=[]
                 if spectrum:modes.append('visual color scale')
                 if numeric:modes.append('numeric RGB')
-                self.exact_color_text.set('✓ Smart custom palette calibrated: '+ ' + '.join(modes) + '. In Adaptive exact mode, Draw Studio uses the normal Paint palette when it is close enough and automatically opens Edit colors only for image colors that need a better match.' + (' Eyedropper reuse is also calibrated.' if eye else ''))
+                self.exact_color_text.set('✓ Smart custom palette calibrated: '+ ' + '.join(modes) + '. In Adaptive exact mode, Image Draw Bot uses the normal Paint palette when it is close enough and automatically opens Edit colors only for image colors that need a better match.' + (' Eyedropper reuse is also calibrated.' if eye else ''))
             elif eye:
                 self.exact_color_text.set('Eyedropper is calibrated, but no exact color scale/RGB selector is complete. Nearest calibrated palette fallback remains active.')
             else:
-                self.exact_color_text.set('Optional: calibrate the custom color spectrum/scale. Draw Studio can click the nearest visible point for each requested RGB; normal palette fallback always remains available.')
+                self.exact_color_text.set('Optional: calibrate the custom color spectrum/scale. Image Draw Bot can click the nearest visible point for each requested RGB; normal palette fallback always remains available.')
         except Exception:
             self.exact_color_text.set('Smart custom palette setup unavailable; nearest calibrated palette fallback remains active.')
 
@@ -7576,7 +7576,7 @@ class DrawBotApp:
         if self.activity or self.closing:return
         from RuntimePaths import helper_command
         import subprocess
-        key=PROFILES[self.game.get()][0];log=BASE/'logs'/'DrawStudio-exact-color-calibration.log';log.parent.mkdir(parents=True,exist_ok=True)
+        key=PROFILES[self.game.get()][0];log=BASE/'logs'/'ImageDrawBot-exact-color-calibration.log';log.parent.mkdir(parents=True,exist_ok=True)
         command=helper_command('exactcolor','--profile',key,'--log',str(log))
         self.status.set('Opening isolated smart custom palette calibration. Main drawing input remains DISARMED.')
         def work():
@@ -7598,12 +7598,12 @@ class DrawBotApp:
         """Open palette calibration in a protected helper process.
 
         The palette picker touches Tk image objects, screen capture and Win32 mouse/window
-        APIs.  A native/GUI failure there must never terminate the main Draw Studio UI.
+        APIs.  A native/GUI failure there must never terminate the main Image Draw Bot UI.
         """
         if self.activity:return
         import subprocess
         profile_key=PROFILES[self.game.get()][0]
-        palette_log=BASE/'logs'/'DrawStudio-palette-calibration.log'
+        palette_log=BASE/'logs'/'ImageDrawBot-palette-calibration.log'
         log_event(f'Isolated color calibration requested: profile={profile_key!r}. Mouse input remains DISARMED.')
         def work():
             from RuntimePaths import helper_command
@@ -7615,7 +7615,7 @@ class DrawBotApp:
                 process=subprocess.Popen(command,cwd=BASE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
                                          text=True,encoding='utf-8',errors='replace',creationflags=creationflags)
                 self.palette_probe_process=process
-                self.events.put(('status','🎨 Color calibration is open in a protected process. Main Draw Studio will stay safe if the calibration window fails.'))
+                self.events.put(('status','🎨 Color calibration is open in a protected process. Main Image Draw Bot will stay safe if the calibration window fails.'))
                 while True:
                     try:
                         output=process.communicate(timeout=.10)[0] or ''
@@ -7627,7 +7627,7 @@ class DrawBotApp:
             finally:
                 self.palette_probe_process=None
             code=process.returncode if process else -1
-            launcher_log=BASE/'logs'/'DrawStudio-palette-launcher.log'
+            launcher_log=BASE/'logs'/'ImageDrawBot-palette-launcher.log'
             try:
                 launcher_log.parent.mkdir(parents=True,exist_ok=True)
                 launcher_log.write_text(f'Command: {command!r}\nExit: {code}\nElapsed: {time.monotonic()-started:.3f}s\n\n{output}',encoding='utf-8')
@@ -7686,7 +7686,7 @@ class DrawBotApp:
         if len(client)!=4:
             raise ValueError('Browser Auto-Recalibration could not read the browser client rectangle.')
         before=DrawBotApp._browser_layout_state(self)
-        # The scan must see the browser itself, not Draw Studio or another window
+        # The scan must see the browser itself, not Image Draw Bot or another window
         # covering it. Activating the existing target changes no canvas content and
         # sends no mouse/keyboard events.
         try:
@@ -8013,7 +8013,7 @@ class DrawBotApp:
             log_event('Drawing blocked: no source image loaded.')
             if start_state:start_state.transition('ABORTED','source image not loaded')
             self.status.set('Load or paste an image before pressing Start Drawing.')
-            try:self.summary.set('No image loaded. Choose an image, paste with Ctrl+V, or drag a file into Draw Studio first.')
+            try:self.summary.set('No image loaded. Choose an image, paste with Ctrl+V, or drag a file into Image Draw Bot first.')
             except (tk.TclError,AttributeError):pass
             return
         try:
@@ -8061,7 +8061,7 @@ class DrawBotApp:
                 log_event(f'Automatic browser brush detection fell back safely: {brush_error!r}.')
             # Paint-only real preflight: resolve stale palette-only saved
             # settings against the *actual* profile calibration before planning.
-            # This is what lets Draw Studio open Edit colors automatically when
+            # This is what lets Image Draw Bot open Edit colors automatically when
             # the current image reaches a useful custom RGB batch.
             custom_resolution=resolve_image_custom_color_workflow(
                 self.game.get(), profile_key, options.get('custom_color_workflow','Calibrated palette'),
@@ -8450,7 +8450,7 @@ class DrawBotApp:
         request=object();self.update_request=request
         self.update_summary.set('Checking GitHub Releases…')
         self.update_detail.set('A newer Windows release will be downloaded, verified and opened in the installer.')
-        self.status.set('Checking Draw Studio releases on GitHub…')
+        self.status.set('Checking Image Draw Bot releases on GitHub…')
         def work():
             from UpdateCenter import check_for_updates,download_installer
             try:
@@ -8492,9 +8492,9 @@ class DrawBotApp:
 
     def open_latest_release_page(self):
         import webbrowser
-        url=str(getattr(self,'latest_release_url','') or 'https://github.com/Vxiey/Draw-Studio/releases')
-        if not url.startswith('https://github.com/Vxiey/Draw-Studio/'):
-            url='https://github.com/Vxiey/Draw-Studio/releases'
+        url=str(getattr(self,'latest_release_url','') or 'https://github.com/Vxiey/Image-Draw-Bot/releases')
+        if not url.startswith('https://github.com/Vxiey/Image-Draw-Bot/'):
+            url='https://github.com/Vxiey/Image-Draw-Bot/releases'
         try:
             opened=webbrowser.open(url,new=2)
             if not opened:self.status.set(f'Releases: {url}')
@@ -8799,7 +8799,7 @@ class DrawBotApp:
             self.status.set(f'Could not clear GPU cache: {error}')
 
     def run_self_test(self):
-        """Run Draw Studio's built-in self-test out of process.
+        """Run Image Draw Bot's built-in self-test out of process.
 
         Developer tooling must never block Tk's main loop, so the result is
         returned through the existing worker-event queue.
@@ -8826,7 +8826,7 @@ class DrawBotApp:
     def show_version_history(self):
         import customtkinter as ctk
         window=ctk.CTkToplevel(self.root)
-        window.title('Draw Studio version history')
+        window.title('Image Draw Bot version history')
         window.geometry('850x680');window.minsize(720,520);window.transient(self.root)
         window.configure(fg_color='#101319')
         card=ctk.CTkFrame(window,fg_color='#1a202b',corner_radius=18)
@@ -8844,13 +8844,13 @@ class DrawBotApp:
         import customtkinter as ctk
         from RuntimePaths import is_frozen
         window=ctk.CTkToplevel(self.root)
-        window.title('About Draw Studio')
+        window.title('About Image Draw Bot')
         window.geometry('610x500');window.resizable(False,False);window.transient(self.root)
         window.configure(fg_color='#101319')
         card=ctk.CTkFrame(window,fg_color='#1a202b',corner_radius=18)
         card.pack(fill='both',expand=True,padx=22,pady=22)
         ctk.CTkLabel(card,text='D',width=58,height=58,corner_radius=16,fg_color='#315c50',font=('Segoe UI',28,'bold'),text_color='#f0f4fb').pack(anchor='w',padx=24,pady=(24,10))
-        ctk.CTkLabel(card,text='Draw Studio',font=('Segoe UI',26,'bold'),text_color='#f0f4fb').pack(anchor='w',padx=24)
+        ctk.CTkLabel(card,text='Image Draw Bot',font=('Segoe UI',26,'bold'),text_color='#f0f4fb').pack(anchor='w',padx=24)
         ctk.CTkLabel(card,text=f'{APP_VERSION} · {BUILD_CHANNEL.capitalize()} channel',font=('Segoe UI',13),text_color='#98edce').pack(anchor='w',padx=24,pady=(2,14))
         try:
             gpu=acceleration_info(self.gpu_mode.get(),self.gpu_vram.get(),self.gpu_performance.get())
@@ -8945,12 +8945,12 @@ class DrawBotApp:
         import customtkinter as ctk
         from ReleaseState import mark_welcome_seen
         window=ctk.CTkToplevel(self.root)
-        window.title('Welcome to Draw Studio')
+        window.title('Welcome to Image Draw Bot')
         window.geometry('760x720');window.minsize(700,660);window.transient(self.root);window.grab_set()
         window.configure(fg_color='#101319')
         outer=ctk.CTkFrame(window,fg_color='#1a202b',corner_radius=20)
         outer.pack(fill='both',expand=True,padx=22,pady=22)
-        ctk.CTkLabel(outer,text=f'Draw Studio {APP_VERSION}',font=('Segoe UI',28,'bold'),text_color='#f0f4fb').pack(anchor='w',padx=28,pady=(26,3))
+        ctk.CTkLabel(outer,text=f'Image Draw Bot {APP_VERSION}',font=('Segoe UI',28,'bold'),text_color='#f0f4fb').pack(anchor='w',padx=28,pady=(26,3))
         ctk.CTkLabel(outer,text='From image to brush strokes — with a safe, test-first workflow.',font=('Segoe UI',13),text_color='#a6b2c5').pack(anchor='w',padx=28,pady=(0,20))
         steps=(
             ('1', 'Choose profile + image', 'Pick the target app profile, then select, paste or drag in an image. A direct drop on the preview canvas can one-shot start supported/non-Paint targets when setup is already safe; otherwise it only imports.'),
@@ -8965,7 +8965,7 @@ class DrawBotApp:
             text=ctk.CTkFrame(row,fg_color='transparent');text.pack(side='left',fill='x',expand=True,pady=8)
             ctk.CTkLabel(text,text=title,font=('Segoe UI',14,'bold'),text_color='#f0f4fb').pack(anchor='w')
             ctk.CTkLabel(text,text=body,font=('Segoe UI',11),text_color='#a6b2c5',justify='left',wraplength=550).pack(anchor='w')
-        ctk.CTkLabel(outer,text='Privacy: Draw Studio has no telemetry or bug-report server. Diagnostics and safety reports stay local. GitHub is contacted only when you explicitly use an image URL or press Check for updates.',font=('Segoe UI',11),text_color='#a6b2c5',wraplength=620,justify='left').pack(anchor='w',padx=28,pady=(14,8))
+        ctk.CTkLabel(outer,text='Privacy: Image Draw Bot has no telemetry or bug-report server. Diagnostics and safety reports stay local. GitHub is contacted only when you explicitly use an image URL or press Check for updates.',font=('Segoe UI',11),text_color='#a6b2c5',wraplength=620,justify='left').pack(anchor='w',padx=28,pady=(14,8))
         def done():
             try:mark_welcome_seen()
             except OSError as error:log_event(f'Could not save welcome state: {error!r}')
@@ -8976,7 +8976,7 @@ class DrawBotApp:
         ctk.CTkButton(outer,text='Get started',command=done,height=44,fg_color='#98edce',hover_color='#b2f6de',text_color='#15382d',font=('Segoe UI',13,'bold')).pack(anchor='e',padx=28,pady=(6,24))
 
     def help(self):
-        messagebox.showinfo('How to use Draw Studio',
+        messagebox.showinfo('How to use Image Draw Bot',
             '1. Select an image from your computer, paste an image, or load a direct image URL.\n\n'
             '2. Open the target drawing application. Read/calibrate colors if needed, then select the drawing area.\n\n'
             '3. For photos/portraits, use Auto or Portrait / shaded. For complex NVIDIA-GPU images use GPU enhanced + Auto CUDA + High throughput and choose a VRAM budget. High precision and a 1–2 px brush are good starting points.\n\n'
@@ -9019,7 +9019,7 @@ class DrawBotApp:
         elif kind=='update_progress':
             self.update_summary.set(str(value))
         elif kind=='update_installer_started':
-            self.status.set('Installer started. Closing Draw Studio to complete the update.')
+            self.status.set('Installer started. Closing Image Draw Bot to complete the update.')
             self.close()
         elif kind=='update_check_complete':
             payload=value if isinstance(value,dict) else {}
@@ -9031,7 +9031,7 @@ class DrawBotApp:
                 self.update_detail.set(str(payload['error']))
                 self.status.set('Update check failed. Check your connection and try again.')
                 return
-            self.latest_release_url=str(payload.get('release_url') or 'https://github.com/Vxiey/Draw-Studio/releases')
+            self.latest_release_url=str(payload.get('release_url') or 'https://github.com/Vxiey/Image-Draw-Bot/releases')
             self.update_summary.set(str(payload.get('message') or 'Update check completed.'))
             latest=str(payload.get('latest_version') or 'No release found')
             release_name=str(payload.get('release_name') or '').strip()
@@ -9041,7 +9041,7 @@ class DrawBotApp:
                 self.update_summary.set(f'Version {latest} downloaded and SHA-256 verified. Opening installer…')
                 self.root.after(100,lambda:DrawBotApp._install_checked_update(self,payload))
             elif payload.get('update_available'):
-                self.status.set(str(payload.get('message') or f'Draw Studio {latest} is available.'))
+                self.status.set(str(payload.get('message') or f'Image Draw Bot {latest} is available.'))
             else:
                 self.status.set(str(payload.get('message') or 'Update check completed.'))
         elif kind=='hardware_profile_check':
@@ -9087,7 +9087,7 @@ class DrawBotApp:
                 self.status.set('Smart custom palette calibration closed. Visual scale / exact RGB will be used when calibrated; nearest palette fallback is always available.')
                 log_event('Exact color calibration helper completed successfully.')
             else:
-                self.status.set(f'Exact color calibration failed safely in helper process (exit {code}). Main Draw Studio stayed open; nearest palette fallback remains active.')
+                self.status.set(f'Exact color calibration failed safely in helper process (exit {code}). Main Image Draw Bot stayed open; nearest palette fallback remains active.')
                 log_event(f'Exact color calibration helper failed safely: exit={code}.')
         elif kind=='smart_drop_canvas_ready':
             payload=value if isinstance(value,dict) else {}
@@ -9194,7 +9194,7 @@ class DrawBotApp:
             else:
                 unsigned=code & 0xffffffff
                 crash_hint=(' Native Windows access violation (0xC0000005).' if unsigned==0xC0000005 else '')
-                self.status.set(f'Color calibration failed safely in its helper process (exit {code} / 0x{unsigned:08X}). Main Draw Studio stayed open.{crash_hint} Check the palette calibration log.')
+                self.status.set(f'Color calibration failed safely in its helper process (exit {code} / 0x{unsigned:08X}). Main Image Draw Bot stayed open.{crash_hint} Check the palette calibration log.')
                 log_event(f'Color calibration helper failed safely: exit={code} / 0x{unsigned:08X}.')
         elif kind=='diagnostics_ready':
             path=Path(str(value))
@@ -9644,7 +9644,7 @@ class DrawBotApp:
                         try:DrawBotApp._show_smart_drop_overlay(self,payload)
                         except Exception as error:
                             self.status.set(f'Game Canvas Drop could not open its canvas listener: {error}')
-                            try:self.smart_drop_in_text.set('Canvas drop listener failed. Use normal target selection or drag the image into Draw Studio instead.')
+                            try:self.smart_drop_in_text.set('Canvas drop listener failed. Use normal target selection or drag the image into Image Draw Bot instead.')
                             except Exception:pass
                             log_event(f'Game Canvas Drop overlay failed: {error!r}')
                 if finished=='load' and not self.closing:
@@ -9804,12 +9804,12 @@ def main():
     lock=InstanceLock()
     root=create_root()
     if lock.already_running:
-        root.withdraw();messagebox.showinfo('Draw Studio is already open','Close the other instance first.');root.destroy();lock.close();return
+        root.withdraw();messagebox.showinfo('Image Draw Bot is already open','Close the other instance first.');root.destroy();lock.close();return
     begin_run_marker()
     try:
         DrawBotApp(root)
     except Exception as error:
-        messagebox.showerror('Draw Studio could not start',str(error))
+        messagebox.showerror('Image Draw Bot could not start',str(error))
         root.destroy();lock.close();raise
     try:root.mainloop()
     finally:lock.close()

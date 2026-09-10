@@ -1,4 +1,4 @@
-# Validation — Draw Studio 1.0.133-rc1
+# Validation — Image Draw Bot 1.0.133-rc1
 
 Base: delivered 1.0.132-rc1. Environment: Python 3.12 on Linux, synthetic images,
 isolated temporary files and fake clocks/input. No desktop input was sent.

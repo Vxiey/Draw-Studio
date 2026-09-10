@@ -1,4 +1,4 @@
-"""Small release/first-run state helpers for Draw Studio.
+"""Small release/first-run state helpers for Image Draw Bot.
 
 This file intentionally stores only local UX state. It does not contain analytics,
 tracking identifiers, source image information, or telemetry.
@@ -43,7 +43,7 @@ def mark_welcome_seen() -> None:
 
 
 def release_label() -> str:
-    return f"Draw Studio {APP_VERSION}"
+    return f"Image Draw Bot {APP_VERSION}"
 
 
 def build_channel_label() -> str:

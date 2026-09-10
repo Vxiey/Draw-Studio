@@ -28,7 +28,7 @@ class App:
         try:
             data=load(profile_key);self.positions={k:tuple(v) for k,v in data['controls'].items()};self.anchor=data['anchor']
         except (OSError,ValueError):pass
-        root.title('Draw Studio · Smart custom palette');root.geometry('760x760');root.minsize(650,620)
+        root.title('Image Draw Bot · Smart custom palette');root.geometry('760x760');root.minsize(650,620)
         body=ttk.Frame(root,padding=16);body.pack(fill='both',expand=True)
         ttk.Label(body,text='Smart custom palette / exact color',font=('Segoe UI',17,'bold')).pack(anchor='w')
         ttk.Label(body,text=(

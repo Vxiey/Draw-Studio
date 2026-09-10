@@ -1,9 +1,9 @@
-# Draw Studio 1.0.142-rc1
+# Image Draw Bot 1.0.142-rc1
 
 ## Microsoft Paint — picture custom palette
 
 - Adds **Custom color palette for picture** directly to the Paint color-calibration area.
-- Requires a loaded image and analyzes it with Draw Studio's production DynamicColors/OKLab color planner.
+- Requires a loaded image and analyzes it with Image Draw Bot's production DynamicColors/OKLab color planner.
 - Prepares only a bounded set of useful exact RGB colors; normal Paint palette colors are reused when they are already sufficient.
 - Reserves a small bounded detail-color budget for high-edge pixels so eyes, thin contours and small isolated color fields can survive palette reduction.
 - Automatically opens Paint **Edit colors**, enters Red/Green/Blue values, confirms each custom color, and saves the picture palette for the current image/calibration.

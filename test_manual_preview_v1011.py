@@ -30,8 +30,8 @@ class Root:
 
 class ManualPreviewV1011Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.143-rc4')
-        self.assertEqual(FILE_VERSION,'1.0.143')
+        self.assertEqual(APP_VERSION,'1.0.144-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.144')
 
     def test_preview_modes_validate(self):
         self.assertIn('Manual', PREVIEW_MODES)

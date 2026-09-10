@@ -5,7 +5,7 @@
   "screen_capture": false,
   "network": false,
   "user_image_data": false,
-  "description": "Synthetic Draw Studio golden-image regression fixtures.",
+  "description": "Synthetic Image Draw Bot golden-image regression fixtures.",
   "cases": [
     {
       "name": "yellow-banana-hue-guard",

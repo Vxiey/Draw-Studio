@@ -35,7 +35,7 @@ class NamedColorIntelligenceTests(unittest.TestCase):
         self.assertEqual(normalize_rgb('rgb(17,34,51)'),(17,34,51))
         self.assertEqual(normalize_rgb('rgba(255,0,0,0.5)'),(255,127,127))
         self.assertEqual(normalize_rgb('argb(128,255,0,0)'),(255,127,127))
-        # Existing 8-digit Draw Studio semantics remain AARRGGBB.
+        # Existing 8-digit Image Draw Bot semantics remain AARRGGBB.
         self.assertEqual(normalize_rgb('#80112233'),(136,144,153))
 
     def test_named_input_never_expands_render_palette(self):

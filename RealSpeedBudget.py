@@ -1,6 +1,6 @@
-"""Measured browser-throughput budgeting for Draw Studio v1.0.77.
+"""Measured browser-throughput budgeting for Image Draw Bot v1.0.77.
 
-The profile is learned locally from completed Draw Studio browser executions. It
+The profile is learned locally from completed Image Draw Bot browser executions. It
 stores only timing counters (paths, seconds, color batches, profile key), never
 screenshots, source images, URLs, account data or telemetry.
 

@@ -9,7 +9,7 @@ class RuntimeSafetyUiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
             payload={'completed':True,'mode':'dry-run','profile':'Microsoft Paint','counts':{'drawn':7,'clipped':2,'skipped':1,'edge_follow':3,'blocked':0}}
-            (root/'DrawStudio-Safety-20260906-000000-000-dry-run.json').write_text(json.dumps(payload),encoding='utf-8')
+            (root/'ImageDrawBot-Safety-20260906-000000-000-dry-run.json').write_text(json.dumps(payload),encoding='utf-8')
             loaded=latest_report(root)
             self.assertEqual(loaded['profile'],'Microsoft Paint')
             summary=compact_summary(loaded)

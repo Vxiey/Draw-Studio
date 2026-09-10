@@ -36,7 +36,7 @@ class Step21ReleaseCleanupTests(unittest.TestCase):
 
     def test_source_archive_is_clean_and_deterministic_layout(self):
         with tempfile.TemporaryDirectory() as tmp:
-            zip_path = Path(tmp) / f"Draw-Studio-{APP_VERSION}-Source.zip"
+            zip_path = Path(tmp) / f"Image-Draw-Bot-{APP_VERSION}-Source.zip"
             meta = create_source_archive(self.root, zip_path)
             self.assertTrue(zip_path.is_file())
             self.assertEqual(zip_path.name, meta["name"])
@@ -44,16 +44,16 @@ class Step21ReleaseCleanupTests(unittest.TestCase):
             with zipfile.ZipFile(zip_path) as archive:
                 names = archive.namelist()
             self.assertTrue(names)
-            self.assertTrue(all(name.startswith("Draw-Studio/") for name in names))
-            self.assertIn("Draw-Studio/README.md", names)
-            self.assertIn("Draw-Studio/ReleasePackage.py", names)
-            forbidden = [name for name in names if is_forbidden_path(name.replace("Draw-Studio/", "", 1))]
+            self.assertTrue(all(name.startswith("Image-Draw-Bot/") for name in names))
+            self.assertIn("Image-Draw-Bot/README.md", names)
+            self.assertIn("Image-Draw-Bot/ReleasePackage.py", names)
+            forbidden = [name for name in names if is_forbidden_path(name.replace("Image-Draw-Bot/", "", 1))]
             self.assertEqual([], forbidden)
             self.assertFalse(any("/logs/" in name or "/safety-reports/" in name for name in names))
 
     def test_manifest_records_artifact_hashes_without_image_or_runtime_data(self):
         with tempfile.TemporaryDirectory() as tmp:
-            zip_path = Path(tmp) / f"Draw-Studio-{APP_VERSION}-Source.zip"
+            zip_path = Path(tmp) / f"Image-Draw-Bot-{APP_VERSION}-Source.zip"
             manifest_path = Path(tmp) / "manifest.json"
             meta = create_source_archive(self.root, zip_path)
             write_release_manifest(self.root, manifest_path, artifacts=[zip_path])
@@ -82,8 +82,8 @@ class Step21ReleaseCleanupTests(unittest.TestCase):
         self.assertIn("actions/upload-artifact@v4", workflow)
         self.assertIn("python ReleasePackage.py --check", workflow)
         self.assertIn("ReleaseCandidateHardening.py --source-gate", workflow)
-        self.assertIn("DrawStudio-*-Windows-x64.zip", workflow)
-        self.assertIn("DrawStudio-*-manifest.json", workflow)
+        self.assertIn("ImageDrawBot-*-Windows-x64.zip", workflow)
+        self.assertIn("ImageDrawBot-*-manifest.json", workflow)
         self.assertIn("--notes-file", workflow)
 
     def test_step22_roadmap_rolls_forward_after_implementation(self):

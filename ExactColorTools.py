@@ -1,7 +1,7 @@
 """User-calibrated exact RGB/custom color controls.
 
 Coordinates are stored relative to the target window anchor. v2 adds a visual
-color-spectrum workflow: Draw Studio can sample the visible color field/slider
+color-spectrum workflow: Image Draw Bot can sample the visible color field/slider
 and click the point whose rendered RGB is nearest the requested drawing color.
 Numeric R/G/B fields remain a deterministic fallback.
 """

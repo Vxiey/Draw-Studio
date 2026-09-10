@@ -1,4 +1,4 @@
-# Draw Studio v1.0.58-beta
+# Image Draw Bot v1.0.58-beta
 
 This beta focuses on canvas safety, deterministic rendering, release readiness and a clearer first-run experience.
 
@@ -31,11 +31,11 @@ This beta focuses on canvas safety, deterministic rendering, release readiness a
 
 ## Renderer
 
-Draw Studio uses deterministic image-processing and geometry algorithms. No AI/ML/OCR model is required by the renderer.
+Image Draw Bot uses deterministic image-processing and geometry algorithms. No AI/ML/OCR model is required by the renderer.
 
 ## Recommended installation
 
-Use `DrawStudio-1.0.58-beta-Windows-x64-Setup.exe` from GitHub Releases when available. The portable ZIP is also supported.
+Use `ImageDrawBot-1.0.58-beta-Windows-x64-Setup.exe` from GitHub Releases when available. The portable ZIP is also supported.
 
 ## First-run order
 

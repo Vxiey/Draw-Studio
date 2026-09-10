@@ -1,4 +1,4 @@
-"""Runtime safety reporting for Draw Studio v1.0.57.
+"""Runtime safety reporting for Image Draw Bot v1.0.57.
 
 Records what the real execution path actually did after CanvasGuard + Edge
 Behavior decisions. Reports are local-only, deterministic and contain no source
@@ -120,7 +120,7 @@ class RuntimeSafetySession:
         c = payload.get("counts") or {}
         fills = payload.get("fills") or {}
         lines = [
-            f"Draw Studio Runtime Safety Report - {payload.get('app_version', '')}",
+            f"Image Draw Bot Runtime Safety Report - {payload.get('app_version', '')}",
             f"Mode: {payload.get('mode', '')}",
             f"Profile: {payload.get('profile', '')}",
             f"Edge behavior: {payload.get('edge_behavior', '')}",
@@ -163,7 +163,7 @@ class RuntimeSafetySession:
             return payload
         target_dir = Path(directory) if directory is not None else REPORT_DIR
         target_dir.mkdir(parents=True, exist_ok=True)
-        base = f"DrawStudio-Safety-{_stamp()}-{'dry-run' if self.dry_run else 'drawing'}"
+        base = f"ImageDrawBot-Safety-{_stamp()}-{'dry-run' if self.dry_run else 'drawing'}"
         json_path = target_dir / f"{base}.json"
         text_path = target_dir / f"{base}.txt"
         atomic_write_text(json_path, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
@@ -188,7 +188,7 @@ def latest_report(directory: Path | None = None) -> dict | None:
     """Load the newest runtime safety JSON report. Local read-only helper."""
     target_dir = Path(directory) if directory is not None else REPORT_DIR
     try:
-        files = sorted(target_dir.glob("DrawStudio-Safety-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        files = sorted(target_dir.glob("ImageDrawBot-Safety-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
     except OSError:
         return None
     for path in files:

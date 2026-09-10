@@ -1,7 +1,7 @@
 # Automatic Paint preparation
 
 Load an image, select Microsoft Paint, then press **Prepare Paint & draw**.
-Before each full drawing, Draw Studio opens Paint if none is visible, activates
+Before each full drawing, Image Draw Bot opens Paint if none is visible, activates
 it, selects Pencil and a verified 1 px size, identifies the blank visible canvas
 and palette, and discovers the current Edit colors RGB fields and OK button.
 The dialog is dismissed with Cancel after calibration. The existing Adaptive

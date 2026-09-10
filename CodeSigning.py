@@ -14,11 +14,11 @@ class SigningError(RuntimeError):pass
 
 def signing_configuration(environ=None):
     env=os.environ if environ is None else environ
-    thumb=str(env.get('DRAWSTUDIO_SIGNING_THUMBPRINT','')).replace(' ','')
+    thumb=str(env.get('IMAGEDRAWBOT_SIGNING_THUMBPRINT') or env.get('DRAWSTUDIO_SIGNING_THUMBPRINT','')).replace(' ','')
     if not re.fullmatch(r'[0-9a-fA-F]{40}',thumb):
-        raise SigningError('Set DRAWSTUDIO_SIGNING_THUMBPRINT to a provisioned code-signing certificate thumbprint.')
-    tool=env.get('DRAWSTUDIO_SIGNTOOL') or shutil.which('signtool.exe')
-    if not tool or not Path(tool).is_file():raise SigningError('Set DRAWSTUDIO_SIGNTOOL to Windows SDK signtool.exe.')
+        raise SigningError('Set IMAGEDRAWBOT_SIGNING_THUMBPRINT (or legacy DRAWSTUDIO_SIGNING_THUMBPRINT) to a provisioned code-signing certificate thumbprint.')
+    tool=env.get('IMAGEDRAWBOT_SIGNTOOL') or env.get('DRAWSTUDIO_SIGNTOOL') or shutil.which('signtool.exe')
+    if not tool or not Path(tool).is_file():raise SigningError('Set IMAGEDRAWBOT_SIGNTOOL to Windows SDK signtool.exe.')
     if any(c in str(tool) for c in ('"','$','\n','\r')):raise SigningError('Unsupported SignTool path.')
     return str(Path(tool).resolve()),thumb.upper()
 
@@ -64,4 +64,4 @@ def sign_distribution(root,config):
 def inno_arguments(config):
     tool,thumb=config
     command=f'$q{tool}$q sign /sha1 {thumb} /s My /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $f'
-    return ['/DSignRelease','/Sdrawstudio='+command]
+    return ['/DSignRelease','/Simagedrawbot='+command]

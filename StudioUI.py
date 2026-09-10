@@ -1,4 +1,4 @@
-"""Modern Draw Studio desktop interface.
+"""Modern Image Draw Bot desktop interface.
 
 The UI is deliberately state-driven: worker threads continue to communicate through
 DrawBot's event queue and all widget updates happen on Tk's main loop. Heavy image
@@ -184,7 +184,7 @@ def build_ui(a, quality, speed):
     logo.pack(side='left', padx=(0, 11))
     title = frame(header)
     title.pack(side='left')
-    label(title, 'Draw Studio', size=23, bold=True).pack(side='left')
+    label(title, 'Image Draw Bot', size=23, bold=True).pack(side='left')
     label(title, APP_VERSION, size=9, bold=True, fg_color=FIELD, corner_radius=8,
           width=96, height=24, anchor='center').pack(side='left', padx=(9, 0))
 
@@ -272,7 +272,7 @@ def build_ui(a, quality, speed):
         body.pack(fill='x', padx=12, pady=(0, 12))
         return body
 
-    step1 = step_card(1, 'Choose target app', 'Pick the app/game you want Draw Studio to draw into.', '🎯')
+    step1 = step_card(1, 'Choose target app', 'Pick the app/game you want Image Draw Bot to draw into.', '🎯')
     a.profile_selector = ttk.Combobox(step1, textvariable=a.game, values=list(PROFILES),
                                       state='readonly', style='DrawStudio.TCombobox',
                                       font=('Segoe UI', 11), height=10)
@@ -290,7 +290,7 @@ def build_ui(a, quality, speed):
     reset_profile_btn.pack(fill='x', pady=(0, 5))
     tooltip(export_btn, 'Step 27: export only this profile to a portable .drawprofile/JSON file. Hardware/timing state and input authorization are excluded.')
     tooltip(import_btn, 'Step 27: validate and import a .drawprofile. Existing names can be replaced or imported as an isolated copy.')
-    tooltip(reset_profile_btn, 'Delete only this profile’s saved settings/calibration/cache files and restore Draw Studio defaults. Other profiles are untouched.')
+    tooltip(reset_profile_btn, 'Delete only this profile’s saved settings/calibration/cache files and restore Image Draw Bot defaults. Other profiles are untouched.')
     label(step1, var=a.profile_hint, muted=True, wraplength=270, size=9).pack(anchor='w')
     profile_guide = frame(step1, PANEL_ALT, border_width=1, border_color=LINE, radius=10)
     profile_guide.pack(fill='x', pady=(7, 2))
@@ -332,7 +332,7 @@ def build_ui(a, quality, speed):
     btn(upscale_row,'Upscale image…',a.upscale_dialog,height=34).pack(side='left',fill='x',expand=True)
     btn(upscale_row,'Undo',a.undo_upscale,width=65,height=34).pack(side='right',padx=(6,0))
     one_click=control(ctk.CTkSwitch(step2, text='Browser One-Click Mode', variable=a.browser_one_click_enabled, command=a.options_changed, fg_color=ACCENT, progress_color=ACCENT, button_color='#e8fff7', button_hover_color='#ffffff', text_color=TEXT)); one_click.pack(anchor='w', pady=(7,0))
-    tooltip(one_click,'Supported browser games only: add an image and Draw Studio automatically finds/reuses the game window, detects canvas/palette, checks brush controls and runs visual preflight before drawing. Paint is never auto-started.')
+    tooltip(one_click,'Supported browser games only: add an image and Image Draw Bot automatically finds/reuses the game window, detects canvas/palette, checks brush controls and runs visual preflight before drawing. Paint is never auto-started.')
     a.browser_one_click_label=label(step2, var=a.browser_one_click_text, muted=True, wraplength=270, size=9)
     a.browser_one_click_label.pack(anchor='w', pady=(3,0))
     a.drop_in_button=btn(step2, '⚡  Arm Drop-In Start', a.arm_manual_drop_in, height=34)
@@ -341,7 +341,7 @@ def build_ui(a, quality, speed):
     label(step2, var=a.drop_in_text, muted=True, wraplength=270, size=9).pack(anchor='w', pady=(4, 0))
     a.smart_drop_button=btn(step2, '🎯  Arm game canvas image drop', a.arm_smart_canvas_drop, height=34)
     a.smart_drop_button.pack(fill='x', pady=(7, 0))
-    tooltip(a.smart_drop_button,'Supported browser games: places a temporary 60-second drop target exactly over the detected drawable canvas. Drag an image from Google Images/Chrome/Edge or File Explorer onto the canvas; Draw Studio imports it, re-verifies canvas/palette and starts drawing automatically. CanvasGuard/preflight still apply.')
+    tooltip(a.smart_drop_button,'Supported browser games: places a temporary 60-second drop target exactly over the detected drawable canvas. Drag an image from Google Images/Chrome/Edge or File Explorer onto the canvas; Image Draw Bot imports it, re-verifies canvas/palette and starts drawing automatically. CanvasGuard/preflight still apply.')
     label(step2, var=a.smart_drop_in_text, muted=True, wraplength=270, size=9).pack(anchor='w', pady=(4, 0))
     a.auto_clear_switch=control(ctk.CTkSwitch(step2, text='Auto clear target canvas before full drawing', variable=a.auto_clear_canvas, command=a.canvas_clear_changed, fg_color=ACCENT, progress_color=ACCENT, button_color='#e8fff7', button_hover_color='#ffffff', text_color=TEXT))
     a.auto_clear_switch.pack(anchor='w', pady=(9,0))
@@ -364,7 +364,7 @@ def build_ui(a, quality, speed):
     a.paint_tool_button.pack(fill='x', pady=(6,0)); a.paint_tool_button.configure(state='disabled')
     a.browser_auto_button = btn(step3, '✨  Auto setup browser', a.auto_calibrate_browser_profile, height=36)
     a.browser_auto_button.pack(fill='x', pady=(6, 0)); a.browser_auto_button.configure(state='disabled')
-    tooltip(a.browser_auto_button,'Gartic Phone, Skribbl.io/Fast and SketchHeads: automatically detect/verify palette and safe canvas. Before drawing, Draw Studio read-only re-scans after Chrome zoom, resize, window movement or DPI changes. No calibration clicks are generated.')
+    tooltip(a.browser_auto_button,'Gartic Phone, Skribbl.io/Fast and SketchHeads: automatically detect/verify palette and safe canvas. Before drawing, Image Draw Bot read-only re-scans after Chrome zoom, resize, window movement or DPI changes. No calibration clicks are generated.')
     a.browser_auto_label=label(step3, var=a.browser_auto_text, muted=True, wraplength=270, size=9)
     a.browser_auto_label.pack(anchor='w', pady=(4, 2))
     a.app_tool_button = btn(step3, '🧰  Calibrate Brush / Fill / Eraser / Clear', a.calibrate_app_tools, height=34)
@@ -696,7 +696,7 @@ def build_ui(a, quality, speed):
     label(tools_scroll, 'Run isolated tests, inspect the canvas, export previews and collect sanitized diagnostics. Full drawing requires Preflight + Unlock + Start.', muted=True, size=10, wraplength=720).pack(anchor='w', padx=16, pady=(0, 12))
     release_card = frame(tools_scroll, PANEL_ALT)
     release_card.pack(fill='x', padx=16, pady=6)
-    label(release_card, f'Draw Studio {APP_VERSION}', size=14, bold=True).pack(anchor='w', padx=14, pady=(12, 3))
+    label(release_card, f'Image Draw Bot {APP_VERSION}', size=14, bold=True).pack(anchor='w', padx=14, pady=(12, 3))
     row = frame(release_card); row.pack(fill='x', padx=14, pady=(4, 12))
     btn(row, 'Quick guide', a.show_welcome, width=105, height=33).pack(side='left')
     btn(row, 'Setup wizard', a.show_beginner_setup_wizard, width=112, height=33).pack(side='left', padx=6)
@@ -717,8 +717,8 @@ def build_ui(a, quality, speed):
     check_update_btn=btn(update_actions, 'Check updates / install', a.check_for_updates, width=138, height=32); check_update_btn.pack(side='left')
     release_page_btn=btn(update_actions, 'Open GitHub Releases', a.open_latest_release_page, width=156, height=32); release_page_btn.pack(side='left', padx=6)
     a.update_download_button=release_page_btn
-    tooltip(check_update_btn,'Contacts only the public Draw Studio GitHub Releases API after this explicit click. Downloads and verifies a newer Windows installer, then starts the update. Save your work first.')
-    tooltip(release_page_btn,'Opens the official Draw Studio GitHub Releases page in your browser.')
+    tooltip(check_update_btn,'Contacts only the public Image Draw Bot GitHub Releases API after this explicit click. Downloads and verifies a newer Windows installer, then starts the update. Save your work first.')
+    tooltip(release_page_btn,'Opens the official Image Draw Bot GitHub Releases page in your browser.')
 
     tuner_card = frame(tools_scroll, PANEL_ALT)
     tuner_card.pack(fill='x', padx=16, pady=6)

@@ -1,6 +1,6 @@
-"""Region Fill Engine for Draw Studio v1.0.119-beta.
+"""Region Fill Engine for Image Draw Bot v1.0.119-beta.
 
-This module deliberately builds on Draw Studio's existing conservative connected-
+This module deliberately builds on Image Draw Bot's existing conservative connected-
 component/bucket-fill detector. It adds a second safety/cost layer and produces a
 shared plan that preview and final execution can consume without guessing again.
 

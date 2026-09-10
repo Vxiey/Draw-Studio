@@ -85,6 +85,6 @@ Preview diagnostics expose:
 
 ## Version
 
-Step 29 is released as **Draw Studio v1.0.128-beta**.
+Step 29 is released as **Image Draw Bot v1.0.128-beta**.
 
 Step 30 remains **Release Candidate Hardening**.

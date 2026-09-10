@@ -1,4 +1,4 @@
-# Draw Studio v1.0.124-beta — Steps 24–25
+# Image Draw Bot v1.0.124-beta — Steps 24–25
 
 ## Step 24 — Adaptive Detail Zoom Pass
 

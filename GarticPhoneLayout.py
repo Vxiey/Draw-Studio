@@ -14,7 +14,7 @@ PALETTE_COLUMNS = 6
 PALETTE_ROWS = 12
 PALETTE_COLOR_COUNT = PALETTE_COLUMNS * PALETTE_ROWS
 
-# Observed tool layout, described semantically only. Draw Studio still requires
+# Observed tool layout, described semantically only. Image Draw Bot still requires
 # anchored user calibration before any native click is allowed.
 TOOL_GRID = (
     ("Brush", "Eraser"),

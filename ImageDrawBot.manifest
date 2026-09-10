@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity version="1.0.5.0" processorArchitecture="*" name="DrawStudio" type="win32"/>
-  <description>Draw Studio</description>
+  <assemblyIdentity version="1.0.5.0" processorArchitecture="*" name="ImageDrawBot" type="win32"/>
+  <description>Image Draw Bot - Automatic Image Drawing</description>
 
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>

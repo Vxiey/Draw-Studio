@@ -1,4 +1,4 @@
-"""Sketch 2.0 structure extraction for Draw Studio v1.0.131-beta.
+"""Sketch 2.0 structure extraction for Image Draw Bot v1.0.131-beta.
 
 Paint-first deterministic planner. It combines luminance and colour-boundary
 edges, protects small high-contrast components and removes isolated noise. It

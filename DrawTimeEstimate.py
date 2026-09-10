@@ -1,4 +1,4 @@
-"""Measured/calibrated draw-time estimates for Draw Studio.
+"""Measured/calibrated draw-time estimates for Image Draw Bot.
 
 v1.0.119 keeps the planner's operation timing model, then—when available—uses
 completed local runtime samples to correct the estimate for the actual machine,

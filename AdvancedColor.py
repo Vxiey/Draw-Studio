@@ -1,4 +1,4 @@
-"""Advanced colour planning for Draw Studio v1.0.8.
+"""Advanced colour planning for Image Draw Bot v1.0.8.
 
 The module is intentionally pure: it does not read the screen, click UI controls,
 or depend on Tk.  It improves palette drawings in three ways:

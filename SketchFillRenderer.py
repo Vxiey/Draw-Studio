@@ -1,8 +1,8 @@
-"""Sketch 2.0 + Auto Fill orchestration for Draw Studio v1.0.131-beta.
+"""Sketch 2.0 + Auto Fill orchestration for Image Draw Bot v1.0.131-beta.
 
 Microsoft Paint is the first supported target. This module creates plans only;
 it never sends input and never weakens CanvasGuard/preflight/authorization. The
-colour phase reuses Draw Studio's existing colour/custom-RGB planning but forces
+colour phase reuses Image Draw Bot's existing colour/custom-RGB planning but forces
 path-based fills so no bucket prelude can run before the sketch.
 """
 from __future__ import annotations

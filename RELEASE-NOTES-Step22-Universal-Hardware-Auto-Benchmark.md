@@ -1,4 +1,4 @@
-# Draw Studio v1.0.124-beta — Step 22 Universal Hardware Auto Benchmark
+# Image Draw Bot v1.0.124-beta — Step 22 Universal Hardware Auto Benchmark
 
 ## Added
 
@@ -12,7 +12,7 @@
 - Conservative dedicated-VRAM and integrated/shared-memory budgets.
 - Per-machine `hardware-performance-profile-v1.json` with hardware-signature invalidation.
 - Deferred automatic re-benchmark on first run or after CPU/GPU/RAM/driver/compute-runtime changes.
-- Optional AMD/Intel PyOpenCL bootstrap inside Draw Studio's `.venv` with safe CPU fallback.
+- Optional AMD/Intel PyOpenCL bootstrap inside Image Draw Bot's `.venv` with safe CPU fallback.
 - Universal Hardware Auto Benchmark labels/status in the UI.
 
 ## Compatibility

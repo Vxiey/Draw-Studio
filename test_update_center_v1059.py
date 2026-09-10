@@ -17,8 +17,8 @@ class _Response:
 
 class UpdateCenterTests(unittest.TestCase):
     def test_version_metadata(self):
-        self.assertEqual(APP_VERSION,'1.0.143-rc4')
-        self.assertEqual(FILE_VERSION,'1.0.143')
+        self.assertEqual(APP_VERSION,'1.0.144-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.144')
 
     def test_version_parser_orders_beta_and_stable(self):
         self.assertTrue(is_newer_version('1.0.59', '1.0.59-beta'))
@@ -41,8 +41,8 @@ class UpdateCenterTests(unittest.TestCase):
             calls.append((url,kwargs))
             return _Response([{
                 'tag_name':'v1.0.90','draft':False,'prerelease':False,
-                'html_url':'https://github.com/yesverynice12/Draw-Studio/releases/tag/v1.0.90',
-                'name':'Draw Studio v1.0.90',
+                'html_url':'https://github.com/yesverynice12/Image-Draw-Bot/releases/tag/v1.0.90',
+                'name':'Image Draw Bot v1.0.90',
             }])
         from unittest.mock import patch
         with patch('UpdateCenter.APP_VERSION','1.0.89-beta'):
@@ -56,8 +56,8 @@ class UpdateCenterTests(unittest.TestCase):
     def test_published_rc3_detects_v10140_rc1_as_update(self):
         release={
             'tag_name':'v1.0.142-rc1','draft':False,'prerelease':True,
-            'html_url':'https://github.com/Vxiey/Draw-Studio/releases/tag/v1.0.142-rc1',
-            'name':'Draw Studio v1.0.142-rc1','assets':[],
+            'html_url':'https://github.com/Vxiey/Image-Draw-Bot/releases/tag/v1.0.142-rc1',
+            'name':'Image Draw Bot v1.0.142-rc1','assets':[],
         }
         from unittest.mock import patch
         with patch('UpdateCenter.APP_VERSION','1.0.133-rc3'), patch('UpdateCenter.BUILD_CHANNEL','rc'):

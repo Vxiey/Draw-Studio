@@ -1,12 +1,12 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-if exist "%~dp0DrawStudio.exe" (
- "%~dp0DrawStudio.exe" --collect-diagnostics
+if exist "%~dp0ImageDrawBot.exe" (
+ "%~dp0ImageDrawBot.exe" --collect-diagnostics
  goto done
 )
-if exist "%~dp0..\DrawStudio.exe" (
- "%~dp0..\DrawStudio.exe" --collect-diagnostics
+if exist "%~dp0..\ImageDrawBot.exe" (
+ "%~dp0..\ImageDrawBot.exe" --collect-diagnostics
  goto done
 )
 if exist "%~dp0.venv\Scripts\python.exe" (

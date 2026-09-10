@@ -1,4 +1,4 @@
-"""Create a privacy-conscious, shareable Draw Studio diagnostics ZIP."""
+"""Create a privacy-conscious, shareable Image Draw Bot diagnostics ZIP."""
 from __future__ import annotations
 
 import hashlib
@@ -52,7 +52,7 @@ def _memory_total_mb():
 
 def _technical_info(context=None):
     info = {
-        'app':'Draw Studio', 'app_version':APP_VERSION, 'file_version':FILE_VERSION,
+        'app':'Image Draw Bot', 'app_version':APP_VERSION, 'file_version':FILE_VERSION,
         'channel':BUILD_CHANNEL, 'created_at':time.strftime('%Y-%m-%dT%H:%M:%S%z'),
         'platform':platform.platform(), 'python':platform.python_version(),
         'architecture':platform.machine(), 'cpu_logical':os.cpu_count(),
@@ -122,18 +122,18 @@ def _calibration_summary():
 def create_diagnostics_package(context=None) -> Path:
     DIAGNOSTICS_DIR.mkdir(parents=True,exist_ok=True)
     stamp=time.strftime('%Y%m%d-%H%M%S')
-    path=DIAGNOSTICS_DIR/f'DrawStudio-Diagnostics-{stamp}-{uuid.uuid4().hex[:8]}.zip'
+    path=DIAGNOSTICS_DIR/f'ImageDrawBot-Diagnostics-{stamp}-{uuid.uuid4().hex[:8]}.zip'
     with zipfile.ZipFile(path,'w',compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr('system.json',json.dumps(_technical_info(context),indent=2,ensure_ascii=False))
         archive.writestr('settings-summary.json',json.dumps(_settings_summary(),indent=2,ensure_ascii=False))
         archive.writestr('calibration-summary.json',json.dumps(_calibration_summary(),indent=2,ensure_ascii=False))
         archive.writestr('README.txt',
-            'Draw Studio diagnostics package.\n\n'
+            'Image Draw Bot diagnostics package.\n\n'
             'Privacy: source images, the local recovery image cache, clipboard contents and raw palette/tool screen coordinates are not included. '
             'Logs are sanitized for user-home paths and credential-like strings.\n')
         log_dir=data_dir()/'logs'
-        for name in ('DrawStudio-session.log','DrawStudio-session.log.1','DrawStudio-crash.log','DrawStudio-crash.log.1',
-                     'DrawStudio-target-probe.log','DrawStudio-mouse-probe.log'):
+        for name in ('ImageDrawBot-session.log','ImageDrawBot-session.log.1','ImageDrawBot-crash.log','ImageDrawBot-crash.log.1',
+                     'ImageDrawBot-target-probe.log','ImageDrawBot-mouse-probe.log'):
             text=_read_text(log_dir/name)
             if text:
                 archive.writestr(f'logs/{name}',text)

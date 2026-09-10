@@ -1,4 +1,4 @@
-# Draw Studio v1.0.126-beta — Step 27.5: One-click Setup + Automatic Canvas/Palette Verification
+# Image Draw Bot v1.0.126-beta — Step 27.5: One-click Setup + Automatic Canvas/Palette Verification
 
 Step 27.5 adds one primary setup action for supported Paint/browser targets while preserving the existing roadmap numbering: Step 28 remains More Drawing Targets, Step 29 remains Hybrid Renderer 3.0 and Step 30 remains Release Candidate Hardening.
 

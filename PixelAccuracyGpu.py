@@ -1,4 +1,4 @@
-"""CUDA/tiled stroke simulation backend for Draw Studio v1.0.90-beta.
+"""CUDA/tiled stroke simulation backend for Image Draw Bot v1.0.90-beta.
 
 Block D keeps Block C's brush model and scoring semantics, but moves the expensive
 planned-stroke raster simulation to NVIDIA CUDA when available.  The sequence is

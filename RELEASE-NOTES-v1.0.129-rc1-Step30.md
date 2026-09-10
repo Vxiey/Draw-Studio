@@ -1,4 +1,4 @@
-# Draw Studio v1.0.129-rc1 — Step 30: Release Candidate Hardening
+# Image Draw Bot v1.0.129-rc1 — Step 30: Release Candidate Hardening
 
 This release candidate freezes the numbered feature roadmap and focuses on release reliability, installer/update correctness, package cleanliness and regression prevention.
 
@@ -7,7 +7,7 @@ This release candidate freezes the numbered feature roadmap and focuses on relea
 - Adds `ReleaseCandidateHardening.py` as a hard pre-release gate.
 - Adds 5,000-cycle start/stop/disarm lifecycle soak testing.
 - Adds repeated profile-storage isolation soak testing.
-- Fixes Update Center to use the active `Vxiey/Draw-Studio` repository.
+- Fixes Update Center to use the active `Vxiey/Image-Draw-Bot` repository.
 - RC update-channel selection no longer treats beta-stage releases as RC-channel updates.
 - Synchronizes `Version.py`, PE version metadata and the Inno Setup fallback version.
 - Hardens `build_release.py` with source gating, stale-artifact cleanup, manifest creation and post-build validation.

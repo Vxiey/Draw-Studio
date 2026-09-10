@@ -1,4 +1,4 @@
-# Draw Studio v1.0.131-beta — Sketch 2.0 + Auto Fill
+# Image Draw Bot v1.0.131-beta — Sketch 2.0 + Auto Fill
 
 ## Sketch 2.0
 

@@ -1,6 +1,6 @@
-"""Automatic NVIDIA CUDA/CuPy bootstrap for Draw Studio source installs.
+"""Automatic NVIDIA CUDA/CuPy bootstrap for Image Draw Bot source installs.
 
-This module intentionally installs GPU packages only into Draw Studio's active
+This module intentionally installs GPU packages only into Image Draw Bot's active
 virtual environment. It never installs a system-wide CUDA Toolkit and never
 requires administrator privileges. With CuPy's ``[ctk]`` extra, the matching
 CUDA runtime/NVRTC/header wheels live inside the venv; an NVIDIA display driver
@@ -203,7 +203,7 @@ def ensure_gpu_backend(*, python: str | None = None, force: bool = False) -> Set
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Ensure Draw Studio NVIDIA CUDA acceleration is ready.")
+    parser = argparse.ArgumentParser(description="Ensure Image Draw Bot NVIDIA CUDA acceleration is ready.")
     parser.add_argument("--ensure", action="store_true", help="Detect NVIDIA and install/repair the CUDA backend if needed")
     parser.add_argument("--force", action="store_true", help="Reinstall/update the GPU backend even when the smoke test already passes")
     parser.add_argument("--json", action="store_true", help="Print machine-readable result JSON")
@@ -211,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if sys.prefix == getattr(sys, "base_prefix", sys.prefix):
-        message = "GPU setup must run inside Draw Studio's .venv. Run Start.bat first."
+        message = "GPU setup must run inside Image Draw Bot's .venv. Run Start.bat first."
         if args.json:
             print(json.dumps({"ok": False, "status": "venv-required", "message": message}, ensure_ascii=False))
         else:

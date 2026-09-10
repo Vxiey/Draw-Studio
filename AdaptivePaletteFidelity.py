@@ -1,4 +1,4 @@
-"""Adaptive palette fidelity / anti-posterization planning for Draw Studio v1.0.123.
+"""Adaptive palette fidelity / anti-posterization planning for Image Draw Bot v1.0.123.
 
 This module sits *after* source->game palette matching.  Its job is to decide
 how many of the calibrated game colours are worth retaining under a deadline.

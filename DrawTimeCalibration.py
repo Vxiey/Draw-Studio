@@ -1,4 +1,4 @@
-"""Local measured calibration for Draw Studio draw-time estimates.
+"""Local measured calibration for Image Draw Bot draw-time estimates.
 
 Step 9 isolates persisted timing by drawing profile. Paint, Gartic and Skribbl
 now have separate files, and each timing key also includes the active tool,

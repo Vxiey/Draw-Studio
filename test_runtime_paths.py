@@ -17,14 +17,14 @@ class RuntimePathTests(unittest.TestCase):
 
     def test_frozen_mouse_helper_relaunches_same_exe(self):
         with patch.object(RuntimePaths.sys, 'frozen', True, create=True), \
-             patch.object(RuntimePaths.sys, 'executable', r'C:\\Apps\\DrawStudio.exe'):
+             patch.object(RuntimePaths.sys, 'executable', r'C:\\Apps\\ImageDrawBot.exe'):
             command = RuntimePaths.helper_command('mouse', '--handle', 123)
-        self.assertEqual(command[:2], [r'C:\\Apps\\DrawStudio.exe', '--internal-mouse-probe'])
+        self.assertEqual(command[:2], [r'C:\\Apps\\ImageDrawBot.exe', '--internal-mouse-probe'])
         self.assertEqual(command[-2:], ['--handle', '123'])
 
     def test_frozen_target_helper_relaunches_same_exe(self):
         with patch.object(RuntimePaths.sys, 'frozen', True, create=True), \
-             patch.object(RuntimePaths.sys, 'executable', r'C:\\Apps\\DrawStudio.exe'):
+             patch.object(RuntimePaths.sys, 'executable', r'C:\\Apps\\ImageDrawBot.exe'):
             command = RuntimePaths.helper_command('target', '--area', 1, 2, 3, 4)
         self.assertEqual(command[1], '--internal-target-probe')
         self.assertEqual(command[-5:], ['--area', '1', '2', '3', '4'])

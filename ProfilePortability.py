@@ -1,10 +1,10 @@
-"""Step 27 — portable profile export/import for Draw Studio.
+"""Step 27 — portable profile export/import for Image Draw Bot.
 
 A .drawprofile is JSON.  It deliberately contains profile-owned renderer/resource
 settings plus calibration metadata, but never runtime input authorization,
 hardware benchmark output, timing feedback, target handles or other machine-only
 state.  Imported calibration is always treated as unverified until the normal
-Draw Studio setup/safety gates pass again.
+Image Draw Bot setup/safety gates pass again.
 """
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ def _json_guard(value, *, depth=0, counter=None):
 
 def _profile_identity(name: str):
     if name not in PROFILES:
-        raise ProfilePortabilityError("Unknown Draw Studio profile.")
+        raise ProfilePortabilityError("Unknown Image Draw Bot profile.")
     key = str(PROFILES[name][0])
     return name, key
 
@@ -257,7 +257,7 @@ def migrate_package(data: dict) -> dict:
         raise ProfilePortabilityError("Profile schema version is invalid.")
     if version > SCHEMA_VERSION:
         raise ProfilePortabilityError(
-            f"This profile uses schema {version}; this Draw Studio build supports up to {SCHEMA_VERSION}."
+            f"This profile uses schema {version}; this Image Draw Bot build supports up to {SCHEMA_VERSION}."
         )
     if version == SCHEMA_VERSION:
         return deepcopy(data)
@@ -287,7 +287,7 @@ def validate_package(data: dict) -> dict:
     _json_guard(data)
     data = migrate_package(data)
     if data.get("format") != FORMAT_ID or data.get("schema_version") != SCHEMA_VERSION:
-        raise ProfilePortabilityError("This is not a supported Draw Studio .drawprofile file.")
+        raise ProfilePortabilityError("This is not a supported Image Draw Bot .drawprofile file.")
     _json_guard(data)
 
     profile = data.get("profile")
@@ -302,7 +302,7 @@ def validate_package(data: dict) -> dict:
     _validate_source_key(key)
     existing = PROFILES.get(name.strip())
     if existing is not None and not str(existing[0]).startswith("custom-") and key != str(existing[0]):
-        raise ProfilePortabilityError("Built-in profile name does not match its Draw Studio target key.")
+        raise ProfilePortabilityError("Built-in profile name does not match its Image Draw Bot target key.")
 
     for section in ("canvas", "settings", "calibration", "safety"):
         if section in data and not isinstance(data[section], dict):
@@ -381,7 +381,7 @@ def build_package(profile_name: str, settings: dict, calibration: dict | None = 
         "format": FORMAT_ID,
         "schema_version": SCHEMA_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "created_by": {"app": "Draw Studio", "app_version": APP_VERSION},
+        "created_by": {"app": "Image Draw Bot", "app_version": APP_VERSION},
         "profile": {"name": name, "key": key},
         "settings": {"renderer": renderer, "resources": resources, "ui": ui},
         "canvas": canvas,
@@ -435,7 +435,7 @@ def _capture_calibration(profile_key: str):
 
 def package_from_app(app) -> dict:
     if getattr(app, "activity", None):
-        raise ProfilePortabilityError("Wait for the current Draw Studio task to finish before exporting a profile.")
+        raise ProfilePortabilityError("Wait for the current Image Draw Bot task to finish before exporting a profile.")
     profile_name = str(app.game.get())
     name, key = _profile_identity(profile_name)
     try:
@@ -531,7 +531,7 @@ def _reload_profile(app, name: str):
 
 def import_package_into_app(app, package: dict, *, action: str = "replace", copy_name: str | None = None):
     if getattr(app, "activity", None):
-        raise ProfilePortabilityError("Wait for the current Draw Studio task to finish before importing a profile.")
+        raise ProfilePortabilityError("Wait for the current Image Draw Bot task to finish before importing a profile.")
     package = validate_package(package)
     source_name = package["profile"]["name"]
     if action not in ("replace", "copy"):
@@ -573,7 +573,7 @@ def import_package_into_app(app, package: dict, *, action: str = "replace", copy
 
 def reset_profile(app):
     if getattr(app, "activity", None):
-        raise ProfilePortabilityError("Wait for the current Draw Studio task to finish before resetting a profile.")
+        raise ProfilePortabilityError("Wait for the current Image Draw Bot task to finish before resetting a profile.")
     name, key = _profile_identity(str(app.game.get()))
     # Do not let the profile-change wrapper save the old values after deletion.
     for path in profile_reset_paths(key):
@@ -583,7 +583,7 @@ def reset_profile(app):
             raise ProfilePortabilityError(f"Could not reset {path.name}: {error}") from error
     _reload_profile(app, name)
     if hasattr(app, "status"):
-        try: app.status.set(f"{name} restored to Draw Studio defaults. Calibration/setup must be verified again.")
+        try: app.status.set(f"{name} restored to Image Draw Bot defaults. Calibration/setup must be verified again.")
         except Exception: pass
     return name
 
@@ -594,9 +594,9 @@ def export_profile_dialog(app):
         package = package_from_app(app)
         default = safe_profile_key(package["profile"]["name"]) + ".drawprofile"
         selected = filedialog.asksaveasfilename(
-            parent=getattr(app, "root", None), title="Export Draw Studio profile",
+            parent=getattr(app, "root", None), title="Export Image Draw Bot profile",
             defaultextension=".drawprofile", initialfile=default,
-            filetypes=(("Draw Studio profile", "*.drawprofile"), ("JSON", "*.json")),
+            filetypes=(("Image Draw Bot profile", "*.drawprofile"), ("JSON", "*.json")),
         )
         if not selected:
             return None
@@ -611,8 +611,8 @@ def export_profile_dialog(app):
 def import_profile_dialog(app):
     from tkinter import filedialog, messagebox, simpledialog
     selected = filedialog.askopenfilename(
-        parent=getattr(app, "root", None), title="Import Draw Studio profile",
-        filetypes=(("Draw Studio profile", "*.drawprofile *.json"), ("All files", "*.*")),
+        parent=getattr(app, "root", None), title="Import Image Draw Bot profile",
+        filetypes=(("Image Draw Bot profile", "*.drawprofile *.json"), ("All files", "*.*")),
     )
     if not selected:
         return None
@@ -658,7 +658,7 @@ def reset_profile_dialog(app):
         messagebox.showerror("Could not reset profile", str(error), parent=getattr(app, "root", None)); return None
     if not messagebox.askyesno(
         "Reset profile to defaults",
-        f"Reset '{name}' to Draw Studio defaults?\n\nThis removes this profile's saved settings and calibration/cache files only. Other profiles are not changed.",
+        f"Reset '{name}' to Image Draw Bot defaults?\n\nThis removes this profile's saved settings and calibration/cache files only. Other profiles are not changed.",
         parent=getattr(app, "root", None),
     ):
         return None

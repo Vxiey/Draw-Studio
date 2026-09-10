@@ -1,4 +1,4 @@
-"""Progressive execution ordering for Draw Studio v1.0.21.
+"""Progressive execution ordering for Image Draw Bot v1.0.21.
 
 The planner remains pure: it only reorders already-safe execution paths. It does
 not move the mouse, read files, touch Tk, or change calibration. DrawBot uses the

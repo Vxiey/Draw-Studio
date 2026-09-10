@@ -1,4 +1,4 @@
-"""Profile-isolated persistent storage helpers for Draw Studio.
+"""Profile-isolated persistent storage helpers for Image Draw Bot.
 
 Step 9 centralizes every profile-derived filename so Paint, Gartic, Skribbl and
 other targets cannot accidentally reuse another profile's calibration/cache.

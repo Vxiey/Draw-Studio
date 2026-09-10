@@ -1,4 +1,4 @@
-# Draw Studio v1.0.124-beta — Step 26
+# Image Draw Bot v1.0.124-beta — Step 26
 
 ## Detail Fidelity, Pixel-Accurate Planning & Named Color Intelligence
 
@@ -36,10 +36,10 @@ Named colors are deliberately kept out of the calibrated game palette and drawin
 
 ### Package
 
-`Draw-Studio-1.0.124-beta-Step26-Color-Engine-Named-Color-Intelligence.zip`
+`Image-Draw-Bot-1.0.124-beta-Step26-Color-Engine-Named-Color-Intelligence.zip`
 
 SHA-256:
 
 `34dc39349b544e202166648df972ba2a07519262b425609fe5cd578566d98f49`
 
-Note: the exact same ZIP bytes were briefly uploaded to the repository under the misleading filename `Draw-Studio-1.0.127-beta-e.zip`. This repository update restores the package's actual internal version/name without modifying its contents.
+Note: the exact same ZIP bytes were briefly uploaded to the repository under the misleading filename `Image-Draw-Bot-1.0.127-beta-e.zip`. This repository update restores the package's actual internal version/name without modifying its contents.

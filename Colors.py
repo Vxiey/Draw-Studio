@@ -12,7 +12,7 @@ def argb_to_rgb(value, background=(255, 255, 255)):
 
     Accepted ARGB inputs: ``(A,R,G,B)``, ``#AARRGGBB``, ``AARRGGBB`` and a
     32-bit ``0xAARRGGBB`` integer.  White is the default background because
-    Draw Studio previews/source transparency on a white drawing canvas.
+    Image Draw Bot previews/source transparency on a white drawing canvas.
     """
     bg=tuple(_channel(v) for v in background)
     if len(bg)!=3:raise ValueError('ARGB background must contain three RGB channels.')
@@ -66,7 +66,7 @@ def normalize_rgb(value, background=(255,255,255)):
         if prefixed_hash:text=text[1:]
         elif text.lower().startswith('0x'):text=text[2:]
         # CSS short hex is unambiguous with a # prefix. #RGBA uses standard
-        # RGBA order, while historical 8-digit Draw Studio hex stays AARRGGBB.
+        # RGBA order, while historical 8-digit Image Draw Bot hex stays AARRGGBB.
         if prefixed_hash and len(text) in (3,4):
             from NamedColorIntelligence import parse_named_color_text
             return parse_named_color_text('#'+text,background=background)
@@ -332,7 +332,7 @@ def load_calibration(path=CALIBRATION_FILE,*,current_client_rect=None,require_an
             from CalibrationAnchors import validate_anchor
             anchor=validate_anchor(data['anchor'])
     if require_anchor and anchor is None:
-        raise ValueError('This color calibration uses fixed screen coordinates. Recalibrate colors once in the current Draw Studio version before drawing.')
+        raise ValueError('This color calibration uses fixed screen coordinates. Recalibrate colors once in the current Image Draw Bot version before drawing.')
     positions=[tuple(row['position']) for row in rows]
     if current_client_rect is not None and anchor is not None:
         from CalibrationAnchors import resolve_points

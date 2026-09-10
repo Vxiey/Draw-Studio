@@ -1,4 +1,4 @@
-"""Deterministic old-vs-Adaptive-Hybrid benchmark for Draw Studio v1.0.132-beta.
+"""Deterministic old-vs-Adaptive-Hybrid benchmark for Image Draw Bot v1.0.132-beta.
 
 This suite measures Python planning time and the calibrated input-time model on
 six synthetic fixtures. It deliberately does NOT report estimated input time as
@@ -182,7 +182,7 @@ def _run_case(name: str, image: Image.Image) -> dict:
 def run_benchmarks() -> dict:
     rows=[_run_case(name,factory()) for name,factory in CASES]
     return {
-        'schema':1,'suite':'Draw Studio Adaptive Hybrid deterministic benchmark',
+        'schema':1,'suite':'Image Draw Bot Adaptive Hybrid deterministic benchmark',
         'cases':rows,'case_count':len(rows),'palette_colors':len(PALETTE),
         'actual_windows_input_measured':False,'gpu_backend':'CPU/NumPy deterministic benchmark',
         'notes':['Estimated draw seconds are not actual measured target-app times.',

@@ -1,4 +1,4 @@
-"""Fast approximate shape-path planner for Draw Studio v1.0.17.
+"""Fast approximate shape-path planner for Image Draw Bot v1.0.17.
 
 Shape paths are intended for fast browser drawing profiles such as skribbl.io.
 They do not replace the exact line planner.  Instead, they compress same-colour

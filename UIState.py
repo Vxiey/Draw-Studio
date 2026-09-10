@@ -1,4 +1,4 @@
-"""Pure UI-state helpers for Draw Studio's modern workspace.
+"""Pure UI-state helpers for Image Draw Bot's modern workspace.
 
 This module deliberately contains no Tk imports so readiness/error logic can be
 unit-tested without a display. The GUI renders these states on the Tk main loop.
@@ -102,7 +102,7 @@ def classify_error(status: str) -> dict[str, str] | None:
     if "expected color" in low or "solid black" in low or "closest rendered rgb" in low:
         return {
             "title": "Paint color verification failed",
-            "message": "Draw Studio could not confirm the requested color in the test stroke. This can be a missed stroke, a stale palette position, background sampling, or a different selected color.",
+            "message": "Image Draw Bot could not confirm the requested color in the test stroke. This can be a missed stroke, a stale palette position, background sampling, or a different selected color.",
             "action": "Run Auto Paint calibration again, keep the Paint ribbon visible, then retry the small test. If custom colors are enabled, recalibrate the custom color controls too.",
         }
     if "drawing area" in low or "target window" in low or "display scaling" in low:
@@ -130,7 +130,7 @@ def classify_error(status: str) -> dict[str, str] | None:
             "action": "Switch GPU acceleration to Auto or CPU, or lower the VRAM budget, then retry.",
         }
     remedies = (
-        (("disk full", "no space left"), "Storage is full", "Free space on the drive containing Draw Studio data, then save again."),
+        (("disk full", "no space left"), "Storage is full", "Free space on the drive containing Image Draw Bot data, then save again."),
         (("permission denied", "read-only file system"), "File cannot be written", "Choose a writable folder and check whether another program has locked the file."),
         (("cannot identify image",), "Image could not be opened", "Try opening the image in an image editor and exporting it as PNG."),
         (("no module named",), "A required component is missing", "Run Start.bat --update from the complete extracted source package."),
@@ -146,7 +146,7 @@ def classify_error(status: str) -> dict[str, str] | None:
             "action": "Re-run the relevant tool or color calibration, then use Draw a small test.",
         }
     return {
-        "title": "Draw Studio could not complete that action",
+        "title": "Image Draw Bot could not complete that action",
         "message": text or "An unexpected error occurred.",
         "action": "Open the logs for details. You can also create a local sanitized diagnostics ZIP from Tools.",
     }

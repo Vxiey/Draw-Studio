@@ -1,4 +1,4 @@
-"""Adaptive deadline planning for Draw Studio v1.0.119-beta.
+"""Adaptive deadline planning for Image Draw Bot v1.0.119-beta.
 
 Turns an already geometry-safe execution plan into the highest-value subset that
 fits the real game deadline.  It never mutates pixel colours or invents shortcut

@@ -2,7 +2,7 @@
 
 v1.0.7 keeps Paint's bucket tool conservative.  A blank-canvas base fill is
 allowed only for a strongly connected background.  Interior fill regions are
-limited to large, safe connected components; Draw Studio draws a
+limited to large, safe connected components; Image Draw Bot draws a
 closed perimeter before clicking Fill so a failed/ambiguous segmentation cannot
 silently flood an unrelated part of the canvas.  v1.0.52 adds a brush-inset
 source mask so planned fills too close to the canvas edge fall back to normal

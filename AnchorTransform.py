@@ -1,4 +1,4 @@
-"""Deterministic canvas anchor transform helpers for Draw Studio v1.0.50.
+"""Deterministic canvas anchor transform helpers for Image Draw Bot v1.0.50.
 
 No AI/ML is used.  This module only performs conservative coordinate math:
 previously saved canvas/corner/triangle anchors are converted from the old target

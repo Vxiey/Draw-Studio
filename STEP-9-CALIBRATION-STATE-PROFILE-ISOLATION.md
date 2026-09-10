@@ -1,6 +1,6 @@
 # Step 9 — Calibration State + Profile-Isolated Cache
 
-Draw Studio now treats calibration and learned runtime data as profile-owned state.
+Image Draw Bot now treats calibration and learned runtime data as profile-owned state.
 
 ## Calibration states
 

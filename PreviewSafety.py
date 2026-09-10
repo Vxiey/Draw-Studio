@@ -1,4 +1,4 @@
-"""Preview-time CanvasGuard/Edge Behavior mirroring for Draw Studio v1.0.56.
+"""Preview-time CanvasGuard/Edge Behavior mirroring for Image Draw Bot v1.0.56.
 
 Smart Preview Safety is deterministic and UI-only: it replays the same
 CanvasGuard + EdgeBehavior path filtering used by execute_plan(), but in the

@@ -1,6 +1,6 @@
-# Draw Studio v1.0.127-beta — Step 28: More Drawing Targets
+# Image Draw Bot v1.0.127-beta — Step 28: More Drawing Targets
 
-Step 28 expands Draw Studio's target system without weakening calibration isolation or pretending that an unverified website layout is safe for automatic detection.
+Step 28 expands Image Draw Bot's target system without weakening calibration isolation or pretending that an unverified website layout is safe for automatic detection.
 
 ## New targets
 

@@ -136,6 +136,6 @@ class PaintFullTests(unittest.TestCase):
     def test_cancel_and_unique_window(self):
         with self.assertRaises(InterruptedError):detect_setup(self.screenshot(),cancelled=lambda:True)
         paint={'title':'Namnlös - Paint','handle':7}
-        self.assertEqual(choose_paint_window([{'title':'Draw Studio'},paint]),paint)
+        self.assertEqual(choose_paint_window([{'title':'Image Draw Bot'},paint]),paint)
         for windows in ([],[paint,dict(paint,handle=8)]):
             with self.assertRaises(ValueError):choose_paint_window(windows)

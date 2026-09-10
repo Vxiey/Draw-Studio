@@ -1,4 +1,4 @@
-# Draw Studio v1.0.124-beta — Step 23 Universal GPU Acceleration Engine
+# Image Draw Bot v1.0.124-beta — Step 23 Universal GPU Acceleration Engine
 
 ## Added
 

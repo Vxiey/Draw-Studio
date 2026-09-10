@@ -1,4 +1,4 @@
-"""Opt-in local-network mobile preview server for Draw Studio.
+"""Opt-in local-network mobile preview server for Image Draw Bot.
 
 No cloud service, telemetry or external assets are used.  The server binds only
 when the user explicitly starts Mobile Preview and serves a random, per-session
@@ -92,7 +92,7 @@ class MobilePreviewState:
 
 
 class MobilePreviewServer:
-    """Small local HTTP server with in-memory Draw Studio preview images."""
+    """Small local HTTP server with in-memory Image Draw Bot preview images."""
 
     def __init__(self):
         self._lock = threading.RLock()
@@ -223,7 +223,7 @@ class MobilePreviewServer:
         token = self.token
         return f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="color-scheme" content="dark"><title>Draw Studio Mobile Preview</title>
+<meta name="color-scheme" content="dark"><title>Image Draw Bot Mobile Preview</title>
 <style>
 :root{{--bg:#0d1117;--panel:#171d27;--line:#293445;--text:#eff5ff;--muted:#9eacc1;--accent:#98edce}}
 *{{box-sizing:border-box}} body{{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif}}
@@ -235,14 +235,14 @@ main{{padding:12px 14px 24px}} .viewer{{min-height:65vh;display:grid;place-items
 img{{display:block;max-width:100%;max-height:78vh;object-fit:contain;border-radius:9px;background:white}} .empty{{color:var(--muted);text-align:center;padding:28px}}
 footer{{padding:0 16px 24px;color:var(--muted);font-size:11px;line-height:1.5}}
 </style></head><body>
-<header><h1>Draw Studio · Mobile Preview</h1><div class="sub" id="status">Connected locally · waiting for preview…</div></header>
+<header><h1>Image Draw Bot · Mobile Preview</h1><div class="sub" id="status">Connected locally · waiting for preview…</div></header>
 <div class="tabs"><button data-view="preview" class="active">Drawing preview</button><button data-view="original">Original</button><button data-view="safety">Safety map</button></div>
-<main><div class="viewer"><img id="image" alt="Draw Studio preview"><div class="empty" id="empty" hidden>Preview not available yet. Build a preview in Draw Studio.</div></div></main>
+<main><div class="viewer"><img id="image" alt="Image Draw Bot preview"><div class="empty" id="empty" hidden>Preview not available yet. Build a preview in Image Draw Bot.</div></div></main>
 <footer>Local-network preview only. This page contains no cloud scripts, analytics or telemetry. Keep the PC and phone on the same Wi-Fi/LAN.</footer>
 <script>
 const token={json.dumps(token)}; let view='preview', revision=-1; const img=document.getElementById('image'), empty=document.getElementById('empty'), status=document.getElementById('status');
 function loadImage(){{img.src=`/${{token}}/${{view}}.png?v=${{revision}}`; img.hidden=false; empty.hidden=true;}}
 img.onerror=()=>{{img.hidden=true;empty.hidden=false}};
 document.querySelectorAll('button[data-view]').forEach(b=>b.onclick=()=>{{document.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');view=b.dataset.view;loadImage();}});
-async function poll(){{try{{const r=await fetch(`/${{token}}/status.json?x=${{Date.now()}}`,{{cache:'no-store'}});const s=await r.json();status.textContent='Connected locally · live refresh';if(s.revision!==revision){{revision=s.revision;loadImage();}}}}catch(e){{status.textContent='Connection lost · keep Draw Studio running';}}setTimeout(poll,1000)}} poll();
+async function poll(){{try{{const r=await fetch(`/${{token}}/status.json?x=${{Date.now()}}`,{{cache:'no-store'}});const s=await r.json();status.textContent='Connected locally · live refresh';if(s.revision!==revision){{revision=s.revision;loadImage();}}}}catch(e){{status.textContent='Connection lost · keep Image Draw Bot running';}}setTimeout(poll,1000)}} poll();
 </script></body></html>'''

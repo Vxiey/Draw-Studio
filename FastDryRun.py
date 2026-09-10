@@ -1,4 +1,4 @@
-"""Bounded representative dry-run planning for Draw Studio v1.0.46.
+"""Bounded representative dry-run planning for Image Draw Bot v1.0.46.
 
 Pure helpers only: no native input. Dry run validates representative canvas/color
 routes instead of replaying every final stroke.

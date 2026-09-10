@@ -1,4 +1,4 @@
-# Draw Studio 1.0.133-rc1 — 100 maintenance improvements
+# Image Draw Bot 1.0.133-rc1 — 100 maintenance improvements
 
 This source candidate builds on the delivered 1.0.132-rc1 engine integration.
 The [numbered Swedish change list](docs/100-UPPDATERINGAR-v1.0.133-rc1.md)

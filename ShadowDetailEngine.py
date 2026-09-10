@@ -1,4 +1,4 @@
-"""Deterministic contour, shadow and local-tone analysis for Draw Studio.
+"""Deterministic contour, shadow and local-tone analysis for Image Draw Bot.
 
 The engine is intentionally non-AI. It derives luminance, local contrast,
 palette boundaries and shadow-detail maps directly from the source pixels. The

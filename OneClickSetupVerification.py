@@ -1,4 +1,4 @@
-"""Step 27.5 — unified one-click setup verification for Draw Studio.
+"""Step 27.5 — unified one-click setup verification for Image Draw Bot.
 
 The module is deliberately read-only.  It validates the selected target,
 canvas, saved verified palette and tool state, then performs an independent

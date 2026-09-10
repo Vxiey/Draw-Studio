@@ -1,21 +1,23 @@
-# Draw Studio
+# Image Draw Bot — Automatic Image Drawing
 
-**Turn images into drawings in Microsoft Paint, Gartic Phone, Skribbl.io and supported drawing apps.**
+**Automatically recreate images in Microsoft Paint, Gartic Phone, Skribbl.io and other drawing apps.**
 
-Draw Studio is a Windows desktop app that recreates images with mouse paths,
+Image Draw Bot is a Windows desktop app that recreates images with mouse paths,
 color matching, outlines and fills. It uses local image processing, not AI image
 generation. Each target profile keeps its own calibration and drawing settings.
 
-## Download — v1.0.143-rc4
+> Formerly **Draw Studio**. Existing settings and calibrations are migrated automatically.
+
+## Download — v1.0.144-rc1
 
 | Download | How to use it |
 | --- | --- |
-| [Windows installer — recommended](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.143-rc4/DrawStudio-1.0.143-rc4-Windows-x64-Setup.exe) | Run Setup, then open Draw Studio. No separate Python installation needed. |
-| [Portable Windows ZIP](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.143-rc4/DrawStudio-1.0.143-rc4-Windows-x64.zip) | Extract the entire ZIP, open the DrawStudio folder and run DrawStudio.exe. Keep its supporting files together. |
-| [SHA-256 checksums](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.143-rc4/DrawStudio-1.0.143-rc4-SHA256.txt) | Verify the downloaded files. |
+| [Windows installer — recommended](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc1/ImageDrawBot-1.0.144-rc1-Windows-x64-Setup.exe) | Run Setup, then open Image Draw Bot. No separate Python installation needed. |
+| [Portable Windows ZIP](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc1/ImageDrawBot-1.0.144-rc1-Windows-x64.zip) | Extract the entire ZIP, open the DrawStudio folder and run ImageDrawBot.exe. Keep its supporting files together. |
+| [SHA-256 checksums](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc1/ImageDrawBot-1.0.144-rc1-SHA256.txt) | Verify the downloaded files. |
 
-[All releases](https://github.com/Vxiey/Draw-Studio/releases) ·
-[Release notes](RELEASE-NOTES-v1.0.143-rc4.md) ·
+[All releases](https://github.com/Vxiey/Image-Draw-Bot/releases) ·
+[Release notes](RELEASE-NOTES-v1.0.144-rc1.md) ·
 [Documentation](README-INDEX.md)
 
 
@@ -23,7 +25,7 @@ generation. Each target profile keeps its own calibration and drawing settings.
 
 After loading an image and calibrating Paint, use **Custom color palette for picture** to analyze the current picture, prepare its important exact RGB colors through **Edit colors**, and cache that image-specific palette. The action is Paint-only, bounded and cancel-safe. Exact RGB control calibration is saved independently from canvas detection, so a clipped Paint canvas can still use manual area selection without losing custom-color support.
 
-Requires **Windows 10/11, 64-bit**. Run Draw Studio and the target app at the same
+Requires **Windows 10/11, 64-bit**. Run Image Draw Bot and the target app at the same
 privilege level, normally without administrator rights.
 
 **This release is unsigned.** Windows may display “Unknown publisher” or
@@ -33,7 +35,7 @@ approval.
 
 ## Quick start: Microsoft Paint
 
-1. Open Draw Studio and choose **Microsoft Paint**.
+1. Open Image Draw Bot and choose **Microsoft Paint**.
 2. Load, paste or drop an image.
 3. Keep one Paint window with a blank, fully visible canvas. If no Paint window
    is visible, automatic preparation attempts to open it.
@@ -57,7 +59,7 @@ on the user's Paint version. [Paint setup details](docs/PAINT-AUTOMATIC-PREPARAT
 
 ## Quick start: drawing games and other apps
 
-1. Open the target and choose the matching Draw Studio profile.
+1. Open the target and choose the matching Image Draw Bot profile.
 2. Load an image and use that profile's automatic setup or manual calibration.
 3. Select only the drawable canvas; keep toolbars and menus outside the area.
 4. Choose a drawing mode and time budget.
@@ -77,10 +79,10 @@ scaling and browser zoom unchanged after calibration.
 
 ## Updates
 
-Installed Windows builds can press **Check updates / install** while the app is idle. A newer verified release is installed over the same Draw Studio installation and the app relaunches automatically after Setup completes.
+Installed Windows builds can press **Check updates / install** while the app is idle. A newer verified release is installed over the same Image Draw Bot installation and the app relaunches automatically after Setup completes.
 It finds a newer eligible GitHub Release, downloads its Windows installer,
 verifies the published SHA-256 digest and size, and opens the installer.
-Settings are saved and Draw Studio closes after the installer starts.
+Settings are saved and Image Draw Bot closes after the installer starts.
 
 Installed builds keep their installation folder. Portable/source builds use
 the normal installer destination. Updates use complete installers; they do not
@@ -163,4 +165,4 @@ every target layout require separate live testing.
 Image analysis and rendering are local. No telemetry is included. Explicit
 features such as checking updates, loading an image URL, source dependency
 installation or optional network preview can use the network. The updater uses
-public releases from **Vxiey/Draw-Studio**.
+public releases from **Vxiey/Image-Draw-Bot**.

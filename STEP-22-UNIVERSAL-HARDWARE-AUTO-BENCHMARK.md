@@ -1,6 +1,6 @@
 # Step 22 — Universal Hardware Auto Benchmark + Adaptive Performance Profile
 
-Draw Studio now treats GPU capability as a set of measured compute backends rather than assuming that GPU means CUDA.
+Image Draw Bot now treats GPU capability as a set of measured compute backends rather than assuming that GPU means CUDA.
 
 ## Hardware detection
 
@@ -16,13 +16,13 @@ Detection is independent from CUDA/OpenCL availability. A GPU can be shown as de
 
 ## Compute backends benchmarked
 
-Draw Studio benchmarks synthetic arrays only:
+Image Draw Bot benchmarks synthetic arrays only:
 
 - CPU / NumPy — always available
 - NVIDIA CUDA / CuPy — when CUDA is usable
 - OpenCL — when the installed NVIDIA/AMD/Intel graphics driver and PyOpenCL expose a GPU device
 
-OpenCL is optional. On AMD/Intel systems `Start.bat` attempts to install the Python binding only inside Draw Studio's `.venv`. It never installs or updates a system GPU driver.
+OpenCL is optional. On AMD/Intel systems `Start.bat` attempts to install the Python binding only inside Image Draw Bot's `.venv`. It never installs or updates a system GPU driver.
 
 ## Workload-specific selection
 
@@ -51,7 +51,7 @@ The signature includes CPU, RAM, GPU identity/driver and compute-runtime version
 
 ## Multi-GPU
 
-All visible compute devices are benchmarked independently. Draw Studio chooses a preferred backend per workload; Step 22 does not split one workload across multiple GPUs.
+All visible compute devices are benchmarked independently. Image Draw Bot chooses a preferred backend per workload; Step 22 does not split one workload across multiple GPUs.
 
 ## Safety and privacy
 

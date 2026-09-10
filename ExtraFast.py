@@ -1,6 +1,6 @@
 """Extra Fast 2.0 safe region selector.
 
-Candidates have already passed Draw Studio's connected-component/closed-contour
+Candidates have already passed Image Draw Bot's connected-component/closed-contour
 safety checks.  This layer decides whether outline+Fill is actually cheaper than
 keeping the same region as connected scanlines.  v2 reuses Region Fill Engine's
 measured cost when available and charges Fill tool switching per colour batch,

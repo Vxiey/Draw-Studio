@@ -1,13 +1,13 @@
 # Color Engine — Named Color Intelligence
 
-Draw Studio now accepts human-readable CSS4 and Tk/X11 colour names without turning those names into extra render-palette candidates.
+Image Draw Bot now accepts human-readable CSS4 and Tk/X11 colour names without turning those names into extra render-palette candidates.
 
 ## Runtime behavior
 
 - Named inputs such as `red`, `DarkSlateBlue`, `dark slate blue`, `dark_slate_blue` and `dark-slate-blue` resolve to the same canonical sRGB value.
 - CSS short hex is accepted: `#RGB` and `#RGBA`.
 - Explicit `rgb(...)`, `rgba(...)` and `argb(...)` text forms are accepted.
-- Existing Draw Studio 8-digit hex remains `AARRGGBB` for backwards compatibility.
+- Existing Image Draw Bot 8-digit hex remains `AARRGGBB` for backwards compatibility.
 - `gray`/`grey` and Tk/X11 aliases are normalized.
 - Compatibility typos `agua` and `crymson` resolve to `aqua` and `crimson`, but are never shown as canonical names.
 - Nearest human-readable names use the same OKLab distance family as the core colour engine.

@@ -1,4 +1,4 @@
-# Draw Studio release checklist
+# Image Draw Bot release checklist
 
 ## Before packaging
 
@@ -33,12 +33,12 @@
    Build-Release.bat
    ```
 
-7. Confirm the builder ran the frozen `DrawStudio.exe --self-test`.
+7. Confirm the builder ran the frozen `ImageDrawBot.exe --self-test`.
 8. Confirm release folder contains:
-   - `DrawStudio-<version>-Windows-x64.zip`
-   - optional `DrawStudio-<version>-Windows-x64-Setup.exe`
-   - `DrawStudio-<version>-SHA256.txt`
-   - `DrawStudio-<version>-ReleaseManifest.json`
+   - `ImageDrawBot-<version>-Windows-x64.zip`
+   - optional `ImageDrawBot-<version>-Windows-x64-Setup.exe`
+   - `ImageDrawBot-<version>-SHA256.txt`
+   - `ImageDrawBot-<version>-ReleaseManifest.json`
 
 ## Manual smoke tests
 

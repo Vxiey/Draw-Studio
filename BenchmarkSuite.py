@@ -1,4 +1,4 @@
-"""Deterministic local benchmark suite for Draw Studio Step 10.
+"""Deterministic local benchmark suite for Image Draw Bot Step 10.
 
 No mouse, keyboard, screen-capture, network or telemetry APIs are used here.
 The caller supplies the normal planning function and receives compact result rows.

@@ -1,6 +1,6 @@
 # Step 27 — Export / Import Profiles
 
-Draw Studio 1.0.125-beta adds portable one-profile-at-a-time export/import.
+Image Draw Bot 1.0.125-beta adds portable one-profile-at-a-time export/import.
 
 ## Portable profile format
 
@@ -36,10 +36,10 @@ Imported canvas/palette/tool metadata is useful as setup metadata, but it never 
 
 ## Validation and migration
 
-Before import Draw Studio validates:
+Before import Image Draw Bot validates:
 
 - file size and UTF-8 JSON
-- Draw Studio profile format/schema
+- Image Draw Bot profile format/schema
 - profile name and target key
 - allow-listed settings only
 - resource settings
@@ -64,4 +64,4 @@ Calibration ownership metadata is rewritten to the destination storage key when 
 
 **Reset profile to defaults** removes only the selected profile's saved settings, calibration and learned/profile cache files. Other profiles are untouched.
 
-After reset, shipped profiles return to their target-specific Draw Studio defaults. Custom profiles return to safe generic defaults. Calibration/setup must be verified again.
+After reset, shipped profiles return to their target-specific Image Draw Bot defaults. Custom profiles return to safe generic defaults. Calibration/setup must be verified again.

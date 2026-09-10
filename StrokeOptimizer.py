@@ -1,4 +1,4 @@
-"""Geometry-safe path optimizer for Draw Studio.
+"""Geometry-safe path optimizer for Image Draw Bot.
 
 The optimizer only changes execution order/direction and may merge paths whose
 endpoints are exactly identical. It never invents a connector across unpainted

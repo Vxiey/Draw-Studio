@@ -1,12 +1,12 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title Draw Studio - Startup
-set "DRAW_LOG=%TEMP%\DrawStudio-start.log"
+title Image Draw Bot - Startup
+set "DRAW_LOG=%TEMP%\ImageDrawBot-start.log"
 set "PYTHONFAULTHANDLER=1"
 set "PYTHONUNBUFFERED=1"
->"%DRAW_LOG%" echo Draw Studio startup log
-echo Starting Draw Studio. The first launch can take a little longer.
+>"%DRAW_LOG%" echo Image Draw Bot startup log
+echo Starting Image Draw Bot. The first launch can take a little longer.
 echo Startup log: %DRAW_LOG%
 if not exist "DrawBot.py" goto missing_files
 if not exist "requirements.txt" goto missing_files
@@ -59,7 +59,7 @@ if /i "%~1"=="--update" goto setup_optional_gpu
 if /i "%~1"=="--gpu" goto setup_optional_gpu
 goto launch
 :setup_optional_gpu
-rem Draw Studio owns its CUDA runtime inside .venv. On NVIDIA systems the
+rem Image Draw Bot owns its CUDA runtime inside .venv. On NVIDIA systems the
 rem bootstrap detects hardware first, tests a real CUDA kernel, and only then
 rem installs/repairs CuPy + matched NVIDIA runtime/NVRTC/header wheels.
 echo Checking NVIDIA GPU acceleration...
@@ -73,10 +73,10 @@ if exist ".venv\gpu-install-failed.marker" del /q ".venv\gpu-install-failed.mark
 goto universal_gpu_dependencies
 :gpu_warning
 echo NVIDIA GPU was detected, but automatic CUDA setup could not be completed.
-echo Draw Studio will open with CPU fallback. Run Start.bat --gpu to retry GPU setup.
+echo Image Draw Bot will open with CPU fallback. Run Start.bat --gpu to retry GPU setup.
 :universal_gpu_dependencies
 rem AMD/Intel use the vendor driver OpenCL runtime. PyOpenCL is installed only
-rem inside Draw Studio's .venv and only when AMD/Intel hardware is detected.
+rem inside Image Draw Bot's .venv and only when AMD/Intel hardware is detected.
 echo Checking AMD / Intel GPU benchmark backend...
 if /i "%~1"=="--update" (
   ".venv\Scripts\python.exe" AutoUniversalGpuSetup.py --ensure --force >>"%DRAW_LOG%" 2>&1
@@ -85,15 +85,15 @@ if /i "%~1"=="--update" (
 )
 if errorlevel 1 echo Optional AMD/Intel OpenCL benchmark backend is unavailable; CPU fallback remains enabled.
 :launch
-echo Opening Draw Studio...
+echo Opening Image Draw Bot...
 ".venv\Scripts\python.exe" -X faulthandler -u DrawBot.py >>"%DRAW_LOG%" 2>&1
 if errorlevel 1 goto error
-echo Draw Studio closed normally.
+echo Image Draw Bot closed normally.
 echo Startup log: %DRAW_LOG%
 pause
 exit /b 0
 :missing_files
-echo Required files are missing. Extract the ENTIRE ZIP file before starting Draw Studio.
+echo Required files are missing. Extract the ENTIRE ZIP file before starting Image Draw Bot.
 goto error
 :error
 echo.
@@ -102,9 +102,9 @@ type "%DRAW_LOG%"
 echo.
 echo Create a local Diagnostics ZIP from Tools, or inspect these files:
 echo %DRAW_LOG%
-echo %~dp0logs\DrawStudio-crash.log
-echo %~dp0logs\DrawStudio-session.log
-echo %~dp0logs\DrawStudio-mouse-probe.log
+echo %~dp0logs\ImageDrawBot-crash.log
+echo %~dp0logs\ImageDrawBot-session.log
+echo %~dp0logs\ImageDrawBot-mouse-probe.log
 echo For a hard crash, run Enable-Crash-Dumps.bat and reproduce the issue.
 pause
 exit /b 1

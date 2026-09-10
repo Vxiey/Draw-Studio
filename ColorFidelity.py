@@ -1,4 +1,4 @@
-"""sRGB-aware palette fidelity helpers for Draw Studio.
+"""sRGB-aware palette fidelity helpers for Image Draw Bot.
 
 v1.0.120 keeps palette mapping deterministic while preventing a common game-
 palette failure mode: several mathematically-close swatches can all be darker
@@ -58,7 +58,7 @@ def rgb_to_oklab(rgb: tuple[int, int, int]) -> tuple[float, float, float]:
 
     The returned components follow Björn Ottosson's OKLab definition: L is
     roughly 0..1 and a/b are opponent chroma axes.  This is the canonical
-    perceptual space for Draw Studio palette matching from Step 2 onward.
+    perceptual space for Image Draw Bot palette matching from Step 2 onward.
     """
     r, g, b = (_linear_channel(v) for v in rgb)
     l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b

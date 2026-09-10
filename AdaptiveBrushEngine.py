@@ -1,4 +1,4 @@
-"""Adaptive brush policy for Draw Studio v1.0.90-beta.
+"""Adaptive brush policy for Image Draw Bot v1.0.90-beta.
 
 The Pixel Accurate planner keeps source geometry lossless, then this module
 assigns a physically executable brush width to every path. It only enables

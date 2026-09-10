@@ -1,4 +1,4 @@
-"""Local browser layout cache for Draw Studio v1.0.76.
+"""Local browser layout cache for Image Draw Bot v1.0.76.
 
 The cache stores only deterministic layout/calibration metadata: profile key,
 client size, DPI, a geometry-derived browser zoom/layout signature, canvas
@@ -70,7 +70,7 @@ def zoom_signature(client_rect: Sequence[int], canvas_box: Sequence[int], palett
     """Return (stable signature, scale hint) inferred from browser geometry.
 
     Chrome does not expose its page-zoom percentage through the Win32 target
-    metadata used by Draw Studio. We therefore persist a deterministic geometry
+    metadata used by Image Draw Bot. We therefore persist a deterministic geometry
     signature that changes when page zoom/reflow changes, plus a normalized
     scale hint based on canvas width and palette spacing.
     """

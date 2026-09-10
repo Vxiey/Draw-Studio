@@ -1,4 +1,4 @@
-"""Calibrated execution-cost model for Draw Studio hybrid planning.
+"""Calibrated execution-cost model for Image Draw Bot hybrid planning.
 
 Cost Model v2 keeps the conservative cold-start geometry model, but treats
 profile-local timing as evidence rather than an all-or-nothing switch. Measured

@@ -1,4 +1,4 @@
-"""Preview diagnostics for Draw Studio Step 10.
+"""Preview diagnostics for Image Draw Bot Step 10.
 
 This module is intentionally read-only with respect to the renderer.  It builds
 truthful diagnostic buffers from existing plan data and never changes palette

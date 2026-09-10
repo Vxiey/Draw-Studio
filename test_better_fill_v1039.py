@@ -65,6 +65,6 @@ class BetterFillV1039Tests(unittest.TestCase):
 
     def test_version(self):
         from Version import APP_VERSION
-        self.assertEqual(APP_VERSION,'1.0.143-rc4')
+        self.assertEqual(APP_VERSION,'1.0.144-rc1')
 
 if __name__=='__main__': unittest.main()

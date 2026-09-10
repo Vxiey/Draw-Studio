@@ -1,7 +1,7 @@
-"""Adaptive Region Hybrid 4.0 for Draw Studio v1.0.132-beta.
+"""Adaptive Region Hybrid 4.0 for Image Draw Bot v1.0.132-beta.
 
 This is a planning/orchestration layer, not a second native-input engine. It
-reuses Draw Studio's proven color pipeline, exact component topology, Fill
+reuses Image Draw Bot's proven color pipeline, exact component topology, Fill
 detector, profile calibration, preview and single guarded mouse executor.
 
 For each exact colour component it evaluates safe horizontal/vertical connected

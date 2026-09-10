@@ -1,4 +1,4 @@
-"""Stateful discrete Fill simulation for Draw Studio v1.0.132-beta.
+"""Stateful discrete Fill simulation for Image Draw Bot v1.0.132-beta.
 
 The existing FillOptimizer remains the topology detector and RegionFillEngine
 remains the first safety/cost gate. This module adds a second, state-at-operation

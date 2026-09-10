@@ -1,4 +1,4 @@
-"""Canonical raster identity oracle for Draw Studio planning tests.
+"""Canonical raster identity oracle for Image Draw Bot planning tests.
 
 This module is deliberately independent from Pillow and the production planners.
 It turns source segments and generated execution paths into exact integer pixel

@@ -1,4 +1,4 @@
-"""Deterministic canvas edge verification for Draw Studio v1.0.51.
+"""Deterministic canvas edge verification for Image Draw Bot v1.0.51.
 
 No AI/ML is used.  The verifier reads a screenshot around the selected canvas,
 looks for real contrast edges near the selected rectangle, and stops only when a
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Sequence
 import math
 
-try:  # Pillow is already required by Draw Studio.
+try:  # Pillow is already required by Image Draw Bot.
     from PIL import Image
 except Exception:  # pragma: no cover - import-time fallback for static tooling
     Image = object  # type: ignore

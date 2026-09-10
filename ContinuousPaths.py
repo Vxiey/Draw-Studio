@@ -1,4 +1,4 @@
-"""Continuous safe-path planner for Draw Studio v1.0.12.
+"""Continuous safe-path planner for Image Draw Bot v1.0.12.
 
 The legacy planner emits one straight mouse stroke for every raster run.  That is
 simple and exact, but thousands of press/release boundaries dominate runtime.

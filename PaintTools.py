@@ -1,4 +1,4 @@
-"""Persisted Microsoft Paint tool positions used by Draw Studio.
+"""Persisted Microsoft Paint tool positions used by Image Draw Bot.
 
 Version 2 anchors controls to Paint's client rectangle.  Paint's Brushes control
 is a dropdown, so automatic Brush selection uses two calibrated clicks:

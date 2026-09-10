@@ -1,4 +1,4 @@
-"""Time-aware exact-colour budgeting for Draw Studio Step 6.
+"""Time-aware exact-colour budgeting for Image Draw Bot Step 6.
 
 Composes Step 5's image-complexity recommendation with the active drawing
 budget.  It does not alter palette extraction, renderer geometry or stroke
@@ -68,7 +68,7 @@ def _resolved_budget(options: dict[str, Any]) -> dict[str, Any]:
             'reserve_seconds': _finite(options.get('deadline_safety_reserve_seconds'), 0.0),
             'render_budget_seconds': _finite(options.get('deadline_render_budget_seconds'), options.get('time_budget_seconds', 0.0)),
             'hard_stop_seconds': options.get('deadline_hard_stop_seconds'),
-            'source': str(options.get('deadline_budget_source') or 'resolved Draw Studio deadline'),
+            'source': str(options.get('deadline_budget_source') or 'resolved Image Draw Bot deadline'),
         }
 
     manual = options.get('manual_max_seconds', options.get('max_seconds', 180))

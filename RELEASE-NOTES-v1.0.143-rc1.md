@@ -1,4 +1,4 @@
-# Draw Studio 1.0.143-rc1
+# Image Draw Bot 1.0.143-rc1
 
 ## Microsoft Paint — clipped canvas calibration
 

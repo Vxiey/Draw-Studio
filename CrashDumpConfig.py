@@ -26,8 +26,8 @@ def configure(action, include_python=False):
     import ctypes
     import winreg as reg
     if not ctypes.windll.shell32.IsUserAnAdmin():
-        raise PermissionError('Right-click this BAT file and choose Run as administrator once. Start Draw Studio normally afterwards.')
-    folder=Path(os.environ['LOCALAPPDATA'])/'DrawBotStudio'/'dumps'
+        raise PermissionError('Right-click this BAT file and choose Run as administrator once. Start Image Draw Bot normally afterwards.')
+    folder=Path(os.environ['LOCALAPPDATA'])/'ImageDrawBot'/'dumps'
     folder.mkdir(parents=True,exist_ok=True)
     backup=folder/'localdumps-backup.json'
     access=reg.KEY_READ|reg.KEY_WRITE|reg.KEY_WOW64_64KEY
@@ -51,7 +51,7 @@ def configure(action, include_python=False):
                     try:reg.DeleteValue(key,value_name)
                     except FileNotFoundError:pass
     if action=='enable':
-        names=['DrawStudio.exe'] + (['python.exe','pythonw.exe'] if include_python else [])
+        names=['ImageDrawBot.exe'] + (['python.exe','pythonw.exe'] if include_python else [])
         for name in names:
             current=read_values(name)
             if name in state:
@@ -67,7 +67,7 @@ def configure(action, include_python=False):
         return f'LocalDumps configured: {", ".join(names)}\nDump folder: {folder}\nMini dumps remain local; share them only when needed.'
     if action=='disable':
         for name, saved in list(state.items()):
-            if name not in ('DrawStudio.exe','python.exe','pythonw.exe'):
+            if name not in ('ImageDrawBot.exe','DrawStudio.exe','python.exe','pythonw.exe'):
                 raise ValueError('Unexpected executable in backup; no restoration for that entry.')
             current=read_values(name)
             restored=restore_values(current,saved['written'],saved['original'])
@@ -75,7 +75,7 @@ def configure(action, include_python=False):
             # Keep the key itself: other tools may store additional values there.
             del state[name]
             atomic_write_text(backup,json.dumps(state,indent=2))
-        return 'Draw Studio dump settings restored. Existing dump files were kept.'
+        return 'Image Draw Bot dump settings restored. Existing dump files were kept.'
     raise ValueError('Choose enable or disable.')
 
 

@@ -1,4 +1,4 @@
-"""Create and validate a release-grade Windows package for Draw Studio."""
+"""Create and validate a release-grade Windows package for Image Draw Bot."""
 from __future__ import annotations
 
 import argparse
@@ -15,7 +15,7 @@ from Version import APP_VERSION, FILE_VERSION, BUILD_CHANNEL
 from ReleaseCandidateHardening import run_source_release_gate, validate_windows_release
 
 BASE = Path(__file__).resolve().parent
-DIST = BASE / "dist" / "DrawStudio"
+DIST = BASE / "dist" / "ImageDrawBot"
 RELEASE = BASE / "release"
 
 
@@ -38,7 +38,7 @@ def zip_onedir(destination: Path) -> None:
     with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for path in sorted(DIST.rglob("*")):
             if path.is_file():
-                relative = Path("DrawStudio") / path.relative_to(DIST)
+                relative = Path("ImageDrawBot") / path.relative_to(DIST)
                 archive.write(path, relative.as_posix())
     with zipfile.ZipFile(destination, "r") as archive:
         bad=archive.testzip()
@@ -59,16 +59,17 @@ def find_iscc() -> Path | None:
 
 def _clean_current_release_outputs() -> None:
     RELEASE.mkdir(exist_ok=True)
-    for path in RELEASE.glob(f"DrawStudio-{APP_VERSION}-*"):
-        if path.is_file():
-            path.unlink()
+    for pattern in (f"ImageDrawBot-{APP_VERSION}-*", f"DrawStudio-{APP_VERSION}-*"):
+        for path in RELEASE.glob(pattern):
+            if path.is_file():
+                path.unlink()
 
 
 def _write_manifest(artifacts: list[dict], *, signed=False) -> Path:
-    path=RELEASE / f"DrawStudio-{APP_VERSION}-manifest.json"
+    path=RELEASE / f"ImageDrawBot-{APP_VERSION}-manifest.json"
     payload={
         "schema":1,
-        "app":"Draw Studio",
+        "app":"Image Draw Bot",
         "version":APP_VERSION,
         "file_version":FILE_VERSION,
         "channel":BUILD_CHANNEL,
@@ -111,9 +112,9 @@ def main() -> int:
         run([sys.executable, "DrawBot.py", "--self-test"])
 
     run([sys.executable, "build_exe.py"] + (["--gpu"] if args.gpu else []))
-    exe = DIST / "DrawStudio.exe"
+    exe = DIST / "ImageDrawBot.exe"
     if not exe.is_file() or exe.read_bytes()[:2] != b"MZ":
-        raise SystemExit("Release build did not produce a valid DrawStudio.exe.")
+        raise SystemExit("Release build did not produce a valid ImageDrawBot.exe.")
     run([str(exe), "--self-test"], cwd=DIST)
 
     if signing:
@@ -121,7 +122,7 @@ def main() -> int:
         sign_distribution(DIST,signing)
 
     suffix = "-CUDA" if args.gpu else ""
-    zip_path = RELEASE / f"DrawStudio-{APP_VERSION}-Windows-x64{suffix}.zip"
+    zip_path = RELEASE / f"ImageDrawBot-{APP_VERSION}-Windows-x64{suffix}.zip"
     zip_onedir(zip_path)
     artifacts=[{"name":zip_path.name,"type":"windows-zip","sha256":sha256(zip_path),"bytes":zip_path.stat().st_size}]
     hash_rows = [f"{artifacts[-1]['sha256']}  {zip_path.name}"]
@@ -136,8 +137,8 @@ def main() -> int:
         if signing:
             from CodeSigning import inno_arguments
             signing_args=inno_arguments(signing)
-        run([str(iscc), f"/DMyAppVersion={APP_VERSION}", *signing_args, str(BASE / "installer" / "DrawStudio.iss")])
-        setup = RELEASE / f"DrawStudio-{APP_VERSION}-Windows-x64-Setup.exe"
+        run([str(iscc), f"/DMyAppVersion={APP_VERSION}", *signing_args, str(BASE / "installer" / "ImageDrawBot.iss")])
+        setup = RELEASE / f"ImageDrawBot-{APP_VERSION}-Windows-x64-Setup.exe"
         if not setup.is_file() or setup.read_bytes()[:2] != b"MZ":
             raise SystemExit("Installer build did not produce the expected Setup.exe.")
         if signing:
@@ -146,8 +147,13 @@ def main() -> int:
         digest=sha256(setup)
         hash_rows.append(f"{digest}  {setup.name}")
         artifacts.append({"name":setup.name,"type":"inno-setup","sha256":digest,"bytes":setup.stat().st_size})
+        legacy_setup = RELEASE / f"DrawStudio-{APP_VERSION}-Windows-x64-Setup.exe"
+        shutil.copy2(setup, legacy_setup)
+        legacy_digest=sha256(legacy_setup)
+        hash_rows.append(f"{legacy_digest}  {legacy_setup.name}")
+        artifacts.append({"name":legacy_setup.name,"type":"legacy-updater-bridge","sha256":legacy_digest,"bytes":legacy_setup.stat().st_size})
 
-    checksum = RELEASE / f"DrawStudio-{APP_VERSION}-SHA256.txt"
+    checksum = RELEASE / f"ImageDrawBot-{APP_VERSION}-SHA256.txt"
     checksum.write_text("\n".join(hash_rows) + "\n", encoding="utf-8")
     manifest=_write_manifest(artifacts,signed=bool(signing))
 

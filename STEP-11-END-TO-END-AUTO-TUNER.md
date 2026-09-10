@@ -4,7 +4,7 @@ Step 11 makes the **Auto** render preset compose the systems introduced in Steps
 
 ## What Auto now selects
 
-Before expensive planning, Draw Studio performs a bounded source analysis and selects:
+Before expensive planning, Image Draw Bot performs a bounded source analysis and selects:
 
 - renderer: Shape paths or Smart paths / Extra Fast 2.0
 - draw quality and planning resolution

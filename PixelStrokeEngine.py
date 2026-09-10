@@ -1,4 +1,4 @@
-"""Component-aware lossless stroke planner for Draw Studio v1.0.90-beta.
+"""Component-aware lossless stroke planner for Image Draw Bot v1.0.90-beta.
 
 Block B consumes the full-resolution PixelMap from v1.0.86 and turns it into
 safe execution paths without changing palette assignments.  It labels exact

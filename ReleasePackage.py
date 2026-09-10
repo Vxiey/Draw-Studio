@@ -1,4 +1,4 @@
-"""Release packaging helpers for Draw Studio.
+"""Release packaging helpers for Image Draw Bot.
 
 This module validates the source tree, creates deterministic source archives and
 writes checksum/manifest files.  It is intentionally local-only: no network,
@@ -19,7 +19,7 @@ from typing import Iterable, Sequence
 from Version import APP_NAME, APP_VERSION, BUILD_CHANNEL
 
 
-ROOT_PREFIX = "Draw-Studio"
+ROOT_PREFIX = "Image-Draw-Bot"
 
 EXCLUDED_DIR_NAMES = {
     ".git",
@@ -67,6 +67,11 @@ EXCLUDED_PREFIXES = (
     "DrawStudio-session",
     "DrawStudio-target-probe",
     "DrawStudio-mouse-probe",
+    "ImageDrawBot-Safety-",
+    "ImageDrawBot-crash",
+    "ImageDrawBot-session",
+    "ImageDrawBot-target-probe",
+    "ImageDrawBot-mouse-probe",
 )
 
 REQUIRED_RELEASE_FILES = (
@@ -139,7 +144,7 @@ def is_forbidden_path(relative_path: str | PurePosixPath) -> bool:
     if suffix in EXCLUDED_FILE_SUFFIXES:
         return True
     # Generated release/source archives should never be re-bundled into another release.
-    if name.startswith(("Draw-Studio-", "DrawStudio-")) and suffix in {".zip", ".exe"}:
+    if name.startswith(("Image-Draw-Bot-", "ImageDrawBot-", "Draw-Studio-", "DrawStudio-")) and suffix in {".zip", ".exe"}:
         return True
     # One-shot integration/packaging helpers are repository maintenance state,
     # never source-release contents.
@@ -156,7 +161,7 @@ def is_nonfatal_excluded_path(relative_path: str | PurePosixPath) -> bool:
     suffix=PurePosixPath(name).suffix.lower()
     if any(part in NON_FATAL_EXCLUDED_DIR_NAMES for part in parts):
         return True
-    if name.startswith(("Draw-Studio-", "DrawStudio-")) and suffix in {'.zip','.exe'}:
+    if name.startswith(("Image-Draw-Bot-", "ImageDrawBot-", "Draw-Studio-", "DrawStudio-")) and suffix in {'.zip','.exe'}:
         return True
     if name.lower().endswith('_once.py'):
         return True
@@ -271,7 +276,7 @@ def write_release_manifest(root: Path, destination: Path, artifacts: Sequence[Pa
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate or package a Draw Studio source release.")
+    parser = argparse.ArgumentParser(description="Validate or package a Image Draw Bot source release.")
     parser.add_argument("--root", default=str(Path(__file__).resolve().parent))
     parser.add_argument("--check", action="store_true", help="Validate the release tree and print JSON.")
     parser.add_argument("--source-zip", default="", help="Create a clean source ZIP at this path.")

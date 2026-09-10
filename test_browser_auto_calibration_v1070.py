@@ -11,8 +11,8 @@ from Version import APP_VERSION, FILE_VERSION
 
 class BrowserAutoCalibrationTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(APP_VERSION,'1.0.143-rc4')
-        self.assertEqual(FILE_VERSION,'1.0.143')
+        self.assertEqual(APP_VERSION,'1.0.144-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.144')
 
     def test_supported_profiles(self):
         self.assertIn('gartic-phone', SUPPORTED_BROWSER_PROFILES)

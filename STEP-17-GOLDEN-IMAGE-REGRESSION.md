@@ -1,6 +1,6 @@
 # Step 17 — Golden Image Regression Suite
 
-Draw Studio now ships a small local golden-image regression suite for the color, accuracy, timing and correction pipeline added in Steps 1-16.
+Image Draw Bot now ships a small local golden-image regression suite for the color, accuracy, timing and correction pipeline added in Steps 1-16.
 
 ## What it checks
 
