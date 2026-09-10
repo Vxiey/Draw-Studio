@@ -23,6 +23,29 @@ class BrandingTests(unittest.TestCase):
     def test_root_dialog_and_header_share_branding(self):
         import customtkinter as ctk
         branding.set_windows_app_id()
+        import ctypes
+        from ctypes import wintypes
+        from unittest.mock import patch
+        # Tk does not retain an ICO filename in its X11 bitmap query field.
+        # Observe successful native setter calls, then check WM_GETICON instead.
+        applied = {}
+        def recorder(original):
+            def set_icon(window, bitmap=None, default=None):
+                result = original(window, bitmap, default)
+                applied[window] = bitmap
+                return result
+            return set_icon
+        root_patch = patch.object(ctk.CTk, 'iconbitmap', recorder(ctk.CTk.iconbitmap))
+        child_patch = patch.object(ctk.CTkToplevel, 'iconbitmap', recorder(ctk.CTkToplevel.iconbitmap))
+        root_patch.start()
+        self.addCleanup(root_patch.stop)
+        child_patch.start()
+        self.addCleanup(child_patch.stop)
+        user32 = ctypes.WinDLL('user32', use_last_error=True)
+        user32.GetParent.argtypes = [wintypes.HWND]
+        user32.GetParent.restype = wintypes.HWND
+        user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+        user32.SendMessageW.restype = ctypes.c_ssize_t
         root=ctk.CTk()
         try:
             branding.configure_root(root)
@@ -35,8 +58,12 @@ class BrandingTests(unittest.TestCase):
             root.after(450,root.quit)
             root.mainloop()
             self.assertTrue(child._image_draw_bot_icon_set)
-            self.assertEqual(Path(root.tk.call('wm', 'iconbitmap', root._w)).name,'image-draw-bot-icon.ico')
-            self.assertEqual(Path(child.tk.call('wm', 'iconbitmap', child._w)).name,'image-draw-bot-icon.ico')
+            for window in (root, child):
+                self.assertEqual(Path(applied[window]).resolve(), (ROOT / branding.ICON_ICO).resolve())
+                hwnd = user32.GetParent(window.winfo_id())
+                self.assertTrue(hwnd)
+                for icon_type in (0, 1):  # ICON_SMALL / ICON_BIG, WM_GETICON
+                    self.assertTrue(user32.SendMessageW(hwnd, 0x007F, icon_type, 0))
         finally:
             root.destroy()
 

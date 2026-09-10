@@ -1,2 +1,3 @@
 Image Draw Bot v1.0.144-rc2 Windows release
 Validate unified app, dialog, executable and installer icons.
+Check native Windows icon handles instead of the X11 bitmap filename query.
