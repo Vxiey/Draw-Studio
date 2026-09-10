@@ -85,6 +85,6 @@ class PaintColorRecoveryV10124Tests(unittest.TestCase):
 
     def test_version(self):
         from Version import APP_VERSION, FILE_VERSION
-        self.assertEqual(APP_VERSION,'1.0.144-rc8'); self.assertEqual(FILE_VERSION,'1.0.144')
+        self.assertEqual(APP_VERSION,'1.0.144-rc9'); self.assertEqual(FILE_VERSION,'1.0.144')
 
 if __name__=='__main__': unittest.main()

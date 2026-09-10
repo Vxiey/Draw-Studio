@@ -21,7 +21,7 @@ from typing import Iterable, Sequence
 
 from RuntimePaths import atomic_write_text, data_dir
 
-SCHEMA = 2
+SCHEMA = 3
 PROFILE_KEY = "microsoft-paint"
 DEFAULT_MAX_COLORS = 16
 MAX_ANALYSIS_DIMENSION = 640
@@ -277,6 +277,11 @@ def build_picture_palette(image, palette_rgb: Iterable[Sequence[int]], *, max_co
     custom = custom[:max_colors]
     custom_cov = custom_cov[:len(custom)]
     all_colors = _dedupe([*custom, *palette_colors], threshold=3)[:max_colors]
+    from PicturePaletteRefinement import refine_picture_palette
+    all_colors = refine_picture_palette(analysis, all_colors, max_colors, cancelled=cancelled)
+    custom = list(all_colors)
+    custom_cov = [0.0] * len(custom)
+    palette_colors = []
     result = PicturePalette(
         image_fp, str(calibration_fingerprint or ""), tuple(map(int, image.size)), max_colors, fidelity,
         tuple(all_colors), tuple(custom), tuple(palette_colors), tuple(custom_cov), False,

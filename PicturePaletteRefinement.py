@@ -1,0 +1,87 @@
+"""Bounded source-color refinement in perceptual OKLab space.
+
+Keep source RGB values (medoids), fill unused color slots and accept only steps
+that reduce sample error without worsening the 95th-percentile error. The OKLab
+transform is shared with PixelAccuratePlanner; background/fixed-palette policy
+is deliberately outside this image-specific pass.
+Color-space reference: https://bottosson.github.io/posts/oklab/
+"""
+from __future__ import annotations
+
+import numpy as np
+
+MAX_SAMPLES = 16384
+MAX_ITERATIONS = 8
+CHUNK = 2048
+
+
+def _assign(points, centers, cancelled):
+    indices = np.empty(len(points), dtype=np.int32)
+    errors = np.empty(len(points), dtype=np.float32)
+    for start in range(0, len(points), CHUNK):
+        if cancelled():
+            raise InterruptedError('Picture palette refinement cancelled.')
+        stop = min(start + CHUNK, len(points))
+        delta = points[start:stop, None, :] - centers[None, :, :]
+        distances = np.sum(delta * delta, axis=2)
+        indices[start:stop] = np.argmin(distances, axis=1)
+        errors[start:stop] = distances[np.arange(stop-start), indices[start:stop]]
+    return indices, errors
+
+
+def refine_picture_palette(image, colors, max_colors, *, cancelled=lambda: False):
+    from ColorMatchingEngine import visible_rgb_image
+    from PixelAccuratePlanner import _to_oklab
+    if cancelled():
+        raise InterruptedError('Picture palette refinement cancelled.')
+    limit = max(1, min(32, int(max_colors)))
+    seeds = tuple(dict.fromkeys(tuple(map(int, c)) for c in colors))[:limit]
+    if not seeds:
+        raise ValueError('Picture palette refinement needs initial colors.')
+    # The caller supplies its <=640 px analysis image. Sampling, distance
+    # tensors and iterations are independently bounded, including huge inputs.
+    pixels = np.asarray(visible_rgb_image(image), dtype=np.uint8).reshape(-1, 3)
+    count = min(len(pixels), MAX_SAMPLES)
+    # Fixed-seed sampling avoids row/stripe aliasing without global RNG state.
+    sampled = pixels if len(pixels) <= MAX_SAMPLES else pixels[np.random.default_rng(0).choice(len(pixels), count, replace=False)]
+    rgb, weights = np.unique(sampled, axis=0, return_counts=True)
+    if len(rgb) <= limit and len(pixels) <= MAX_SAMPLES:
+        return tuple(tuple(map(int, c)) for c in rgb)
+    points = _to_oklab(rgb)
+    palette = np.asarray(seeds, dtype=np.uint8)
+    labels, error = _assign(points, _to_oklab(palette), cancelled)
+    # A near-color merge must not leave slots unused while gradients still
+    # have measurable error. Weighted error favors repeated tones over noise.
+    while len(palette) < limit and float(error.max()) > 1e-8:
+        index = int(np.argmax(error * weights))
+        palette = np.vstack((palette, rgb[index]))
+        labels, error = _assign(points, _to_oklab(palette), cancelled)
+
+    def quality(errors):
+        return float(np.dot(errors, weights)), float(np.percentile(np.repeat(errors, weights), 95))
+
+    best_score, best_tail = quality(error)
+    for _ in range(MAX_ITERATIONS):
+        if cancelled():
+            raise InterruptedError('Picture palette refinement cancelled.')
+        candidate = palette.copy()
+        for index in range(len(palette)):
+            members = np.flatnonzero(labels == index)
+            if not len(members):
+                continue
+            mass = int(weights[members].sum())
+            # Preserve tiny accents already given a slot by the source planner.
+            if mass <= max(2, len(sampled) // 200):
+                continue
+            center = np.average(points[members], axis=0, weights=weights[members])
+            nearest = members[int(np.argmin(np.sum((points[members] - center) ** 2, axis=1)))]
+            candidate[index] = rgb[nearest]
+        if np.array_equal(candidate, palette):
+            break
+        new_labels, new_error = _assign(points, _to_oklab(candidate), cancelled)
+        score, tail = quality(new_error)
+        if score >= best_score or tail > best_tail + 1e-9:
+            break
+        palette, labels, error = candidate, new_labels, new_error
+        best_score, best_tail = score, tail
+    return tuple(dict.fromkeys(tuple(map(int, color)) for color in palette))

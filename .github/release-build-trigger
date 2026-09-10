@@ -1,1 +1,1 @@
-Build rc8: share prepared image RGB across pixel maps, preview and runtime.
+Build rc9: refine source RGB palette and remove redundant exact-color setup UI.

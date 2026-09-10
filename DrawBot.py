@@ -981,7 +981,7 @@ def make_plan(original, area, options, cancelled=lambda: False):
         pixel_map=build_pixel_map(
             image, picture_plan_colors,
             color_rendering=options.get('color_rendering','Perceptual match'),
-            color_fidelity=options.get('color_fidelity','Faithful'),
+            color_fidelity='Exact' if picture_selectors else options.get('color_fidelity','Faithful'),
             skip_white=bool(options.get('skip_white',True)),
             gpu_mode=options.get('gpu_mode','Auto'),
             gpu_vram=options.get('gpu_vram','Auto'),
@@ -3127,7 +3127,7 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                 f'Stopped on color batch {color_number}/{total_colors}: RGB {rgb} could not be verified after adaptive recovery. '
                 f'Closest rendered RGB was {actual} ({confidence:.0f}% match). Previously completed color batches remain painted. '
                 f'{(last or {}).get("reason","")} This is a verification stop, not a crash. '
-                + ('Run Auto Paint calibration and retry. If this color is outside the normal Paint palette, enable/calibrate Smart custom palette so Image Draw Bot can open Edit colors automatically.' if selected_tool!='Use current tool' else 'Verify the current Paint tool and selected color, then retry.'))
+                + ('Run Auto Paint calibration and retry. If this color is outside the normal Paint palette, run Custom color palette for picture so Image Draw Bot can calibrate and select the image RGB colors.' if selected_tool!='Use current tool' else 'Verify the current Paint tool and selected color, then retry.'))
 
         def visual_verify_color_batch(index, ordered_items, smart_group, color_number, total_colors):
             nonlocal visual_previous_snapshot

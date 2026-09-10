@@ -45,7 +45,7 @@ class PreflightLockV1019Tests(unittest.TestCase):
         return app
 
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.144-rc8')
+        self.assertEqual(APP_VERSION,'1.0.144-rc9')
         self.assertEqual(FILE_VERSION,'1.0.144')
 
     def test_small_test_is_optional(self):

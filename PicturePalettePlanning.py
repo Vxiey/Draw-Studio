@@ -69,7 +69,7 @@ def build_prepared_color_strokes(image, palette, selectors, options, *, skip_whi
     from PixelAccuratePlanner import exact_palette_map, groups_from_pixel_map
     indices, drawable, _rgb, route = exact_palette_map(
         image, palette, color_rendering=options.get('color_rendering', 'Perceptual match'),
-        color_fidelity=options.get('color_fidelity', 'Faithful'), skip_white=skip_white,
+        color_fidelity='Exact', skip_white=skip_white,
         gpu_mode=options.get('gpu_mode', 'Auto'), gpu_vram=options.get('gpu_vram', 'Auto'),
         gpu_performance=options.get('gpu_performance', 'High throughput'))
     pixel_map = SimpleNamespace(height=image.height, palette_index=indices, drawable_mask=drawable)

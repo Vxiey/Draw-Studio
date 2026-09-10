@@ -156,6 +156,7 @@ def main():
         '--hidden-import', 'DetailFidelityPlanner',
         '--hidden-import', 'PixelAccuratePlanner',
         '--hidden-import', 'PicturePalettePlanning',
+        '--hidden-import', 'PicturePaletteRefinement',
         '--hidden-import', 'PictureCustomPalette',
         '--hidden-import', 'ShadowDetailEngine',
         '--hidden-import', 'PixelStrokeEngine',
