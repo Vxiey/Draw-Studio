@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path
 import sys
 import tempfile
@@ -27,20 +26,10 @@ def resource_path(name: str) -> Path:
 
 
 def data_dir() -> Path:
-    """Return the writable Image Draw Bot data directory.
-
-    Frozen builds migrate the legacy DrawBotStudio directory by copying it once.
-    If that copy is blocked, the old directory remains the safe fallback.
-    """
+    """Return the writable Image Draw Bot data directory."""
     if is_frozen():
         base = Path((os.environ.get("LOCALAPPDATA") or str(Path.home())))
         root = base / "ImageDrawBot"
-        legacy = base / "DrawBotStudio"
-        if not root.exists() and legacy.exists():
-            try:
-                shutil.copytree(legacy, root)
-            except OSError:
-                root = legacy
     else:
         root = source_dir()
     root.mkdir(parents=True, exist_ok=True)
