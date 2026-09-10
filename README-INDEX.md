@@ -5,7 +5,7 @@
 - [README and downloads](README.md)
 - [First drawing](docs/GETTING-STARTED.md)
 - [Image Draw Bot Wiki](https://github.com/Vxiey/Image-Draw-Bot/wiki)
-- [Current release: v1.0.144-rc9](RELEASE-NOTES-v1.0.144-rc9.md)
+- [Current release: v1.0.144-rc10](RELEASE-NOTES-v1.0.144-rc10.md)
 - [Automatic Paint setup and RGB calibration](docs/PAINT-AUTOMATIC-PREPARATION.md)
 - [Frequently asked questions](docs/FAQ.md)
 - [In-app updates](docs/IN-APP-UPDATES.md)
