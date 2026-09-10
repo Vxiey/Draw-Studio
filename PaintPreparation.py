@@ -33,6 +33,7 @@ ConvertTo-Json -InputObject @($rows) -Depth 5 -Compress
 # A provider may keep Invoke blocked until a modal dialog closes. The caller must
 # scan/verify the resulting UI state; a pending invocation is not proof of success.
 _INVOKE_HELPER = r'''
+Add-Type -AssemblyName WindowsBase
 Add-Type -ReferencedAssemblies @([System.Windows.Automation.InvokePattern].Assembly.Location,[System.Windows.Automation.AutomationElementIdentifiers].Assembly.Location,[System.Windows.Rect].Assembly.Location) -TypeDefinition @"
 using System;
 using System.Threading;
