@@ -332,12 +332,12 @@ def benchmark_cuda(*, size: int = 512, repeats: int = 2) -> list[BackendScore]:
 
 
 _OPENCL_SOURCE = r"""
-inline float drawstudio_srgb_linear(float c) {
+inline float imagedrawbot_srgb_linear(float c) {
     return c <= 0.04045f ? c / 12.92f : pow((c + 0.055f) / 1.055f, 2.4f);
 }
-__kernel void drawstudio_oklabish(__global const float4 *src, __global float4 *dst, const int n) {
+__kernel void imagedrawbot_oklabish(__global const float4 *src, __global float4 *dst, const int n) {
     int i=get_global_id(0); if(i>=n) return; float4 x=src[i];
-    float r=drawstudio_srgb_linear(x.x), g=drawstudio_srgb_linear(x.y), b=drawstudio_srgb_linear(x.z);
+    float r=imagedrawbot_srgb_linear(x.x), g=imagedrawbot_srgb_linear(x.y), b=imagedrawbot_srgb_linear(x.z);
     float l=cbrt(0.4122214708f*r + 0.5363325363f*g + 0.0514459929f*b);
     float m=cbrt(0.2119034982f*r + 0.6806995451f*g + 0.1073969566f*b);
     float ss=cbrt(0.0883024619f*r + 0.2817188376f*g + 0.6299787005f*b);
@@ -345,19 +345,19 @@ __kernel void drawstudio_oklabish(__global const float4 *src, __global float4 *d
                     1.9779984951f*l - 2.4285922050f*m + 0.4505937099f*ss,
                     0.0259040371f*l + 0.7827717662f*m - 0.8086757660f*ss, 1.0f);
 }
-__kernel void drawstudio_palette(__global const float4 *src, __global const float4 *pal,
+__kernel void imagedrawbot_palette(__global const float4 *src, __global const float4 *pal,
                                  __global ushort *out, const int n, const int count) {
     int i=get_global_id(0); if(i>=n) return; float4 x=src[i]; float best=3.4e38f; ushort best_i=0;
     for(int p=0;p<count;p++){float4 d=x-pal[p]; float dist=d.x*d.x+d.y*d.y+d.z*d.z;
         if(dist<best){best=dist;best_i=(ushort)p;}}
     out[i]=best_i;
 }
-__kernel void drawstudio_edge(__global const float *src, __global float *dst, const int w, const int h) {
+__kernel void imagedrawbot_edge(__global const float *src, __global float *dst, const int w, const int h) {
     int i=get_global_id(0); int n=w*h; if(i>=n) return; int x=i%w; int y=i/w;
     int xl=max(0,x-1), xr=min(w-1,x+1), yu=max(0,y-1), yd=min(h-1,y+1);
     float gx=src[y*w+xr]-src[y*w+xl]; float gy=src[yd*w+x]-src[yu*w+x]; dst[i]=sqrt(gx*gx+gy*gy);
 }
-__kernel void drawstudio_bulk(__global const float4 *src, __global float4 *dst, const int n) {
+__kernel void imagedrawbot_bulk(__global const float4 *src, __global float4 *dst, const int n) {
     int i=get_global_id(0); if(i>=n) return; float4 x=src[i];
     dst[i]=(x*0.731f+0.117f)*(1.0f-x*0.213f)+sqrt(x+0.001f);
 }
@@ -431,10 +431,10 @@ def benchmark_opencl(*, size: int = 512, repeats: int = 2) -> list[BackendScore]
                     return min(timings)
 
                 funcs = {
-                    "oklab": lambda: timed(program.drawstudio_oklabish, dst4, sink4, src4, dst4, np.int32(pixels)),
-                    "palette_match": lambda: timed(program.drawstudio_palette, idx_out, sink_idx, src4, pal, idx_out, np.int32(pixels), np.int32(16)),
-                    "edge_map": lambda: timed(program.drawstudio_edge, edge_out, sink_gray, gray, edge_out, np.int32(size), np.int32(size)),
-                    "bulk_matrix": lambda: timed(program.drawstudio_bulk, dst4, sink4, src4, dst4, np.int32(pixels)),
+                    "oklab": lambda: timed(program.imagedrawbot_oklabish, dst4, sink4, src4, dst4, np.int32(pixels)),
+                    "palette_match": lambda: timed(program.imagedrawbot_palette, idx_out, sink_idx, src4, pal, idx_out, np.int32(pixels), np.int32(16)),
+                    "edge_map": lambda: timed(program.imagedrawbot_edge, edge_out, sink_gray, gray, edge_out, np.int32(size), np.int32(size)),
+                    "bulk_matrix": lambda: timed(program.imagedrawbot_bulk, dst4, sink4, src4, dst4, np.int32(pixels)),
                 }
                 # Warm context/build/device path.
                 funcs["bulk_matrix"]()

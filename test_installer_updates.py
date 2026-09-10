@@ -78,7 +78,7 @@ class InstallerUpdateTests(unittest.TestCase):
             executable=root/'ImageDrawBot.exe';(root/'unins000.exe').write_bytes(b'MZ')
             args=installer_launch_args(setup,executable=executable)
             self.assertIn('/DIR='+str(root),args)
-            for flag in ('/VERYSILENT','/SUPPRESSMSGBOXES','/CLOSEAPPLICATIONS','/RELAUNCHDRAWSTUDIO','/NORESTART'):
+            for flag in ('/VERYSILENT','/SUPPRESSMSGBOXES','/CLOSEAPPLICATIONS','/RELAUNCHIMAGEDRAWBOT','/NORESTART'):
                 self.assertIn(flag,args)
             self.assertNotIn('/FORCECLOSEAPPLICATIONS',args)
 
@@ -88,7 +88,7 @@ class InstallerUpdateTests(unittest.TestCase):
             args=installer_launch_args(setup,executable=executable)
             self.assertFalse(any(arg.startswith('/DIR=') for arg in args))
             self.assertNotIn('/VERYSILENT',args)
-            self.assertNotIn('/RELAUNCHDRAWSTUDIO',args)
+            self.assertNotIn('/RELAUNCHIMAGEDRAWBOT',args)
 
     @unittest.skipUnless(__import__('os').name=='nt','Windows installer handoff')
     def test_installer_launch_rechecks_bytes_and_preserves_install_directory(self):
@@ -101,7 +101,7 @@ class InstallerUpdateTests(unittest.TestCase):
             self.assertIn('/DIR='+str(root),calls[0])
             self.assertIn('/NORESTART',calls[0])
             self.assertIn('/VERYSILENT',calls[0])
-            self.assertIn('/RELAUNCHDRAWSTUDIO',calls[0])
+            self.assertIn('/RELAUNCHIMAGEDRAWBOT',calls[0])
             setup.write_bytes(DATA[:-1]+b'X')
             with self.assertRaises(UpdateCheckError):launch_installer(setup,asset,launcher=lambda args:self.fail('must not execute'))
 

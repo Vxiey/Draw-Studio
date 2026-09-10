@@ -144,7 +144,7 @@ class MobilePreviewServer:
         owner = self
 
         class Handler(BaseHTTPRequestHandler):
-            server_version = 'DrawStudioMobilePreview/1.0'
+            server_version = 'ImageDrawBotMobilePreview/1.0'
             sys_version = ''
 
             def log_message(self, _format, *_args):

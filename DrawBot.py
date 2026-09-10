@@ -6982,7 +6982,7 @@ class DrawBotApp:
                 log_event(f'Worker {activity} finished in {time.monotonic()-started:.3f} s.')
             finally:
                 self.events.put(('done',activity))
-        self.worker=threading.Thread(target=work,daemon=True,name=f'drawstudio-{activity}')
+        self.worker=threading.Thread(target=work,daemon=True,name=f'imagedrawbot-{activity}')
         try:
             self.worker.start()
         except Exception:
@@ -8219,7 +8219,7 @@ class DrawBotApp:
                             _watch=start_state.watchdog_text(2.0)
                             log_event(f'Start Drawing watchdog: {_watch}')
                             self.events.put(('status',f'Start Drawing: {_watch}'))
-                threading.Thread(target=heartbeat,daemon=True,name=f'drawstudio-plan-watchdog-{attempt.index}').start()
+                threading.Thread(target=heartbeat,daemon=True,name=f'imagedrawbot-plan-watchdog-{attempt.index}').start()
                 def attempt_cancelled(deadline=attempt_deadline):
                     return self.stop.is_set() or self.closing or time.monotonic() >= deadline
                 try:
@@ -9784,11 +9784,11 @@ def create_root():
     if ctk is not None:
         try:
             from tkinterdnd2 import TkinterDnD
-            class DrawStudioRoot(ctk.CTk,TkinterDnD.DnDWrapper):
+            class ImageDrawBotRoot(ctk.CTk,TkinterDnD.DnDWrapper):
                 def __init__(self,*args,**kwargs):
                     ctk.CTk.__init__(self,*args,**kwargs)
                     self.TkdndVersion=TkinterDnD._require(self)
-            return DrawStudioRoot()
+            return ImageDrawBotRoot()
         except (ImportError,RuntimeError,tk.TclError):
             return ctk.CTk()
     try:

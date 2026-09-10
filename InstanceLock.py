@@ -9,7 +9,7 @@ class InstanceLock:
         self.api.CreateMutexW.argtypes=[ctypes.c_void_p,wintypes.BOOL,wintypes.LPCWSTR]
         self.api.CreateMutexW.restype=wintypes.HANDLE
         self.api.CloseHandle.argtypes=[wintypes.HANDLE]
-        self.handle=self.api.CreateMutexW(None,False,'Local\\DrawBotStudio.SingleInstance')
+        self.handle=self.api.CreateMutexW(None,False,'Local\\ImageDrawBot.SingleInstance')
         if not self.handle:raise OSError('Could not create the instance lock.')
         self.already_running=ctypes.get_last_error()==183
 

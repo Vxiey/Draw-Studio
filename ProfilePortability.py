@@ -31,7 +31,7 @@ from RuntimePaths import atomic_write_text, data_dir
 from StabilityRC import migrate_settings
 from Version import APP_VERSION
 
-FORMAT_ID = "draw-studio-profile"
+FORMAT_ID = "image-draw-bot-profile"
 SCHEMA_VERSION = 1
 MAX_PROFILE_BYTES = 8 * 1024 * 1024
 MAX_JSON_DEPTH = 16

@@ -112,7 +112,7 @@ class StorageTests(unittest.TestCase):
         import RuntimePaths
         with tempfile.TemporaryDirectory() as td, patch.object(RuntimePaths,'is_frozen',return_value=True), \
                 patch.dict('os.environ',{'LOCALAPPDATA':''}), patch.object(RuntimePaths.Path,'home',return_value=Path(td)):
-            self.assertEqual(RuntimePaths.data_dir(),Path(td)/'DrawBotStudio')
+            self.assertEqual(RuntimePaths.data_dir(),Path(td)/'ImageDrawBot')
 
     def test_profile_names_are_isolated_and_idempotent(self):
         for a,b in [('a/b','a-b'),('a'*81+'x','a'*81+'y')]:

@@ -1,10 +1,10 @@
 # v1.0.144-rc1
 
-- Full public rebrand from **Draw Studio** to **Image Draw Bot — Automatic Image Drawing**.
+- Full public identity update from **Image Draw Bot** to **Image Draw Bot — Automatic Image Drawing**.
 - GitHub repository, UI titles, Windows metadata, installer, EXE and release artifacts use the Image Draw Bot identity.
-- Frozen installs use `%LOCALAPPDATA%\ImageDrawBot`; existing `DrawBotStudio` data is copied forward automatically with a safe legacy fallback.
-- Installer AppId remains unchanged for in-place upgrades and stale Draw Studio shortcuts/EXE files are removed.
-- Updater accepts both ImageDrawBot and legacy DrawStudio installer/executable names during the transition.
+- Frozen installs use `%LOCALAPPDATA%\ImageDrawBot`; existing `ImageDrawBot` data is copied forward automatically with a safe legacy fallback.
+- Installer AppId remains unchanged for in-place upgrades and stale Image Draw Bot shortcuts/EXE files are removed.
+- Updater accepts both ImageDrawBot and legacy ImageDrawBot installer/executable names during the transition.
 - Sketch/single-color Paint modes continue to bypass Edit colors.
 
 # v1.0.143-rc4

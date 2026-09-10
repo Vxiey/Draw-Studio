@@ -11,9 +11,9 @@ class CodeSigningTests(unittest.TestCase):
     def test_config_validates_thumbprint_and_tool(self):
         with tempfile.TemporaryDirectory() as tmp:
             tool=Path(tmp)/'signtool.exe';tool.touch()
-            conf=signing_configuration({'DRAWSTUDIO_SIGNTOOL':str(tool),'DRAWSTUDIO_SIGNING_THUMBPRINT':'ab'*20})
+            conf=signing_configuration({'IMAGEDRAWBOT_SIGNTOOL':str(tool),'IMAGEDRAWBOT_SIGNING_THUMBPRINT':'ab'*20})
             self.assertEqual(conf[1],'AB'*20)
-            with self.assertRaises(SigningError):signing_configuration({'DRAWSTUDIO_SIGNTOOL':str(tool),'DRAWSTUDIO_SIGNING_THUMBPRINT':'bad; command'})
+            with self.assertRaises(SigningError):signing_configuration({'IMAGEDRAWBOT_SIGNTOOL':str(tool),'IMAGEDRAWBOT_SIGNING_THUMBPRINT':'bad; command'})
 
     def test_dependencies_signed_and_upstream_signature_preserved(self):
         with tempfile.TemporaryDirectory() as tmp:

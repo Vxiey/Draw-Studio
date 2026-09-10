@@ -34,7 +34,7 @@ class RuntimePathTests(unittest.TestCase):
              patch.dict(os.environ, {'LOCALAPPDATA': temp}), \
              patch.object(RuntimePaths.sys, 'frozen', True, create=True):
             path = RuntimePaths.data_dir()
-        self.assertEqual(path, Path(temp) / 'DrawBotStudio')
+        self.assertEqual(path, Path(temp) / 'ImageDrawBot')
 
 
 if __name__ == '__main__':

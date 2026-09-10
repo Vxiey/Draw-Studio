@@ -7,7 +7,7 @@ import UpdateCenter
 
 ROOT=Path(__file__).resolve().parent
 
-class RebrandV10144Tests(unittest.TestCase):
+class Identity updateV10144Tests(unittest.TestCase):
     def test_public_identity(self):
         self.assertEqual(APP_NAME,'Image Draw Bot')
         self.assertEqual(APP_TAGLINE,'Automatic Image Drawing')
@@ -21,10 +21,10 @@ class RebrandV10144Tests(unittest.TestCase):
         self.assertIn('AppName=Image Draw Bot',installer)
         self.assertIn('ImageDrawBot.exe',installer)
         self.assertIn('/RELAUNCHIMAGEDRAWBOT',installer)
-        self.assertIn('/RELAUNCHDRAWSTUDIO',installer)
-        self.assertFalse((ROOT/'installer'/'DrawStudio.iss').exists())
+        self.assertIn('/RELAUNCHIMAGEDRAWBOT',installer)
+        self.assertFalse((ROOT/'installer'/'ImageDrawBot.iss').exists())
         self.assertTrue((ROOT/'ImageDrawBot.manifest').exists())
-        self.assertFalse((ROOT/'DrawStudio.manifest').exists())
+        self.assertFalse((ROOT/'ImageDrawBot.manifest').exists())
 
     def test_build_and_release_names(self):
         build=(ROOT/'build_exe.py').read_text(encoding='utf-8')
@@ -37,7 +37,7 @@ class RebrandV10144Tests(unittest.TestCase):
     def test_legacy_installed_exe_is_recognized(self):
         from pathlib import Path as RealPath
         with mock.patch('pathlib.Path.glob', return_value=[RealPath('C:/Apps/unins000.exe')]):
-            args=UpdateCenter.installer_launch_args('setup.exe',executable='C:/Apps/Draw Studio/DrawStudio.exe')
+            args=UpdateCenter.installer_launch_args('setup.exe',executable='C:/Apps/Image Draw Bot/ImageDrawBot.exe')
         self.assertIn('/RELAUNCHIMAGEDRAWBOT',args)
 
 if __name__=='__main__': unittest.main()

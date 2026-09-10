@@ -137,7 +137,7 @@ def create_diagnostics_package(context=None) -> Path:
             text=_read_text(log_dir/name)
             if text:
                 archive.writestr(f'logs/{name}',text)
-        dumps=Path(os.environ.get('LOCALAPPDATA',str(data_dir())))/'DrawBotStudio'/'dumps'
+        dumps=Path(os.environ.get('LOCALAPPDATA',str(data_dir())))/'ImageDrawBot'/'dumps'
         inventory=[]
         if dumps.is_dir():
             candidates=[]

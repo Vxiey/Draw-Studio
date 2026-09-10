@@ -17,7 +17,7 @@ py -3 "%~dp0DiagnosticsPackage.py"
 :done
 set "DIAG_RESULT=%errorlevel%"
 if not "%DIAG_RESULT%"=="0" echo Collection failed. Read the message above.
-echo Memory dumps are kept separately in LOCALAPPDATA\DrawBotStudio\dumps.
+echo Memory dumps are kept separately in LOCALAPPDATA\ImageDrawBot\dumps.
 echo Share only the files you choose. Nothing is uploaded automatically.
 pause
 exit /b %DIAG_RESULT%

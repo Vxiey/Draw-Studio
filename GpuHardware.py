@@ -349,8 +349,8 @@ def cupy_smoke_test() -> tuple[bool, str]:
         target = gpu.index if gpu.index is not None and 0 <= gpu.index < count else 0
         with cp.cuda.Device(int(target)):
             kernel = cp.RawKernel(
-                'extern "C" __global__ void drawstudio_probe(float* x){int i=blockDim.x*blockIdx.x+threadIdx.x;if(i<32)x[i]=x[i]*2.0f+1.0f;}',
-                "drawstudio_probe",
+                'extern "C" __global__ void imagedrawbot_probe(float* x){int i=blockDim.x*blockIdx.x+threadIdx.x;if(i<32)x[i]=x[i]*2.0f+1.0f;}',
+                "imagedrawbot_probe",
             )
             arr = cp.arange(32, dtype=cp.float32)
             kernel((1,), (32,), (arr,))

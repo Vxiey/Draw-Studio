@@ -6,7 +6,7 @@ Image Draw Bot 1.0.125-beta adds portable one-profile-at-a-time export/import.
 
 A profile can be saved as `.drawprofile` (JSON) or normal `.json`.
 
-The current schema is `draw-studio-profile` schema version `1` and contains:
+The current schema is `image-draw-bot-profile` schema version `1` and contains:
 
 - target/profile name and storage identity
 - renderer and quality settings

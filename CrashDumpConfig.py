@@ -67,7 +67,7 @@ def configure(action, include_python=False):
         return f'LocalDumps configured: {", ".join(names)}\nDump folder: {folder}\nMini dumps remain local; share them only when needed.'
     if action=='disable':
         for name, saved in list(state.items()):
-            if name not in ('ImageDrawBot.exe','DrawStudio.exe','python.exe','pythonw.exe'):
+            if name not in ('ImageDrawBot.exe','ImageDrawBot.exe','python.exe','pythonw.exe'):
                 raise ValueError('Unexpected executable in backup; no restoration for that entry.')
             current=read_values(name)
             restored=restore_values(current,saved['written'],saved['original'])

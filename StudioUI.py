@@ -109,9 +109,9 @@ def build_ui(a, quality, speed):
     style.map('Treeview', background=[('selected', ACCENT_DARK)])
     style.configure('Horizontal.TProgressbar', background=ACCENT,
                     troughcolor=FIELD, borderwidth=0, thickness=5)
-    style.configure('DrawStudio.TCombobox', fieldbackground=FIELD, background=FIELD,
+    style.configure('ImageDrawBot.TCombobox', fieldbackground=FIELD, background=FIELD,
                     foreground=TEXT, arrowcolor=TEXT, padding=8)
-    style.map('DrawStudio.TCombobox', fieldbackground=[('readonly', FIELD)],
+    style.map('ImageDrawBot.TCombobox', fieldbackground=[('readonly', FIELD)],
               foreground=[('readonly', TEXT)], selectbackground=[('readonly', FIELD)],
               selectforeground=[('readonly', TEXT)])
 
@@ -274,7 +274,7 @@ def build_ui(a, quality, speed):
 
     step1 = step_card(1, 'Choose target app', 'Pick the app/game you want Image Draw Bot to draw into.', '🎯')
     a.profile_selector = ttk.Combobox(step1, textvariable=a.game, values=list(PROFILES),
-                                      state='readonly', style='DrawStudio.TCombobox',
+                                      state='readonly', style='ImageDrawBot.TCombobox',
                                       font=('Segoe UI', 11), height=10)
     a.profile_selector.pack(fill='x', ipady=5)
     a.profile_selector.bind('<<ComboboxSelected>>', lambda _event: a.change_profile())
