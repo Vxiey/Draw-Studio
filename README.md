@@ -1,10 +1,26 @@
-# Image Draw Bot — Automatic Image Drawing
+# Image Draw Bot — automatic image drawing bot for Paint and drawing games
 
-**Automatically recreate images in Microsoft Paint, Gartic Phone, Skribbl.io and other drawing apps.**
+![Image Draw Bot preview](assets/social-preview.svg)
 
-Image Draw Bot is a Windows desktop app that recreates images with mouse paths,
-color matching, outlines and fills. It uses local image processing, not AI image
-generation. Each target profile keeps its own calibration and drawing settings.
+[![Image Draw Bot CI](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml)
+![Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-informational)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-informational)
+![Local processing](https://img.shields.io/badge/processing-local-informational)
+
+**Image Draw Bot converts pictures into mouse strokes, contours, fills and exact RGB color selections for Microsoft Paint, Gartic Phone, Skribbl.io and other drawing canvases.**
+
+Image Draw Bot is a source-available Windows desktop app for automatic image drawing. It uses local image processing, deterministic render planning and safe mouse automation to recreate images in target drawing apps. It does not generate AI images, upload artwork or require cloud processing.
+
+## Why use Image Draw Bot?
+
+| Use case | What Image Draw Bot does |
+| --- | --- |
+| **Microsoft Paint automation** | Detects the Paint canvas, prepares Pencil/Fill, calibrates RGB fields and draws with exact colors where possible. |
+| **Image-to-strokes conversion** | Converts source images into optimized mouse paths, connected runs, outlines, fill regions and correction passes. |
+| **Fast drawing rounds** | Uses Extra Fast, Quick Sketch and Auto Hybrid planning to keep recognizable shapes under tight time budgets. |
+| **Pixel-focused rendering** | Uses Pixel Accurate planning, coverage maps, error checks and protected-detail logic for higher fidelity. |
+| **Drawing game canvases** | Supports calibrated browser-canvas workflows for Gartic Phone, Skribbl.io and similar drawing apps. |
+| **Local privacy** | Processes images locally with no telemetry; network use is limited to explicit features such as updates or URL loading. |
 
 ## Download — v1.0.144-rc1
 
@@ -18,6 +34,17 @@ generation. Each target profile keeps its own calibration and drawing settings.
 [Release notes](RELEASE-NOTES-v1.0.144-rc1.md) ·
 [Documentation](README-INDEX.md)
 
+## Core features
+
+- Automatic drawing bot for Windows 10/11 x64.
+- Microsoft Paint canvas detection, Pencil/Fill setup and RGB color calibration.
+- Image-to-mouse-path rendering with contours, connected regions, fills and scanline fallback.
+- Extra Fast, Balanced, Pixel Accurate and Auto Hybrid drawing modes.
+- Adaptive detail preservation for small shapes, eyes, outlines, text-like forms and high-contrast edges.
+- Palette matching, exact custom RGB colors, color batching and preview diagnostics.
+- Optional CUDA/OpenCL acceleration with CPU fallback.
+- Per-target profiles for Paint, Gartic Phone, Skribbl.io and other calibrated canvases.
+- Manual preview, estimated draw time, stop/pause hotkeys and safety guards.
 
 ### Picture custom palette for Microsoft Paint
 
@@ -69,6 +96,22 @@ scaling and browser zoom unchanged after calibration.
 **Gartic Phone:** the supported workflow requires Google Chrome with
 **Artist Tools for Gartic Phone** installed and enabled.
 
+## Drawing modes and features
+
+| Mode or feature | Purpose |
+| --- | --- |
+| Extra Fast | Uses safe outline/fill substitutions and connected scanlines to reduce separate drags. |
+| Balanced | General-purpose speed and detail settings. |
+| Pixel Accurate | Prioritizes small details and source coverage; can take longer. |
+| Auto Hybrid | Chooses among specialized deterministic renderers for different image structures. |
+| Adaptive Exact colors | Uses calibrated custom RGB controls when the normal palette is not a close enough match. |
+| Manual previews | Inspect the planned result without rebuilding a preview after every setting change. |
+| Separate profiles | Keep per-target settings and calibration isolated; export/import profiles when needed. |
+
+Extra Fast's six synthetic comparison cases preserved source-raster coverage.
+For example, a vertical block went from 280 paths to 3. Actual drawing speed in the target application has not been measured by this benchmark.
+[Benchmark and limitations](docs/EXTRA-FAST-REVIEW.md)
+
 ## Controls
 
 - **Esc:** stop drawing.
@@ -89,22 +132,6 @@ apply individual source-code patches. There are no background update checks.
 Install v1.0.144-rc1 once using the download above if you have an older build. RC builds
 accept newer RC/stable releases; stable builds do not automatically switch to
 prereleases. [Update details](docs/IN-APP-UPDATES.md)
-
-## Drawing modes and features
-
-| Mode or feature | Purpose |
-| --- | --- |
-| Extra Fast | Uses safe outline/fill substitutions and connected scanlines to reduce separate drags. |
-| Balanced | General-purpose speed and detail settings. |
-| Pixel Accurate | Prioritizes small details and source coverage; can take longer. |
-| Auto Hybrid | Chooses among specialized deterministic renderers for different image structures. |
-| Adaptive Exact colors | Uses calibrated custom RGB controls when the normal palette is not a close enough match. |
-| Manual previews | Inspect the planned result without rebuilding a preview after every setting change. |
-| Separate profiles | Keep per-target settings and calibration isolated; export/import profiles when needed. |
-
-Extra Fast's six synthetic comparison cases preserved source-raster coverage.
-For example, a vertical block went from 280 paths to 3. Actual drawing speed in the target application has not been measured by this benchmark.
-[Benchmark and limitations](docs/EXTRA-FAST-REVIEW.md)
 
 ## Troubleshooting
 
@@ -156,7 +183,7 @@ uninstall round trip. Real drawing speed, GPU behavior and compatibility with
 every target layout require separate live testing.
 
 [Publishing](docs/PUBLISHING.md) · [Package layout](docs/RELEASE-STRUCTURE.md) ·
-[Version history](VERSION-HISTORY.md)
+[Version history](VERSION-HISTORY.md) · [GitHub SEO checklist](docs/GITHUB-SEO-CHECKLIST.md)
 
 ## Privacy
 
@@ -164,3 +191,7 @@ Image analysis and rendering are local. No telemetry is included. Explicit
 features such as checking updates, loading an image URL, source dependency
 installation or optional network preview can use the network. The updater uses
 public releases from **Vxiey/Image-Draw-Bot**.
+
+## Search terms
+
+Image Draw Bot is relevant to searches for automatic image drawing, image drawing bot, image to mouse strokes, Microsoft Paint automation, Paint drawing bot, contour fill renderer, pixel accurate drawing, drawing game canvas automation, local image processing, Python Windows automation, CustomTkinter desktop app, GPU image processing and safe mouse automation.
