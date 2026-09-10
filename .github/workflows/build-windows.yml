@@ -1,4 +1,4 @@
-name: Build and publish Draw Studio Windows release
+name: Build and publish Image Draw Bot Windows release
 
 on:
   workflow_dispatch:
@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: draw-studio-release-${{ github.ref }}
+  group: image-draw-bot-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -81,10 +81,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $setup = Get-ChildItem release/DrawStudio-*-Windows-x64-Setup.exe | Select-Object -First 1
+          $setup = Get-ChildItem release/ImageDrawBot-*-Windows-x64-Setup.exe | Select-Object -First 1
           if (-not $setup) { throw 'Setup.exe was not produced' }
 
-          $installDir = Join-Path $env:RUNNER_TEMP 'DrawStudio-release-install'
+          $installDir = Join-Path $env:RUNNER_TEMP 'ImageDrawBot-release-install'
           if (Test-Path $installDir) { Remove-Item $installDir -Recurse -Force }
 
           Write-Host "Installing $($setup.Name) to $installDir"
@@ -94,9 +94,9 @@ jobs:
           Write-Host "Installer exit code: $($installProcess.ExitCode)"
           if ($installProcess.ExitCode -ne 0) { throw "Silent install failed: $($installProcess.ExitCode)" }
 
-          $exe = Join-Path $installDir 'DrawStudio.exe'
-          if (-not (Test-Path $exe)) { throw "Installed DrawStudio.exe is missing at $exe" }
-          Write-Host 'Running installed DrawStudio.exe --self-test'
+          $exe = Join-Path $installDir 'ImageDrawBot.exe'
+          if (-not (Test-Path $exe)) { throw "Installed ImageDrawBot.exe is missing at $exe" }
+          Write-Host 'Running installed ImageDrawBot.exe --self-test'
           $selfTestProcess = Start-Process -FilePath $exe -ArgumentList @('--self-test') -Wait -PassThru
           Write-Host "Installed self-test exit code: $($selfTestProcess.ExitCode)"
           if ($selfTestProcess.ExitCode -ne 0) { throw "Installed self-test failed: $($selfTestProcess.ExitCode)" }
@@ -111,12 +111,12 @@ jobs:
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: DrawStudio-${{ github.ref_name }}-Windows-x64
+          name: ImageDrawBot-${{ github.ref_name }}-Windows-x64
           path: |
-            release/DrawStudio-*-Windows-x64.zip
-            release/DrawStudio-*-Windows-x64-Setup.exe
-            release/DrawStudio-*-SHA256.txt
-            release/DrawStudio-*-manifest.json
+            release/ImageDrawBot-*-Windows-x64.zip
+            release/ImageDrawBot-*-Windows-x64-Setup.exe
+            release/ImageDrawBot-*-SHA256.txt
+            release/ImageDrawBot-*-manifest.json
           if-no-files-found: error
           retention-days: 30
 
@@ -144,10 +144,10 @@ jobs:
           $flags = @()
           if ($version -match '-') { $flags += '--prerelease' }
           if (-not $resumeDraft) {
-            gh release create $tag --target $env:GITHUB_SHA --draft --title "Draw Studio $tag" --notes-file $notes @flags
+            gh release create $tag --target $env:GITHUB_SHA --draft --title "Image Draw Bot $tag" --notes-file $notes @flags
             if ($LASTEXITCODE -ne 0) { throw 'Could not create release draft' }
           }
-          gh release upload $tag --clobber release/DrawStudio-*-Windows-x64.zip release/DrawStudio-*-Windows-x64-Setup.exe release/DrawStudio-*-SHA256.txt release/DrawStudio-*-manifest.json
+          gh release upload $tag --clobber release/ImageDrawBot-*-Windows-x64.zip release/ImageDrawBot-*-Windows-x64-Setup.exe release/ImageDrawBot-*-SHA256.txt release/ImageDrawBot-*-manifest.json
           if ($LASTEXITCODE -ne 0) { throw 'Could not upload verified release assets' }
           gh release edit $tag --draft=false
           if ($LASTEXITCODE -ne 0) { throw 'Could not publish release' }
