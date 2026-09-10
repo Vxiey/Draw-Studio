@@ -1,5 +1,6 @@
 """One visual identity for Tk windows, taskbar grouping and the app header."""
 import sys
+import logging
 
 from RuntimePaths import resource_path
 
@@ -14,7 +15,12 @@ def set_windows_app_id():
         return
     try:
         import ctypes
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
+        setter = ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID
+        setter.argtypes = [ctypes.c_wchar_p]
+        setter.restype = ctypes.c_int32
+        result = setter(APP_USER_MODEL_ID)
+        if result < 0:
+            raise OSError(f'AppUserModelID failed: {result}')
     except (AttributeError, OSError):
         pass
 
@@ -37,6 +43,18 @@ def configure_root(root):
     except Exception:
         return root
     ico = resource_path(ICON_ICO)
+    if sys.platform == 'win32':
+        # Release property-store values while the native window still exists.
+        original_destroy = root.destroy
+        def destroy():
+            from TaskbarIdentity import clear_window_identity
+            try:
+                clear_window_identity(root)
+            except Exception:
+                logging.getLogger(__name__).exception('Taskbar identity cleanup failed')
+            finally:
+                original_destroy()
+        root.destroy = destroy
 
     def apply(window):
         try:
@@ -45,20 +63,26 @@ def configure_root(root):
             if sys.platform == 'win32' and ico.is_file():
                 # CTk's override also records that its default icon must not win.
                 window.iconbitmap(str(ico))
+                if window is root:
+                    from TaskbarIdentity import set_window_identity
+                    set_window_identity(root, APP_USER_MODEL_ID, ico)
             else:
                 window.iconphoto(False, *root._image_draw_bot_icons)
         except Exception:
-            pass
+            logging.getLogger(__name__).exception('Could not apply Image Draw Bot window/taskbar icon')
 
     def mapped(event):
         window = event.widget
         try:
-            if window.winfo_toplevel() != window or getattr(window, '_image_draw_bot_icon_set', False):
+            if window.winfo_toplevel() != window:
                 return
             window._image_draw_bot_icon_set = True
             apply(window)
             # CustomTkinter also schedules its default Windows icon at startup.
-            window.after(300, lambda: apply(window))
+            pending = getattr(window, '_image_draw_bot_icon_after', None)
+            if pending:
+                window.after_cancel(pending)
+            window._image_draw_bot_icon_after = window.after(300, lambda: apply(window))
         except Exception:
             pass
 

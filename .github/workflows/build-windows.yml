@@ -96,6 +96,14 @@ jobs:
 
           $exe = Join-Path $installDir 'ImageDrawBot.exe'
           if (-not (Test-Path $exe)) { throw "Installed ImageDrawBot.exe is missing at $exe" }
+          $icon = Join-Path $installDir '_internal\assets\image-draw-bot-icon.ico'
+          if (-not (Test-Path $icon)) { throw "Installed taskbar icon is missing: $icon" }
+          $shortcutPath = Join-Path ([Environment]::GetFolderPath('Programs')) 'Image Draw Bot/Image Draw Bot.lnk'
+          if (-not (Test-Path $shortcutPath)) { throw 'Start-menu shortcut is missing' }
+          $shell = New-Object -ComObject WScript.Shell
+          $shortcut = $shell.CreateShortcut($shortcutPath)
+          if ($shortcut.IconLocation -ne "$icon,0") { throw "Shortcut uses unexpected icon: $($shortcut.IconLocation)" }
+          Write-Host 'Installed shortcut icon verified'
           Write-Host 'Running installed ImageDrawBot.exe --self-test'
           $selfTestProcess = Start-Process -FilePath $exe -ArgumentList @('--self-test') -Wait -PassThru
           Write-Host "Installed self-test exit code: $($selfTestProcess.ExitCode)"

@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.144-rc2"
+#define MyAppVersion "1.0.144-rc3"
 #endif
 
 [Setup]
@@ -36,8 +36,8 @@ RestartApplications=no
 Source: "..\dist\ImageDrawBot\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Image Draw Bot"; Filename: "{app}\ImageDrawBot.exe"; IconFilename: "{app}\ImageDrawBot.exe"; AppUserModelID: "Vxiey.ImageDrawBot"
-Name: "{autodesktop}\Image Draw Bot"; Filename: "{app}\ImageDrawBot.exe"; IconFilename: "{app}\ImageDrawBot.exe"; AppUserModelID: "Vxiey.ImageDrawBot"; Tasks: desktopicon
+Name: "{group}\Image Draw Bot"; Filename: "{app}\ImageDrawBot.exe"; IconFilename: "{app}\_internal\assets\image-draw-bot-icon.ico"; AppUserModelID: "Vxiey.ImageDrawBot"
+Name: "{autodesktop}\Image Draw Bot"; Filename: "{app}\ImageDrawBot.exe"; IconFilename: "{app}\_internal\assets\image-draw-bot-icon.ico"; AppUserModelID: "Vxiey.ImageDrawBot"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked

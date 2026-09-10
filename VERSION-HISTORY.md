@@ -1,3 +1,10 @@
+## v1.0.144-rc3 — Windows taskbar identity
+
+- Set the taskbar group icon and relaunch metadata on the native app window.
+- Restore branding on remap and theme changes.
+- Use the bundled icon file for installer shortcuts.
+- Verify Windows shell properties through the real app root and release them on close.
+
 # v1.0.144-rc2
 
 - Unified application, window, header, taskbar, installer and shortcut icons.

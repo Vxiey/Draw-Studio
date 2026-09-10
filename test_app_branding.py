@@ -46,7 +46,9 @@ class BrandingTests(unittest.TestCase):
         user32.GetParent.restype = wintypes.HWND
         user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
         user32.SendMessageW.restype = ctypes.c_ssize_t
-        root=ctk.CTk()
+        from DrawBot import create_root
+        from TaskbarIdentity import WindowProperties, window_handle, relaunch_command
+        root=create_root()
         try:
             branding.configure_root(root)
             photos=root._image_draw_bot_icons
@@ -57,6 +59,18 @@ class BrandingTests(unittest.TestCase):
             child=ctk.CTkToplevel(root)
             root.after(450,root.quit)
             root.mainloop()
+            # Follow StudioUI's dark-mode startup, then hide/show the wrapper.
+            ctk.set_appearance_mode('light')
+            ctk.set_appearance_mode('dark')
+            root.withdraw()
+            root.deiconify()
+            root.after(650, root.quit)
+            root.mainloop()
+            with WindowProperties(window_handle(root)) as properties:
+                self.assertEqual(properties.get(5), branding.APP_USER_MODEL_ID)
+                self.assertEqual(properties.get(3), f'{(ROOT / branding.ICON_ICO).resolve()},0')
+                self.assertEqual(properties.get(2), relaunch_command())
+                self.assertEqual(properties.get(4), 'Image Draw Bot')
             self.assertTrue(child._image_draw_bot_icon_set)
             for window in (root, child):
                 self.assertEqual(Path(applied[window]).resolve(), (ROOT / branding.ICON_ICO).resolve())
@@ -66,6 +80,7 @@ class BrandingTests(unittest.TestCase):
                     self.assertTrue(user32.SendMessageW(hwnd, 0x007F, icon_type, 0))
         finally:
             root.destroy()
+        self.assertIsNone(root._image_draw_bot_taskbar_hwnd)
 
 
 if __name__ == '__main__': unittest.main()

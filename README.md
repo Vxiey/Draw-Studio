@@ -24,6 +24,8 @@ Image Draw Bot is a source-available Windows desktop app for automatic image dra
 
 ## Download for Windows
 
+Source version **v1.0.144-rc3** adds explicit Windows taskbar icon metadata; its Windows build is being validated.
+
 Download **Image Draw Bot v1.0.144-rc2** for Windows 10/11 x64.
 The installer and portable ZIP include Python and use the Image Draw Bot name.
 
