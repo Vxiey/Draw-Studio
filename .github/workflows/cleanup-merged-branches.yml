@@ -1,0 +1,37 @@
+name: Cleanup merged branches
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.repository == 'Vxiey/Draw-Studio'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete merged RC branches
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const refs = [
+              'heads/v1.0.143-rc4-paint-dialog-closure',
+              'heads/v1.0.143-rc4-release'
+            ];
+            for (const ref of refs) {
+              try {
+                await github.rest.git.deleteRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref
+                });
+                core.info(`Deleted ${ref}`);
+              } catch (error) {
+                if (error.status === 422 || error.status === 404) {
+                  core.info(`${ref} already absent`);
+                  continue;
+                }
+                throw error;
+              }
