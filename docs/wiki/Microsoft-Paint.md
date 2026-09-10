@@ -8,7 +8,7 @@ Keep Paint and Image Draw Bot at the same Windows privilege level, normally with
 
 ## Custom color palette for picture
 
-With an image loaded, this action analyzes important colors, prepares Edit colors R/G/B controls when needed and enters image-specific custom colors. It operates Paint controls: leave the mouse alone. RGB calibration is saved separately from canvas detection. Preloading colors does not guarantee every later mark is correct; runtime checks still apply.
+With an image loaded, this action analyzes important colors, prepares Edit colors R/G/B controls when needed and enters image-specific custom colors. It operates Paint controls: leave the mouse alone. From rc6, this action calibrates only RGB controls, waits for the numeric fields before typing and verifies dialog closure between colors. RGB calibration is saved separately from canvas detection. Preloading colors does not guarantee every later mark is correct; runtime checks still apply.
 
 ## When setup fails
 

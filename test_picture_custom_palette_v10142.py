@@ -61,15 +61,20 @@ class PictureCustomPaletteTests(unittest.TestCase):
 
     def test_rgb_sequence_types_exact_channels_and_disarms(self):
         mouse=Mouse();keyboard=Keyboard();waits=[]
-        controls={'OpenCustomColor':(10,10),'RedField':(20,20),'GreenField':(30,30),'BlueField':(40,40),'ConfirmColor':(50,50)}
+        controls={'OpenCustomColor':(10,10),'RedField':(20,20),'GreenField':(30,30),'BlueField':(40,40),'ConfirmColor':(50,50),'AddCustomColor':(60,60)}
         count=pcp.apply_custom_rgb_sequence(mouse,keyboard,controls,[(12,34,56),(201,4,9)],wait=lambda s:waits.append(s))
         self.assertEqual(count,2);self.assertFalse(mouse.armed)
         self.assertEqual(mouse.actions[0],('arm',));self.assertEqual(mouse.actions[-1],('disarm',))
         self.assertEqual([a for a in keyboard.actions if a[0]=='write'],[('write','12'),('write','34'),('write','56'),('write','201'),('write','4'),('write','9')])
         self.assertEqual(keyboard.actions.count(('press','ctrl+a')),6)
+        self.assertEqual(mouse.actions.count(('move',10,10)),1)
+        self.assertEqual(mouse.actions.count(('move',50,50)),1)
+        self.assertEqual(mouse.actions.count(('move',60,60)),2)
+        self.assertEqual(waits.count(.50),2)
+        self.assertEqual(waits.count(.25),2)
 
     def test_rgb_sequence_cancel_always_disarms_and_escapes_open_dialog(self):
-        mouse=Mouse();keyboard=Keyboard();controls={'OpenCustomColor':(10,10),'RedField':(20,20),'GreenField':(30,30),'BlueField':(40,40),'ConfirmColor':(50,50)}
+        mouse=Mouse();keyboard=Keyboard();controls={'OpenCustomColor':(10,10),'RedField':(20,20),'GreenField':(30,30),'BlueField':(40,40),'ConfirmColor':(50,50),'AddCustomColor':(60,60)}
         calls={'n':0}
         def cancelled():
             calls['n']+=1
@@ -81,7 +86,7 @@ class PictureCustomPaletteTests(unittest.TestCase):
 
     def test_dialog_not_ready_prevents_all_numeric_input(self):
         mouse=Mouse();keyboard=Keyboard()
-        controls={'OpenCustomColor':(10,10),'RedField':(20,20),'GreenField':(30,30),'BlueField':(40,40),'ConfirmColor':(50,50)}
+        controls={'OpenCustomColor':(10,10),'RedField':(20,20),'GreenField':(30,30),'BlueField':(40,40),'ConfirmColor':(50,50),'AddCustomColor':(60,60)}
         def not_ready(): raise TimeoutError('Paint not ready')
         with self.assertRaises(TimeoutError):
             pcp.apply_custom_rgb_sequence(mouse,keyboard,controls,[(12,34,56)],
@@ -89,19 +94,32 @@ class PictureCustomPaletteTests(unittest.TestCase):
         self.assertFalse(any(a[0]=='write' or a==('press','ctrl+a') for a in keyboard.actions))
         self.assertFalse(mouse.armed)
 
-    def test_unclosed_dialog_prevents_next_color_and_completion(self):
+    def test_rejected_rgb_prevents_save_and_next_color(self):
         mouse=Mouse();keyboard=Keyboard();progress=[]
-        controls={'OpenCustomColor':(10,10),'RedField':(20,20),'GreenField':(30,30),'BlueField':(40,40),'ConfirmColor':(50,50)}
-        def still_open(): raise TimeoutError('Paint dialog still open')
+        controls={'OpenCustomColor':(10,10),'RedField':(20,20),'GreenField':(30,30),'BlueField':(40,40),'ConfirmColor':(50,50),'AddCustomColor':(60,60)}
+        def rejected(rgb): raise TimeoutError('Paint RGB not accepted')
         with self.assertRaises(TimeoutError):
             pcp.apply_custom_rgb_sequence(mouse,keyboard,controls,[(12,34,56),(7,8,9)],
                 wait=lambda _:None,dialog_ready=lambda:{'RedField':(22,22)},
-                dialog_closed=still_open,progress=lambda *a:progress.append(a))
+                color_ready=rejected,progress=lambda *a:progress.append(a))
         self.assertEqual([a for a in keyboard.actions if a[0]=='write'],[('write','12'),('write','34'),('write','56')])
         self.assertIn(('move',22,22),mouse.actions)
         self.assertNotIn(('move',20,20),mouse.actions)
         self.assertEqual(progress,[])
+        self.assertNotIn(('move',60,60),mouse.actions)
         self.assertFalse(mouse.armed)
+
+    def test_missing_plus_stops_before_rgb_input(self):
+        mouse=Mouse();keyboard=Keyboard()
+        controls={'OpenCustomColor':(10,10),'RedField':(20,20),'GreenField':(30,30),'BlueField':(40,40),'ConfirmColor':(50,50)}
+        with self.assertRaisesRegex(ValueError,'Add to custom colors'):
+            pcp.apply_custom_rgb_sequence(mouse,keyboard,controls,[(12,34,56)],wait=lambda _:None)
+        self.assertFalse(any(a[0]=='write' for a in keyboard.actions))
+        self.assertFalse(mouse.armed)
+
+    def test_picture_palette_capacity_matches_24_visible_custom_slots(self):
+        app=SimpleNamespace(exact_color_limit=Var('32'),draw_quality=Var('Maximum likeness'))
+        self.assertLessEqual(pcp._resolve_max_colors(app),24)
 
     def test_picture_palette_is_bounded_and_uses_production_dynamic_colors(self):
         fallback=((0,0,0),(255,255,255),(255,0,0),(0,0,255),(0,128,0),(128,128,128))

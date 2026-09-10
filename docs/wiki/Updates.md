@@ -1,6 +1,6 @@
 # Updates and release history
 
-Current published release: [v1.0.144-rc5](https://github.com/Vxiey/Image-Draw-Bot/releases/tag/v1.0.144-rc5). It fixes blocking Paint color-dialog activation and recovery after interrupted RGB calibration. It also includes the new Get started guide and clickable setting help. Recent rc2/rc3 releases introduced unified icons and explicit Windows taskbar identity.
+Current published release: [v1.0.144-rc6](https://github.com/Vxiey/Image-Draw-Bot/releases/tag/v1.0.144-rc6). It adds RGB-dialog readiness checks to Custom color palette for picture and avoids unrelated Pencil/size calibration. It includes rc5 fixes for blocking color-dialog activation and recovery after interrupted RGB calibration. It also includes the new Get started guide and clickable setting help. Recent rc2/rc3 releases introduced unified icons and explicit Windows taskbar identity.
 
 ## Update the installed app
 

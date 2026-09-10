@@ -2,9 +2,8 @@
 
 This module is intentionally separate from the drawing engine.  It analyses the
 currently loaded source image with Image Draw Bot's existing DynamicColors planner,
-keeps only custom RGB values that materially improve over the calibrated Paint
-palette, enters those RGB values through the already calibrated Edit colors
-controls, and persists the resulting picture palette for reuse.
+selects a bounded image palette and saves its RGB values with Paint's Add to
+custom colors button through calibrated Edit colors controls, and persists the resulting picture palette for reuse.
 
 The feature never paints on the canvas.  It is an explicit user action and raw
 mouse input is armed only for the short UI-control sequence, then always disarmed.
@@ -288,7 +287,7 @@ def build_picture_palette(image, palette_rgb: Iterable[Sequence[int]], *, max_co
 
 def apply_custom_rgb_sequence(mouse, keyboard_backend, controls: dict,
                               colors: Iterable[Sequence[int]], *, cancelled=lambda: False,
-                              wait=time.sleep, progress=None, dialog_ready=None, dialog_closed=None) -> int:
+                              wait=time.sleep, progress=None, dialog_ready=None, dialog_closed=None, color_ready=None) -> int:
     """Type a bounded RGB sequence into Paint's calibrated Edit colors dialog."""
     required = ("OpenCustomColor", "RedField", "GreenField", "BlueField", "ConfirmColor")
     missing = [name for name in required if name not in controls]
@@ -306,15 +305,21 @@ def apply_custom_rgb_sequence(mouse, keyboard_backend, controls: dict,
         mouse.click()
         wait(delay)
 
+    if not values:
+        return 0
     mouse.arm_input()
     try:
+        if cancelled():
+            raise InterruptedError("Picture custom palette cancelled.")
+        click("OpenCustomColor", 0.16)
+        dialog_open = True
+        if dialog_ready is not None:
+            controls.update(dialog_ready())
+        if "AddCustomColor" not in controls:
+            raise ValueError("Paint + / Add to custom colors is not calibrated; no RGB input was sent.")
         for index, rgb in enumerate(values, 1):
             if cancelled():
                 raise InterruptedError("Picture custom palette cancelled.")
-            click("OpenCustomColor", 0.16)
-            dialog_open = True
-            if dialog_ready is not None:
-                controls.update(dialog_ready())
             for name, value in zip(("RedField", "GreenField", "BlueField"), rgb):
                 if cancelled():
                     raise InterruptedError("Picture custom palette cancelled.")
@@ -322,13 +327,23 @@ def apply_custom_rgb_sequence(mouse, keyboard_backend, controls: dict,
                 keyboard_backend.press_and_release("ctrl+a")
                 keyboard_backend.write(str(int(value)), delay=0.01)
                 wait(0.025)
-            click("ConfirmColor", 0.12)
-            if dialog_closed is not None:
-                dialog_closed()
-            dialog_open = False
+            # OK only selects the current color. The + button is what adds it
+            # to Paint's Custom colors slots. Keep the dialog open for the batch.
+            if color_ready is not None:
+                controls.update(color_ready(rgb))
+            if cancelled():
+                raise InterruptedError("Picture custom palette cancelled.")
+            click("AddCustomColor", 0.25)
+            wait(0.50)
+            if cancelled():
+                raise InterruptedError("Picture custom palette cancelled.")
             completed += 1
             if progress is not None:
                 progress(index, len(values), rgb)
+        click("ConfirmColor", 0.12)
+        if dialog_closed is not None:
+            dialog_closed()
+        dialog_open = False
     finally:
         if dialog_open:
             try:
@@ -344,7 +359,7 @@ def _resolve_max_colors(app) -> int:
     from DynamicColors import resolve_exact_color_limit
     setting = getattr(getattr(app, "exact_color_limit", None), "get", lambda: "Auto")()
     quality = getattr(getattr(app, "draw_quality", None), "get", lambda: "High likeness")()
-    return max(1, min(32, int(resolve_exact_color_limit(setting, draw_quality=quality, preview=False))))
+    return max(1, min(24, int(resolve_exact_color_limit(setting, draw_quality=quality, preview=False))))
 
 
 def _resolve_target(app, cancelled=lambda: False):
@@ -435,10 +450,10 @@ def start_picture_custom_palette(app) -> bool:
         )
         if id(getattr(app, "original", None)) != source_id:
             raise InterruptedError("Source image changed while the picture palette was being prepared.")
-        custom = tuple(palette.custom_colors)
+        custom = tuple(palette.colors)
         if not custom:
             app.picture_custom_palette_state = dict(palette.as_dict(), image_id=source_id, prepared_count=0)
-            app.events.put(("status", f"Picture palette saved: {len(palette.colors)} colors are already covered by the calibrated Paint palette; no custom RGB entries were needed."))
+            app.events.put(("status", f"Picture palette saved: {len(palette.colors)} colors found; no entries were available to save."))
             return
         from WindowsMouse import WindowsMouse
         mouse = WindowsMouse()
@@ -449,18 +464,32 @@ def start_picture_custom_palette(app) -> bool:
         def dialog_ready():
             # A fixed 160 ms delay is not proof that XAML has opened its dialog.
             # Resolve fresh fields before allowing Ctrl+A or numeric input.
-            from PaintPreparation import automation, rgb_controls
+            from PaintPreparation import automation, rgb_controls, find_add_custom_color, center
             deadline = time.monotonic() + 8.0
             while True:
                 if app.stop.is_set():
                     raise InterruptedError("Picture custom palette cancelled.")
                 nodes = automation(handle, cancelled=app.stop.is_set)
                 try:
-                    return rgb_controls(nodes)
+                    fields = rgb_controls(nodes)
+                    fields["AddCustomColor"] = center(find_add_custom_color(nodes))
+                    return fields
                 except ValueError:
                     if time.monotonic() >= deadline:
                         raise TimeoutError("Paint RGB dialog is not ready. No RGB input was sent; keep Edit colors in RGB mode and retry.")
                 app.stop.wait(.20)
+
+        def color_ready(rgb):
+            from PaintPreparation import automation, rgb_controls, find_add_custom_color, center
+            nodes = automation(handle, cancelled=app.stop.is_set)
+            fields = rgb_controls(nodes)
+            for key, expected in zip(("RedField", "GreenField", "BlueField"), rgb):
+                matches = [n for n in nodes if str(n.get("kind", "")).endswith("Edit")
+                           and center(n) == fields[key]]
+                if len(matches) != 1 or str(matches[0].get("value", "")) != str(expected):
+                    raise ValueError("Paint did not accept the requested RGB values; this color was not added.")
+            fields["AddCustomColor"] = center(find_add_custom_color(nodes))
+            return fields
 
         def dialog_closed():
             # Foreground ownership alone does not prove the modal has closed.
@@ -477,7 +506,7 @@ def start_picture_custom_palette(app) -> bool:
         completed = apply_custom_rgb_sequence(
             mouse, keyboard_backend, controls, custom,
             cancelled=app.stop.is_set, wait=app.stop.wait, progress=progress,
-            dialog_ready=dialog_ready, dialog_closed=dialog_closed,
+            dialog_ready=dialog_ready, dialog_closed=dialog_closed, color_ready=color_ready,
         )
         # Hard postcondition for the preparation action: never leave Edit colors
         # over the document when control returns to Image Draw Bot.
@@ -505,7 +534,7 @@ def start_picture_custom_palette(app) -> bool:
             pass
         app.events.put((
             "status",
-            f"Picture custom palette ready: {completed} custom RGB colors entered in Paint and {len(palette.palette_colors)} standard palette colors reused. The picture palette is saved for this image/calibration.",
+            f"Picture custom palette ready: {completed} custom RGB colors added with + to Paint Custom colors. The picture palette is saved for this image/calibration.",
         ))
 
     app.status.set(f"Building picture custom palette: analyzing image and preparing up to {max_colors} colors…")

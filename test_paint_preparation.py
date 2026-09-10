@@ -37,6 +37,16 @@ class PaintPreparationTests(unittest.TestCase):
         self.assertEqual(actions,['Cancel'])
         self.assertFalse(state['open'])
 
+    def test_add_custom_color_resolves_named_and_scoped_plus(self):
+        from PaintPreparation import find_add_custom_color
+        for name in ('Add to custom colors','Lägg till anpassad färg','+'):
+            add=node(name,rect=(280,220,310,250))
+            self.assertEqual(find_add_custom_color(dialog()+[add]),add)
+        with self.assertRaises(ValueError):
+            find_add_custom_color(dialog()+[node('+',rect=(10,10,30,30))])
+        with self.assertRaises(ValueError):
+            find_add_custom_color(dialog())
+
     def test_rgb_swedish_and_english_label_geometry(self):
         for language in ('sv','en'):
             self.assertEqual(rgb_controls(dialog(language))['BlueField'],(160,195))

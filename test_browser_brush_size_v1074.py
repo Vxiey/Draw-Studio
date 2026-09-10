@@ -8,7 +8,7 @@ from Version import APP_VERSION, FILE_VERSION
 
 class AutomaticBrushSizeV1074Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.144-rc6')
+        self.assertEqual(APP_VERSION,'1.0.144-rc7')
         self.assertEqual(FILE_VERSION,'1.0.144')
 
     def _gartic_image(self):

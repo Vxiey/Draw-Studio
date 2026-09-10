@@ -212,6 +212,29 @@ def rgb_controls(nodes):
     return result
 
 
+def find_add_custom_color(nodes):
+    """Resolve Paint's save-to-custom-palette button, never the dialog's OK."""
+    controls=rgb_controls(nodes)
+    names=('add to custom colors','add to custom colours','add custom color',
+           'add custom colour','add color','add colour',
+           'lägg till i anpassade färger','lägg till anpassad färg',
+           'lägg till färg','lägg till i egna färger')
+    hits=[n for n in nodes if str(n.get('kind','')).endswith('Button')
+          and _normalized_name(n) in names]
+    if len(hits)==1:return hits[0]
+    if len(hits)>1:raise ValueError('Paint Add custom color button is ambiguous.')
+    # Some XAML versions expose only the + glyph. Restrict it to the custom
+    # palette area below the RGB fields and above the dialog confirmation row.
+    red_x,_=controls['RedField'];_,blue_y=controls['BlueField']
+    _,ok_y=controls['ConfirmColor']
+    hits=[n for n in nodes if str(n.get('kind','')).endswith('Button')
+          and _normalized_name(n) in ('+','plus','add','lägg till')
+          and center(n)[0]>=red_x and blue_y<center(n)[1]<ok_y]
+    if len(hits)!=1:
+        raise ValueError('Paint + / Add to custom colors could not be identified. No picture colors were saved.')
+    return hits[0]
+
+
 def edit_colors_dialog_open(nodes):
     """Return True only when Paint's numeric Edit colors dialog is still exposed."""
     try:
