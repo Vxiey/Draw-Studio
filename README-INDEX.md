@@ -8,6 +8,7 @@
 - [In-app updates](docs/IN-APP-UPDATES.md)
 - [Windows installer, portable ZIP and source layout](docs/RELEASE-STRUCTURE.md)
 - [Version history](VERSION-HISTORY.md)
+- [GitHub SEO checklist](docs/GITHUB-SEO-CHECKLIST.md)
 - [Release naming policy](docs/RELEASE-NAMING.md)
 
 ## Rendering and previous changes
@@ -17,11 +18,12 @@
 - [Engine integration validation](docs/ENGINE-VALIDATION-v1.0.132-rc1.md)
 - [Named color intelligence](COLOR-ENGINE-NAMED-COLOR-INTELLIGENCE.md)
 
-## Development
+## Public discovery and publishing
 
+- [GitHub SEO checklist](docs/GITHUB-SEO-CHECKLIST.md)
 - [Release publishing](docs/PUBLISHING.md)
 - [Release checklist](RELEASE-CHECKLIST.md)
 - [Optional code-signing preparation](docs/WINDOWS-CODE-SIGNING.md) — not activated; published rc3 is unsigned.
 
 Older version documents describe the behavior at the time they were written.
-For current setup and update instructions, use the README and guides above.
+For current setup, download, update, SEO and publishing instructions, use the README and guides above.
