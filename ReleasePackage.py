@@ -62,11 +62,6 @@ OUTPUT_DIR_NAMES = {"build", "dist", "release"}
 NON_FATAL_EXCLUDED_DIR_NAMES = set(EXCLUDED_DIR_NAMES)
 
 EXCLUDED_PREFIXES = (
-    "DrawStudio-Safety-",
-    "DrawStudio-crash",
-    "DrawStudio-session",
-    "DrawStudio-target-probe",
-    "DrawStudio-mouse-probe",
     "ImageDrawBot-Safety-",
     "ImageDrawBot-crash",
     "ImageDrawBot-session",
@@ -144,7 +139,7 @@ def is_forbidden_path(relative_path: str | PurePosixPath) -> bool:
     if suffix in EXCLUDED_FILE_SUFFIXES:
         return True
     # Generated release/source archives should never be re-bundled into another release.
-    if name.startswith(("Image-Draw-Bot-", "ImageDrawBot-", "Draw-Studio-", "DrawStudio-")) and suffix in {".zip", ".exe"}:
+    if name.startswith(("Image-Draw-Bot-", "ImageDrawBot-")) and suffix in {".zip", ".exe"}:
         return True
     # One-shot integration/packaging helpers are repository maintenance state,
     # never source-release contents.
@@ -161,7 +156,7 @@ def is_nonfatal_excluded_path(relative_path: str | PurePosixPath) -> bool:
     suffix=PurePosixPath(name).suffix.lower()
     if any(part in NON_FATAL_EXCLUDED_DIR_NAMES for part in parts):
         return True
-    if name.startswith(("Image-Draw-Bot-", "ImageDrawBot-", "Draw-Studio-", "DrawStudio-")) and suffix in {'.zip','.exe'}:
+    if name.startswith(("Image-Draw-Bot-", "ImageDrawBot-")) and suffix in {'.zip','.exe'}:
         return True
     if name.lower().endswith('_once.py'):
         return True
@@ -218,7 +213,7 @@ def validate_release_tree(root: Path, *, allow_output_dirs: bool = False) -> Rel
                 forbidden.append(rel)
     warnings: list[str] = []
     if not (root / "golden-regression" / "manifest.json").is_file():
-        warnings.append("Golden regression manifest is missing; Step 17 tests cannot be audited from the release tree.")
+        warnings.append("Golden regression manifest is missing; v1.0.141 tests cannot be audited from the release tree.")
     if not (root / "docs" / "PUBLISHING.md").is_file():
         warnings.append("docs/PUBLISHING.md is missing; GitHub publishing instructions are incomplete.")
     return ReleaseTreeReport(
@@ -276,7 +271,7 @@ def write_release_manifest(root: Path, destination: Path, artifacts: Sequence[Pa
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate or package a Image Draw Bot source release.")
+    parser = argparse.ArgumentParser(description="Validate or package an Image Draw Bot source release.")
     parser.add_argument("--root", default=str(Path(__file__).resolve().parent))
     parser.add_argument("--check", action="store_true", help="Validate the release tree and print JSON.")
     parser.add_argument("--source-zip", default="", help="Create a clean source ZIP at this path.")
