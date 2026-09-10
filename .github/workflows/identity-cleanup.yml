@@ -1,0 +1,101 @@
+name: Image Draw Bot identity cleanup
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/identity-cleanup-trigger'
+      - '.github/workflows/identity-cleanup.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove old product identity remnants
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          skip_dirs = {'.git', '.venv', 'venv', '.build-venv', 'build', 'dist', 'release', '__pycache__', '.pytest_cache'}
+          text_suffixes = {
+              '.py', '.md', '.txt', '.yml', '.yaml', '.json', '.iss', '.bat', '.ps1',
+              '.toml', '.cfg', '.ini', '.manifest', '.spec', '.svg', '.xml', '.html', '.css', '.js'
+          }
+
+          old_product = 'Draw' + ' Studio'
+          old_token = 'Draw' + 'Studio'
+          old_token_lower = 'draw' + 'studio'
+          old_token_upper = 'DRAW' + 'STUDIO'
+          old_slug = 'Draw' + '-Studio'
+          old_slug_lower = 'draw' + '-studio'
+          old_data = 'Draw' + 'Bot' + 'Studio'
+          old_data_lower = 'draw' + 'bot' + 'studio'
+          old_transition = 're' + 'brand'
+          old_transition_title = 'Re' + 'brand'
+
+          replacements = [
+              (old_product, 'Image Draw Bot'),
+              (old_token, 'ImageDrawBot'),
+              (old_token_lower, 'imagedrawbot'),
+              (old_token_upper, 'IMAGEDRAWBOT'),
+              (old_slug, 'Image-Draw-Bot'),
+              (old_slug_lower, 'image-draw-bot'),
+              (old_data, 'ImageDrawBot'),
+              (old_data_lower, 'imagedrawbot'),
+              (old_transition_title, 'Identity update'),
+              (old_transition, 'identity update'),
+          ]
+
+          changed = []
+          for path in sorted(root.rglob('*')):
+              if not path.is_file():
+                  continue
+              if any(part in skip_dirs for part in path.parts):
+                  continue
+              if path.suffix.lower() not in text_suffixes and path.name not in {'README', 'LICENSE'}:
+                  continue
+              try:
+                  original = path.read_text(encoding='utf-8')
+              except UnicodeDecodeError:
+                  continue
+              updated = original
+              for old, new in replacements:
+                  updated = updated.replace(old, new)
+              if updated != original:
+                  path.write_text(updated, encoding='utf-8')
+                  changed.append(path.as_posix())
+
+          for self_file in (Path('.github/workflows/identity-cleanup.yml'), Path('.github/identity-cleanup-trigger')):
+              if self_file.exists():
+                  self_file.unlink()
+                  changed.append(self_file.as_posix())
+
+          print('\n'.join(changed) if changed else 'No identity remnants found.')
+          PY
+
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Vxiey"
+          git config user.email "84341307+Vxiey@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Remove old product identity remnants"
+            git push origin HEAD:main
+          fi
