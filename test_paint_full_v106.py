@@ -45,6 +45,38 @@ class PaintFullTests(unittest.TestCase):
         self.assertLess(r['canvas_box'][2],im.width)
         self.assertLess(r['canvas_box'][3],im.height)
 
+    def test_compact_visible_canvas_is_accepted(self):
+        im=self.screenshot()
+        d=ImageDraw.Draw(im)
+        d.rectangle((75,225,1844,995),fill=(241,243,245))
+        d.rectangle((700,280,1120,720),fill='white')
+        r=detect_setup(im)
+        self.assertEqual(r['canvas_visibility'],'viewport-compact')
+        l,t,rr,b=r['canvas_box']
+        self.assertGreater(l,700)
+        self.assertGreater(t,280)
+        self.assertLess(rr,1120)
+        self.assertLess(b,720)
+        self.assertGreater(rr-l,350)
+        self.assertGreater(b-t,350)
+        self.assertGreaterEqual(r['confidence'],.85)
+
+    def test_edge_resize_handle_does_not_split_blank_canvas(self):
+        im=self.screenshot()
+        d=ImageDraw.Draw(im)
+        d.rectangle((930,988,990,995),fill=(190,190,190))
+        r=detect_setup(im)
+        self.assertGreater(r['canvas_box'][2]-r['canvas_box'][0],1600)
+        self.assertGreater(r['canvas_box'][3]-r['canvas_box'][1],700)
+
+    def test_truly_tiny_visible_area_is_rejected(self):
+        im=self.screenshot()
+        d=ImageDraw.Draw(im)
+        d.rectangle((75,225,1844,995),fill=(241,243,245))
+        d.rectangle((850,400,930,470),fill='white')
+        with self.assertRaisesRegex(ValueError,'too small'):
+            detect_setup(im)
+
     def test_scaled_reference(self):
         im=self.screenshot()
         for scale in (.8,1.25,1.5,2):
