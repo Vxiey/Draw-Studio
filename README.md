@@ -6,14 +6,12 @@ Image Draw Bot is a Windows desktop app that recreates images with mouse paths,
 color matching, outlines and fills. It uses local image processing, not AI image
 generation. Each target profile keeps its own calibration and drawing settings.
 
-> Formerly **Draw Studio**. Existing settings and calibrations are migrated automatically.
-
 ## Download — v1.0.144-rc1
 
 | Download | How to use it |
 | --- | --- |
 | [Windows installer — recommended](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc1/ImageDrawBot-1.0.144-rc1-Windows-x64-Setup.exe) | Run Setup, then open Image Draw Bot. No separate Python installation needed. |
-| [Portable Windows ZIP](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc1/ImageDrawBot-1.0.144-rc1-Windows-x64.zip) | Extract the entire ZIP, open the DrawStudio folder and run ImageDrawBot.exe. Keep its supporting files together. |
+| [Portable Windows ZIP](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc1/ImageDrawBot-1.0.144-rc1-Windows-x64.zip) | Extract the entire ZIP, open the ImageDrawBot folder and run ImageDrawBot.exe. Keep its supporting files together. |
 | [SHA-256 checksums](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc1/ImageDrawBot-1.0.144-rc1-SHA256.txt) | Verify the downloaded files. |
 
 [All releases](https://github.com/Vxiey/Image-Draw-Bot/releases) ·
@@ -88,7 +86,7 @@ Installed builds keep their installation folder. Portable/source builds use
 the normal installer destination. Updates use complete installers; they do not
 apply individual source-code patches. There are no background update checks.
 
-Install rc3 once using the download above if you have an older build. RC builds
+Install v1.0.144-rc1 once using the download above if you have an older build. RC builds
 accept newer RC/stable releases; stable builds do not automatically switch to
 prereleases. [Update details](docs/IN-APP-UPDATES.md)
 
@@ -120,7 +118,7 @@ For example, a vertical block went from 280 paths to 3. Actual drawing speed in 
   Actions artifacts. The current version must be older than the release.
 - **Download verification fails:** retry Check updates. A failed download does
   not replace the installed app.
-- **Windows blocks the app:** rc3 is unsigned; Smart App Control compatibility
+- **Windows blocks the app:** v1.0.144-rc1 is unsigned; Smart App Control compatibility
   is not established. The project does not require disabling Windows protection.
 
 ## Run from source
@@ -153,7 +151,7 @@ python build_release.py --installer
 
 You can also use `Build-Release.bat` for the local Windows build.
 
-The rc3 Windows workflow passed tests, packaging and a silent install/self-test/
+The v1.0.144-rc1 Windows workflow passed tests, packaging and a silent install/self-test/
 uninstall round trip. Real drawing speed, GPU behavior and compatibility with
 every target layout require separate live testing.
 
