@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Remove old product identity remnants
+      - name: Remove old product identity remnants outside workflows
         shell: bash
         run: |
           set -euo pipefail
@@ -59,11 +59,17 @@ jobs:
               (old_transition, 'identity update'),
           ]
 
+          rename_targets = {
+              'test_' + old_transition + '_v10144.py': 'test_image_draw_bot_identity_v10144.py',
+          }
+
           changed = []
           for path in sorted(root.rglob('*')):
               if not path.is_file():
                   continue
               if any(part in skip_dirs for part in path.parts):
+                  continue
+              if len(path.parts) >= 3 and path.parts[0] == '.github' and path.parts[1] == 'workflows':
                   continue
               if path.suffix.lower() not in text_suffixes and path.name not in {'README', 'LICENSE'}:
                   continue
@@ -78,10 +84,17 @@ jobs:
                   path.write_text(updated, encoding='utf-8')
                   changed.append(path.as_posix())
 
-          for self_file in (Path('.github/workflows/identity-cleanup.yml'), Path('.github/identity-cleanup-trigger')):
-              if self_file.exists():
-                  self_file.unlink()
-                  changed.append(self_file.as_posix())
+          for old_name, new_name in rename_targets.items():
+              old_path = Path(old_name)
+              new_path = Path(new_name)
+              if old_path.exists() and not new_path.exists():
+                  old_path.rename(new_path)
+                  changed.append(f'{old_name} -> {new_name}')
+
+          trigger = Path('.github/identity-cleanup-trigger')
+          if trigger.exists():
+              trigger.unlink()
+              changed.append(trigger.as_posix())
 
           print('\n'.join(changed) if changed else 'No identity remnants found.')
           PY
