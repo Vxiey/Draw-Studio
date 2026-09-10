@@ -59,7 +59,7 @@ def find_iscc() -> Path | None:
 
 def _clean_current_release_outputs() -> None:
     RELEASE.mkdir(exist_ok=True)
-    for pattern in (f"ImageDrawBot-{APP_VERSION}-*", f"DrawStudio-{APP_VERSION}-*"):
+    for pattern in (f"ImageDrawBot-{APP_VERSION}-*",):
         for path in RELEASE.glob(pattern):
             if path.is_file():
                 path.unlink()
@@ -147,11 +147,6 @@ def main() -> int:
         digest=sha256(setup)
         hash_rows.append(f"{digest}  {setup.name}")
         artifacts.append({"name":setup.name,"type":"inno-setup","sha256":digest,"bytes":setup.stat().st_size})
-        legacy_setup = RELEASE / f"DrawStudio-{APP_VERSION}-Windows-x64-Setup.exe"
-        shutil.copy2(setup, legacy_setup)
-        legacy_digest=sha256(legacy_setup)
-        hash_rows.append(f"{legacy_digest}  {legacy_setup.name}")
-        artifacts.append({"name":legacy_setup.name,"type":"legacy-updater-bridge","sha256":legacy_digest,"bytes":legacy_setup.stat().st_size})
 
     checksum = RELEASE / f"ImageDrawBot-{APP_VERSION}-SHA256.txt"
     checksum.write_text("\n".join(hash_rows) + "\n", encoding="utf-8")
