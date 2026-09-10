@@ -1,0 +1,65 @@
+name: Prepare v1.0.143-rc3 metadata
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-v10143rc3.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Synchronize rc3 metadata except Version.py
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          OLD='1.0.143-rc2';NEW='1.0.143-rc3';changed=[]
+          def write(path,text):
+              path=Path(path);old=path.read_text(encoding='utf-8') if path.exists() else None
+              if old!=text:
+                  path.parent.mkdir(parents=True,exist_ok=True);path.write_text(text,encoding='utf-8');changed.append(path.as_posix())
+
+          # Change only current-version assertions. Synthetic updater fixtures
+          # intentionally containing other versions are left untouched.
+          for path in Path('.').rglob('test_*.py'):
+              text=path.read_text(encoding='utf-8');lines=[]
+              for line in text.splitlines(keepends=True):
+                  if 'APP_VERSION' in line and OLD in line:line=line.replace(OLD,NEW)
+                  lines.append(line)
+              write(path,''.join(lines))
+
+          path=Path('installer/DrawStudio.iss');text=path.read_text(encoding='utf-8')
+          write(path,text.replace('#define MyAppVersion "1.0.143-rc2"','#define MyAppVersion "1.0.143-rc3"'))
+
+          for name in ('README.md','README-INDEX.md','docs/IN-APP-UPDATES.md'):
+              path=Path(name)
+              if path.exists():write(path,path.read_text(encoding='utf-8').replace(OLD,NEW))
+
+          section='''# v1.0.143-rc3\n\n- Fix false `Paint canvas border is ambiguous or covered` failures in modern Microsoft Paint.\n- Treat an explicit user-selected Paint drawing area as the authoritative CanvasGuard boundary during Prepare Paint & draw.\n- Reuse that selection only for the same Paint window and same client size; pure window moves are rebased, while resize/target changes fall back to automatic detection.\n- Keep palette, Pencil/Fill/Eraser and Edit colors RGB calibration automatic even when visual canvas-border detection is unreliable.\n- Preserve the full auto-detected canvas envelope around interior obstructions so a covered canvas cannot be silently reduced to a smaller white sub-area.\n- Add a conservative inward safety margin for auto-detected visible Paint borders whose pale shadow/resize chrome is visually indistinguishable from pure white canvas.\n- Add regressions for manual canvas authority, moved-window rebasing, resize rejection, white border halos, compact/clipped canvases and covered-canvas rejection.\n\n'''
+          for name in ('VERSION-HISTORY.md','docs/VERSION-HISTORY.md'):
+              path=Path(name)
+              if path.exists():
+                  old=path.read_text(encoding='utf-8')
+                  if not old.startswith('# v1.0.143-rc3'):write(path,section+old)
+
+          notes='''# Draw Studio 1.0.143-rc3\n\n## Microsoft Paint — selected canvas authority\n\n- Fixes the `Paint canvas border is ambiguous or covered. Clear Paint or select the drawing area manually.` failure shown after a drawing area had already been selected.\n- **Prepare Paint & draw now honors the existing selected Paint canvas** instead of forcing a second visual border guess.\n- The selected canvas is reused only when it still belongs to the same Paint window and the client size is unchanged. If Paint only moved, the selection is safely rebased. If Paint resized or the target changed, Draw Studio falls back to fresh detection.\n- Palette/tool/RGB calibration still runs normally, including Edit colors and picture custom palette support.\n\n## Automatic border safety\n\n- Automatic detection keeps the full document envelope so a black/covered region inside the canvas cannot make Draw Studio choose a smaller white sub-area.\n- Auto-detected visible borders use a larger inward safety margin to absorb Paint's pale shadow and resize chrome.\n- Compact and clipped canvases remain supported. Truly tiny, covered, invalid or out-of-window areas remain blocked.\n\n## Verification\n\n- Full Windows/Linux CI and DrawBot Windows self-test are required before publication.\n- The Windows release workflow additionally validates package integrity and a silent install → self-test → uninstall round trip.\n'''
+          write(Path('RELEASE-NOTES-v1.0.143-rc3.md'),notes)
+
+          print(f'Changed {len(changed)} files')
+          for item in changed:print(item)
+          if len(changed)<8:raise SystemExit('RC metadata sync changed too few files; refusing to commit')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- ':!.github/workflows/sync-v10143rc3.yml'
+          git diff --cached --check
+          git commit -m 'Sync v1.0.143-rc3 release metadata'
+          git push origin HEAD:main
