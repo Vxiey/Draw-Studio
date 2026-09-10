@@ -13,25 +13,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Delete merged RC branches
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const refs = [
-              'heads/v1.0.143-rc4-paint-dialog-closure',
-              'heads/v1.0.143-rc4-release'
-            ];
-            for (const ref of refs) {
-              try {
-                await github.rest.git.deleteRef({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  ref
-                });
-                core.info(`Deleted ${ref}`);
-              } catch (error) {
-                if (error.status === 422 || error.status === 404) {
-                  core.info(`${ref} already absent`);
-                  continue;
-                }
-                throw error;
-              }
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for branch in \
+            v1.0.143-rc4-paint-dialog-closure \
+            v1.0.143-rc4-release
+          do
+            code="$(curl -sS -o /tmp/delete-ref.json -w '%{http_code}' \
+              -X DELETE \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/${REPO}/git/refs/heads/${branch}")"
+            case "$code" in
+              204) echo "Deleted ${branch}" ;;
+              404|422) echo "${branch} already absent" ;;
+              *) cat /tmp/delete-ref.json; echo "Failed deleting ${branch}: HTTP ${code}" >&2; exit 1 ;;
+            esac
+          done
