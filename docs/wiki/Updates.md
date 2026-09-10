@@ -1,6 +1,6 @@
 # Updates and release history
 
-Current published release: [v1.0.144-rc6](https://github.com/Vxiey/Image-Draw-Bot/releases/tag/v1.0.144-rc6). It adds RGB-dialog readiness checks to Custom color palette for picture and avoids unrelated Pencil/size calibration. It includes rc5 fixes for blocking color-dialog activation and recovery after interrupted RGB calibration. It also includes the new Get started guide and clickable setting help. Recent rc2/rc3 releases introduced unified icons and explicit Windows taskbar identity.
+Current published release: [v1.0.144-rc7](https://github.com/Vxiey/Image-Draw-Bot/releases/tag/v1.0.144-rc7). Custom color palette for picture now saves colors with Paint’s + button, waits at least 750 ms after each addition and keeps Edit colors open for the batch. It includes rc5/rc6 calibration fixes and the earlier Get started guide, setting help and Windows icon updates.
 
 ## Update the installed app
 

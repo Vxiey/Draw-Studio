@@ -20,6 +20,6 @@ Named colors are diagnostic/input helpers. They do **not** automatically add ext
 
 Check the target profile: **Other drawing app** with **palette Unavailable / exact Unavailable** is not a calibrated Microsoft Paint preview. Choose Microsoft Paint and calibrate its RGB controls. For image-specific colors, use **Adaptive exact (recommended)** or **Exact custom + palette fallback**, with Faithful or Exact fidelity, then rebuild the preview. More colors can preserve more gradients but increase drawing time.
 
-**Custom color palette for picture** analyzes image colors and prepares Paint RGB input. The drawing planner still builds its own palette using the active workflow and color limit; the button does not force every source shade into the preview. Calibration alone does not undo quantization.
+**Custom color palette for picture** analyzes image colors and, from rc7, saves up to 24 of them into Paint Custom colors using + with a pause between additions. The drawing planner still builds its own palette using the active workflow and color limit; the button does not force every source shade into the preview. Calibration alone does not undo quantization.
 
 The diagnostic **luminance +15%** measures brightness drift in the mapped colors; it is not a brightness adjustment setting. A pair such as **LightGray→White** describes a detected color substitution. Compare the rebuilt Quantized target and Simulated final before a full drawing. Neither is a guarantee of the actual Paint result.

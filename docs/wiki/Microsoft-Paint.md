@@ -8,7 +8,11 @@ Keep Paint and Image Draw Bot at the same Windows privilege level, normally with
 
 ## Custom color palette for picture
 
-With an image loaded, this action analyzes important colors, prepares Edit colors R/G/B controls when needed and enters image-specific custom colors. It operates Paint controls: leave the mouse alone. From rc6, this action calibrates only RGB controls, waits for the numeric fields before typing and verifies dialog closure between colors. RGB calibration is saved separately from canvas detection. Preloading colors does not guarantee every later mark is correct; runtime checks still apply.
+With an image loaded, this action selects up to 24 representative image colors and calibrates Edit colors R/G/B controls when needed. From rc7, it keeps the dialog open, enters each RGB value, checks that Paint accepted it, and presses **+ / Add to custom colors**. It waits at least **750 ms after each addition**, then proceeds to the next color. It presses OK once at the end. OK alone only selects the current color; it is not the save-to-custom-palette action.
+
+Leave the mouse alone during preparation. If the Add button or RGB fields cannot be identified, preparation stops. Inspect the slots under **Custom colors / Anpassade färger** after the first run on your Paint version. This action does not clear existing custom colors, and should not be treated as a guarantee that Paint preserves them across restarts.
+
+RGB calibration is saved separately from canvas detection. Saving the picture palette does not force every original image shade into the drawing: the drawing workflow and color limit still determine the plan. See [Color Engine](Color-Engine).
 
 ## When setup fails
 

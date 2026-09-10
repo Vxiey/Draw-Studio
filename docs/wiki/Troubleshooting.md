@@ -18,7 +18,7 @@
 
 ## Paint closes or stops responding during picture palette preparation
 
-Use v1.0.144-rc6 or later. This release waits for RGB fields before typing and verifies that Edit colors closes before the next color. It also avoids Pencil/size preparation for the picture-palette button. These fixes address timing problems; they do not prove the cause of every Paint crash.
+Use v1.0.144-rc7 or later. This release waits for RGB fields before typing and adds each color with +, waits at least 750 ms and closes Edit colors once after the batch. It also avoids Pencil/size preparation for the picture-palette button. These fixes address timing problems; they do not prove the cause of every Paint crash.
 
 Distinguish **Paint controls did not respond** (Image Draw Bot stopped waiting for a control operation) from Paint itself disappearing or Windows reporting an application crash. If it persists, include both Image Draw Bot and Microsoft Paint versions and state whether Edit colors appeared or any RGB values were entered. A Windows application-error event for mspaint/PaintApp can identify a process crash more precisely.
 
