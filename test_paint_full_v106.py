@@ -69,6 +69,28 @@ class PaintFullTests(unittest.TestCase):
         self.assertGreater(r['canvas_box'][2]-r['canvas_box'][0],1600)
         self.assertGreater(r['canvas_box'][3]-r['canvas_box'][1],700)
 
+    def test_light_border_segment_does_not_false_ambiguous(self):
+        im=self.screenshot()
+        d=ImageDraw.Draw(im)
+        # Simulate modern Paint's pale shadow/resize chrome just outside one
+        # visible document edge.  It should not invalidate an otherwise blank
+        # verified canvas.
+        d.rectangle((69,300,74,500),fill='white')
+        r=detect_setup(im)
+        self.assertEqual(r['canvas_visibility'],'full')
+        self.assertGreater(r['canvas_box'][2]-r['canvas_box'][0],1600)
+
+    def test_mostly_white_outside_border_is_still_rejected(self):
+        im=self.screenshot()
+        d=ImageDraw.Draw(im)
+        # A nearly-white outside band with only sparse workspace evidence is
+        # genuinely ambiguous; do not accept it as a safe document boundary.
+        d.rectangle((69,225,74,995),fill='white')
+        for y in range(225,996,50):
+            d.rectangle((69,y,74,min(995,y+1)),fill=(241,243,245))
+        with self.assertRaisesRegex(ValueError,'border is ambiguous'):
+            detect_setup(im)
+
     def test_truly_tiny_visible_area_is_rejected(self):
         im=self.screenshot()
         d=ImageDraw.Draw(im)
