@@ -23,3 +23,9 @@ Check the target profile: **Other drawing app** with **palette Unavailable / exa
 **Custom color palette for picture** analyzes image colors and, from rc7, saves up to 24 of them into Paint Custom colors using + with a pause between additions. From rc8, the completed picture palette is shared by Pixel Accurate, normal color-run planning, the preview and runtime selectors for that same loaded image. Earlier releases could keep showing an old preview or bypass this palette in Pixel Accurate. Run the picture-palette button again after updating, then rebuild the preview. A photograph is still reduced to a limited number of representative colors. Calibration alone does not undo quantization.
 
 The diagnostic **luminance +15%** measures brightness drift in the mapped colors; it is not a brightness adjustment setting. A pair such as **LightGray→White** describes a detected color substitution. Compare the rebuilt Quantized target and Simulated final before a full drawing. Neither is a guarantee of the actual Paint result.
+
+## Finer picture tones in rc9
+
+The image palette now receives a bounded OKLab refinement pass. It uses up to 16,384 source samples and eight iterations, fills unused palette slots when useful, and preserves tiny color accents. A refinement step must lower squared sample error without worsening its 95th-percentile error. Image-palette matching uses nearest OKLab distance rather than the brightness preference used for coarse standard palettes. Preview and drawing still share the same ordered RGB palette.
+
+Rerun **Custom color palette for picture** after updating, then **Build preview**. The Paint preparation limit remains 24 colors; additional slots or faster input are not required. These changes improve the palette approximation, not the precision of the mouse or Paint brush itself.
