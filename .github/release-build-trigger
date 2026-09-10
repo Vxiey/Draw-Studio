@@ -1,3 +1,2 @@
-Image Draw Bot v1.0.144-rc1 Windows release
-Rebuild after identity, application signing policy and version regressions were fixed.
-Validated Windows CI source: 6124b6306c1564812349941fe37755458163a295
+Image Draw Bot v1.0.144-rc2 Windows release
+Validate unified app, dialog, executable and installer icons.

@@ -295,7 +295,8 @@ def main(argv=None):
         enable_dpi_awareness()
         from AppBranding import configure_root, set_windows_app_id
         set_windows_app_id()
-        root=configure_root(tk.Tk())
+        root=tk.Tk()
+        configure_root(root)
         CalibrationApp(root,path=Path(args.path),profile=str(args.profile))
         root.mainloop()
         return 0

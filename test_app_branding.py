@@ -35,8 +35,8 @@ class BrandingTests(unittest.TestCase):
             root.after(450,root.quit)
             root.mainloop()
             self.assertTrue(child._image_draw_bot_icon_set)
-            self.assertEqual(Path(root.iconbitmap()).name,'image-draw-bot-icon.ico')
-            self.assertEqual(Path(child.iconbitmap()).name,'image-draw-bot-icon.ico')
+            self.assertEqual(Path(root.tk.call('wm', 'iconbitmap', root._w)).name,'image-draw-bot-icon.ico')
+            self.assertEqual(Path(child.tk.call('wm', 'iconbitmap', child._w)).name,'image-draw-bot-icon.ico')
         finally:
             root.destroy()
 
