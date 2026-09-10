@@ -29,25 +29,24 @@ jobs:
           from pathlib import Path
           import re
 
-          clean_block = """# v1.0.144-rc1
-
-- Image Draw Bot — Automatic Image Drawing public release candidate.
-- GitHub repository, UI titles, Windows metadata, installer, EXE and release artifacts use the Image Draw Bot identity.
-- Frozen installs use `%LOCALAPPDATA%\\ImageDrawBot`.
-- Installer, updater and portable ZIP use `ImageDrawBot.exe` and `ImageDrawBot-...` release files.
-- Sketch/single-color Paint modes continue to bypass Edit colors.
-"""
+          clean_block = (
+              '# v1.0.144-rc1\n\n'
+              '- Image Draw Bot — Automatic Image Drawing public release candidate.\n'
+              '- GitHub repository, UI titles, Windows metadata, installer, EXE and release artifacts use the Image Draw Bot identity.\n'
+              '- Frozen installs use `%LOCALAPPDATA%\\ImageDrawBot`.\n'
+              '- Installer, updater and portable ZIP use `ImageDrawBot.exe` and `ImageDrawBot-...` release files.\n'
+              '- Sketch/single-color Paint modes continue to bypass Edit colors.\n'
+          )
 
           changed = []
           for name in ('VERSION-HISTORY.md', 'docs/VERSION-HISTORY.md'):
               path = Path(name)
-              if not path.exists():
-                  continue
-              text = path.read_text(encoding='utf-8')
-              updated = re.sub(r'^# v1\.0\.144-rc1\n\n.*?(?=\n# v1\.0\.143-rc4\n)', clean_block + '\n', text, count=1, flags=re.S)
-              if updated != text:
-                  path.write_text(updated, encoding='utf-8')
-                  changed.append(name)
+              if path.exists():
+                  text = path.read_text(encoding='utf-8')
+                  updated = re.sub(r'^# v1\.0\.144-rc1\n\n.*?(?=\n# v1\.0\.143-rc4\n)', clean_block + '\n', text, count=1, flags=re.S)
+                  if updated != text:
+                      path.write_text(updated, encoding='utf-8')
+                      changed.append(name)
 
           old_values = [
               'Draw' + ' Studio',
@@ -72,10 +71,9 @@ jobs:
               old_values[8]: 'Identity update',
           }
           suffixes = {'.py','.md','.txt','.json','.iss','.bat','.ps1','.toml','.cfg','.ini','.manifest','.spec','.svg','.xml','.html','.css','.js'}
+          skip_dirs = {'.git','.venv','venv','.build-venv','build','dist','release','__pycache__','.pytest_cache'}
           for path in sorted(Path('.').rglob('*')):
-              if not path.is_file():
-                  continue
-              if any(part in {'.git','.venv','venv','.build-venv','build','dist','release','__pycache__','.pytest_cache'} for part in path.parts):
+              if not path.is_file() or any(part in skip_dirs for part in path.parts):
                   continue
               if len(path.parts) >= 3 and path.parts[0] == '.github' and path.parts[1] == 'workflows':
                   continue
@@ -117,11 +115,10 @@ jobs:
               'Re' + 'brand',
           ]
           suffixes = {'.py','.md','.txt','.json','.iss','.bat','.ps1','.toml','.cfg','.ini','.manifest','.spec','.svg','.xml','.html','.css','.js'}
+          skip_dirs = {'.git','.venv','venv','.build-venv','build','dist','release','__pycache__','.pytest_cache'}
           hits = []
           for path in sorted(Path('.').rglob('*')):
-              if not path.is_file():
-                  continue
-              if any(part in {'.git','.venv','venv','.build-venv','build','dist','release','__pycache__','.pytest_cache'} for part in path.parts):
+              if not path.is_file() or any(part in skip_dirs for part in path.parts):
                   continue
               if len(path.parts) >= 3 and path.parts[0] == '.github' and path.parts[1] == 'workflows':
                   continue
