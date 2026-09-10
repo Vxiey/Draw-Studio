@@ -30,11 +30,6 @@ RestartIfNeededByRun=no
 CloseApplications=yes
 RestartApplications=no
 
-[InstallDelete]
-Type: files; Name: "{app}\DrawStudio.exe"
-Type: files; Name: "{autodesktop}\Draw Studio.lnk"
-Type: files; Name: "{group}\Draw Studio.lnk"
-
 [Files]
 Source: "..\dist\ImageDrawBot\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
@@ -66,5 +61,5 @@ end;
 
 function ShouldLaunchImageDrawBot(): Boolean;
 begin
-  Result := (not WizardSilent) or HasCommandLineParam('/RELAUNCHIMAGEDRAWBOT') or HasCommandLineParam('/RELAUNCHDRAWSTUDIO');
+  Result := (not WizardSilent) or HasCommandLineParam('/RELAUNCHIMAGEDRAWBOT');
 end;
