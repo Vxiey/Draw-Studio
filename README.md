@@ -24,19 +24,17 @@ Image Draw Bot is a source-available Windows desktop app for automatic image dra
 
 ## Download for Windows
 
-Source version **v1.0.144-rc4** adds a step-by-step Get started guide and setting help; its Windows build is being validated.
-
-Download **Image Draw Bot v1.0.144-rc3** for Windows 10/11 x64.
+Download **Image Draw Bot v1.0.144-rc4** for Windows 10/11 x64.
 The installer and portable ZIP include Python and use the Image Draw Bot name.
 
 | Download | How to use it |
 | --- | --- |
-| [Windows installer — recommended](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc3/ImageDrawBot-1.0.144-rc3-Windows-x64-Setup.exe) | Run Setup, then open Image Draw Bot. Python is included. |
-| [Portable Windows ZIP](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc3/ImageDrawBot-1.0.144-rc3-Windows-x64.zip) | Extract the entire ZIP and run ImageDrawBot/ImageDrawBot.exe. Keep its supporting files together. |
-| [SHA-256 checksums](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc3/ImageDrawBot-1.0.144-rc3-SHA256.txt) | Verify the downloaded files. |
+| [Windows installer — recommended](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc4/ImageDrawBot-1.0.144-rc4-Windows-x64-Setup.exe) | Run Setup, then open Image Draw Bot. Python is included. |
+| [Portable Windows ZIP](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc4/ImageDrawBot-1.0.144-rc4-Windows-x64.zip) | Extract the entire ZIP and run ImageDrawBot/ImageDrawBot.exe. Keep its supporting files together. |
+| [SHA-256 checksums](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc4/ImageDrawBot-1.0.144-rc4-SHA256.txt) | Verify the downloaded files. |
 
 [All releases](https://github.com/Vxiey/Image-Draw-Bot/releases) ·
-[Release notes](RELEASE-NOTES-v1.0.144-rc3.md) ·
+[Release notes](RELEASE-NOTES-v1.0.144-rc4.md) ·
 [Setup and troubleshooting](README-INDEX.md) · [Frequently asked questions](docs/FAQ.md)
 
 ## Core features
