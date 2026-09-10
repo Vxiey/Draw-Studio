@@ -26,9 +26,20 @@ class BrandingTests(unittest.TestCase):
         self.assertTrue(branding._already_destroyed_tcl_error(tk.TclError('application has been destroyed')))
         self.assertFalse(branding._already_destroyed_tcl_error(tk.TclError('bad window path name ".missing"')))
 
+    def test_destroy_guard_tolerates_minimal_non_tk_test_root(self):
+        from unittest.mock import patch
+        class FakeRoot:
+            pass
+        root = FakeRoot()
+        with patch.object(branding.sys, 'platform', 'win32'):
+            branding._install_destroy_guard(root)
+        self.assertFalse(hasattr(root, '_image_draw_bot_destroy_wrapped'))
+
     def test_destroy_wrapper_is_guarded_and_marks_teardown(self):
         source = (ROOT / 'AppBranding.py').read_text(encoding='utf-8')
         self.assertIn("getattr(root, '_image_draw_bot_destroying', False)", source)
+        self.assertIn("getattr(root, 'destroy', None)", source)
+        self.assertIn("if not callable(original_destroy)", source)
         self.assertIn("root._image_draw_bot_destroying = True", source)
         self.assertIn("root._image_draw_bot_destroyed = True", source)
         self.assertIn("except tk.TclError as error", source)
