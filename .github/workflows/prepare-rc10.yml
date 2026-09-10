@@ -1,0 +1,98 @@
+name: Prepare Image Draw Bot rc10 release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/prepare-rc10.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Synchronize rc10 release metadata
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          old = '1.0.144-rc9'
+          new = '1.0.144-rc10'
+          excluded = {
+              'RELEASE-NOTES-v1.0.144-rc9.md',
+              'VERSION-HISTORY.md',
+              'docs/VERSION-HISTORY.md',
+              '.github/workflows/prepare-rc10.yml',
+          }
+
+          matches = subprocess.check_output(['git', 'grep', '-Il', old], text=True).splitlines()
+          for name in matches:
+              if name in excluded:
+                  continue
+              path = Path(name)
+              text = path.read_text(encoding='utf-8')
+              path.write_text(text.replace(old, new), encoding='utf-8')
+
+          notes = '''# Image Draw Bot v1.0.144-rc10 — Compact UI and release update fix
+
+- Reduce the default sidebar density with progressive-disclosure sections while keeping the five-step workflow and all existing controls.
+- Keep target selection, image loading, one-click setup, core drawing preset and preview/draw actions visible first.
+- Move profile/ink extras, image automation, manual calibration, fine tuning, preview options and duplicate safety shortcuts behind clear expandable sections.
+- Keep Advanced and Developer controls available, but start the largest groups collapsed so the settings panel is easier to scan.
+- Preserve the existing Tk variables, callbacks, saved profile values and profile-scoped visibility; the compact layer only changes presentation.
+- Add regression coverage for compact UI structure, compatibility markers and profile-aware visibility.
+- Publish this as a new rc10 installer so rc9 installations can detect the update through the existing verified GitHub Releases updater.
+
+The updater security model is unchanged: automatic installation still requires a versioned GitHub Release, the expected installer filename, published SHA-256 digest and size checks before launch.
+'''
+          Path(f'RELEASE-NOTES-v{new}.md').write_text(notes, encoding='utf-8')
+
+          for name in ('VERSION-HISTORY.md', 'docs/VERSION-HISTORY.md'):
+              path = Path(name)
+              if not path.is_file():
+                  continue
+              text = path.read_text(encoding='utf-8')
+              if f'# Image Draw Bot v{new}' not in text:
+                  path.write_text(notes.rstrip() + '\n\n' + text.lstrip(), encoding='utf-8')
+
+          Path('.github/release-build-trigger').write_text(new + ' compact-ui-release\n', encoding='utf-8')
+
+          helper = Path('.github/workflows/prepare-rc10.yml')
+          if helper.exists():
+              helper.unlink()
+          PY
+
+      - name: Verify release metadata before commit
+        shell: bash
+        run: |
+          python - <<'PY'
+          from Version import APP_VERSION, FILE_VERSION, BUILD_CHANNEL
+          assert APP_VERSION == '1.0.144-rc10', APP_VERSION
+          assert FILE_VERSION == '1.0.144', FILE_VERSION
+          assert BUILD_CHANNEL == 'rc', BUILD_CHANNEL
+          PY
+          test -f RELEASE-NOTES-v1.0.144-rc10.md
+          grep -q '#define MyAppVersion "1.0.144-rc10"' installer/ImageDrawBot.iss
+          if git grep -n '1.0.144-rc9' -- 'test_*.py'; then
+            echo 'A current-version regression assertion still references rc9.' >&2
+            exit 1
+          fi
+
+      - name: Commit synchronized rc10 release
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Release 1.0.144-rc10 compact UI update'
+          git push origin HEAD:main
