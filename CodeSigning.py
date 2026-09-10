@@ -49,13 +49,20 @@ def sign_file(path,config):
     subprocess.run([config[0],'verify','/pa','/all','/tw',str(path)],check=True,timeout=90)
 
 
+def _is_primary_application_binary(path):
+    return path.name.lower() == 'imagedrawbot.exe'
+
+
 def sign_distribution(root,config):
     files=sorted(p for p in Path(root).rglob('*') if p.is_file() and p.suffix.lower() in ('.exe','.dll','.pyd'))
     if not files:raise SigningError('No native release binaries were found.')
     for path in files:
-        # Preserve valid upstream signatures; timestamp/sign unsigned native
-        # dependencies as part of the distributed application.
-        if not verify(path,config):sign_file(path,config)
+        # Always stamp the application EXE with the configured Image Draw Bot
+        # certificate. Preserve valid upstream signatures on bundled runtime
+        # dependencies, but sign unsigned DLL/PYD files so every native binary
+        # verifies before release publication.
+        if _is_primary_application_binary(path) or not verify(path,config):
+            sign_file(path,config)
     for path in files:
         if not verify(path,config):raise SigningError(f'Signature verification failed: {path.name}')
     return len(files)
