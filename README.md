@@ -37,6 +37,14 @@ The installer and portable ZIP include Python and use the Image Draw Bot name.
 [Release notes](RELEASE-NOTES-v1.0.144-rc4.md) ·
 [Setup and troubleshooting](README-INDEX.md) · [Frequently asked questions](docs/FAQ.md)
 
+## Guides and help
+
+- [First drawing](docs/GETTING-STARTED.md)
+- [Wiki: installation, target setup and troubleshooting](https://github.com/Vxiey/Image-Draw-Bot/wiki)
+- [Setting explanations and glossary](https://github.com/Vxiey/Image-Draw-Bot/wiki/Settings-and-Tooltips)
+
+Inside the app, open **Get started** for the six-section guide or click **?** beside a setting. **Setup wizard** checks the selected profile requirements.
+
 ## Core features
 
 - Automatic drawing bot for Windows 10/11 x64.

@@ -1,0 +1,42 @@
+name: Publish Image Draw Bot Wiki
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/wiki/**'
+      - '.github/workflows/publish-wiki.yml'
+permissions:
+  contents: write
+concurrency:
+  group: image-draw-bot-wiki
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish maintained wiki pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import base64, os, pathlib, shutil, subprocess, tempfile
+          repo = os.environ['GITHUB_REPOSITORY']
+          env = os.environ.copy()
+          env['GIT_CONFIG_COUNT'] = '1'
+          env['GIT_CONFIG_KEY_0'] = 'http.https://github.com/.extraheader'
+          env['GIT_CONFIG_VALUE_0'] = 'AUTHORIZATION: basic ' + base64.b64encode(('x-access-token:' + env.pop('GH_TOKEN')).encode()).decode()
+          def git(*args, cwd=None):
+              return subprocess.run(['git', *args], cwd=cwd, env=env, check=True, capture_output=True, text=True).stdout.strip()
+          with tempfile.TemporaryDirectory() as temporary:
+              destination = pathlib.Path(temporary) / 'wiki'
+              git('clone', 'https://github.com/' + repo + '.wiki.git', str(destination))
+              for source in pathlib.Path('docs/wiki').glob('*.md'):
+                  shutil.copyfile(source, destination / source.name)
+              git('add', '--', '*.md', cwd=destination)
+              if git('diff', '--cached', '--name-only', cwd=destination):
+                  git('-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit', '-m', 'Update user guides from ' + os.environ['GITHUB_SHA'], cwd=destination)
+                  git('push', 'origin', 'HEAD', cwd=destination)
+              print('Wiki verified at commit ' + git('rev-parse', 'HEAD', cwd=destination))

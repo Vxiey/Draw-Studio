@@ -14,7 +14,7 @@ Packaged Windows downloads include Python. Running the source requires Python 3.
 
 ## How do I draw a picture in Microsoft Paint?
 
-Open a blank Paint canvas, select the Paint profile, load a picture and complete canvas/tool calibration. Check the preview before starting. Window size, zoom and display scaling can affect calibration. Follow the [Paint setup guide](PAINT-AUTOMATIC-PREPARATION.md).
+Open a blank Paint canvas, select the Paint profile, load a picture and press **Prepare Paint & draw**. This prepares Paint and then draws. Preview and small tests are optional. Window size, zoom and display scaling can affect calibration. Follow the [Paint setup guide](PAINT-AUTOMATIC-PREPARATION.md).
 
 ## Which drawing mode should I use?
 
@@ -27,3 +27,7 @@ The repository and current source use Image Draw Bot. Older published packages r
 ## Is the Windows download signed?
 
 Published downloads are unsigned. Windows may show an unknown-publisher warning or block execution. SHA-256 checks verify file integrity, not a trusted publisher signature. See [package verification](RELEASE-STRUCTURE.md#verification-files).
+
+## Where can I learn the controls?
+
+Open **Get started** in the app header for the step-by-step guide. Click **?** beside a setting for an explanation. **Setup wizard** checks the current profile requirements. See [First drawing](GETTING-STARTED.md) and the [Wiki](https://github.com/Vxiey/Image-Draw-Bot/wiki).
