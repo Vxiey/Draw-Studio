@@ -2,7 +2,7 @@
 
 ## Release candidate
 
-This is a Image Draw Bot release-candidate build. The versioned feature roadmap is frozen while RC validation is in progress.
+This is an Image Draw Bot release-candidate build. The versioned feature roadmap is frozen while RC validation is in progress.
 
 ## Download
 
