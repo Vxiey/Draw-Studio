@@ -23,6 +23,20 @@ def dialog(language='sv'):
 
 
 class PaintPreparationTests(unittest.TestCase):
+    def test_retry_reuses_open_rgb_dialog_without_invoking_opener(self):
+        from PaintPreparation import calibrate_rgb_controls
+        main=[node('Edit colors',rect=(80,10,120,40))]
+        state={'open':True}; actions=[]
+        def backend(handle,**kw):
+            if kw.get('action'):
+                actions.append(kw['element']['name'])
+                if actions[-1]=='Cancel':state['open']=False
+            return dialog('en') if state['open'] else main
+        controls=calibrate_rgb_controls(42,backend=backend)
+        self.assertEqual(controls['OpenCustomColor'],(100,25))
+        self.assertEqual(actions,['Cancel'])
+        self.assertFalse(state['open'])
+
     def test_rgb_swedish_and_english_label_geometry(self):
         for language in ('sv','en'):
             self.assertEqual(rgb_controls(dialog(language))['BlueField'],(160,195))
@@ -225,6 +239,20 @@ class PaintPreparationTests(unittest.TestCase):
 
 
 class WindowsScriptSyntaxTests(unittest.TestCase):
+    @unittest.skipUnless(__import__('os').name=='nt','Windows modal invocation regression')
+    def test_modal_helper_bounds_wait_and_propagates_completed_errors(self):
+        import base64, os, subprocess
+        from PaintPreparation import _INVOKE_HELPER
+        helper=_INVOKE_HELPER.replace('    public static void Invoke',
+            '    public static bool Probe() { return Run(() => Thread.Sleep(5000), 100); }\n'
+            '    public static void ErrorProbe() { Run(() => { throw new Exception("probe"); }, 1000); }\n'
+            '    public static void Invoke',1)
+        script="Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes; $ErrorActionPreference='Stop';\n"+helper
+        script+="\n$watch=[Diagnostics.Stopwatch]::StartNew(); if([PaintModalAction]::Probe()){throw 'Blocking action unexpectedly completed'}; if($watch.ElapsedMilliseconds -gt 3000){throw 'Modal action blocked caller'}; $failed=$false; try{[PaintModalAction]::ErrorProbe()}catch{$failed=$true}; if(!$failed){throw 'Provider exception was swallowed'}"
+        path=os.path.join(os.environ['SystemRoot'],'System32','WindowsPowerShell','v1.0','powershell.exe')
+        result=subprocess.run([path,'-NoProfile','-NonInteractive','-EncodedCommand',base64.b64encode(script.encode('utf-16-le')).decode()],capture_output=True,timeout=30)
+        self.assertEqual(result.returncode,0,result.stderr.decode(errors='replace'))
+
     @unittest.skipUnless(__import__('os').name=='nt','Windows PowerShell parser')
     def test_embedded_script_parses_without_running_paint(self):
         import base64,os,subprocess

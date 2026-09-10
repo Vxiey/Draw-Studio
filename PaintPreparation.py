@@ -22,18 +22,43 @@ for($i=0;$i -lt $all.Count;$i++) {
  $e=$all.Item($i); $c=$e.Current; $b=$c.BoundingRectangle
  if($c.IsOffscreen -or !$c.IsEnabled -or $b.Width -le 0 -or $b.Height -le 0){continue}
  $label=''; if($c.LabeledBy){$label=$c.LabeledBy.Current.Name}
- $v=''; try{$v=$e.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value}catch{}
+ $v=''; if($c.ControlType -eq [System.Windows.Automation.ControlType]::Edit) {try{$v=$e.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value}catch{}}
  $rows+=@{id=$i;name=$c.Name;label=$label;kind=$c.ControlType.ProgrammaticName;rect=@($b.Left,$b.Top,$b.Right,$b.Bottom);value=$v}
 }
 ACTION
 ConvertTo-Json -InputObject @($rows) -Depth 5 -Compress
 '''
 
+
+# A provider may keep Invoke blocked until a modal dialog closes. The caller must
+# scan/verify the resulting UI state; a pending invocation is not proof of success.
+_INVOKE_HELPER = r'''
+Add-Type -ReferencedAssemblies @([System.Windows.Automation.InvokePattern].Assembly.Location,[System.Windows.Automation.AutomationElementIdentifiers].Assembly.Location,[System.Windows.Rect].Assembly.Location) -TypeDefinition @"
+using System;
+using System.Threading;
+using System.Windows.Automation;
+public static class PaintModalAction {
+    public static bool Run(Action action, int waitMs) {
+        Exception failure = null;
+        Thread worker = new Thread(() => { try { action(); } catch (Exception e) { failure = e; } });
+        worker.IsBackground = true;
+        worker.SetApartmentState(ApartmentState.MTA);
+        worker.Start();
+        bool finished = worker.Join(waitMs);
+        if (finished && failure != null) throw new InvalidOperationException("Paint action failed", failure);
+        return finished;
+    }
+    public static void Invoke(InvokePattern pattern) { Run(() => pattern.Invoke(), 750); }
+    public static void Legacy(LegacyIAccessiblePattern pattern) { Run(() => pattern.DoDefaultAction(), 750); }
+}
+"@
+'''
+
 _INVOKE_ACTION = r'''
 $activated=$false
 $pattern=$null
 if($e.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern,[ref]$pattern)) {
-    ([System.Windows.Automation.InvokePattern]$pattern).Invoke(); $activated=$true
+    [PaintModalAction]::Invoke([System.Windows.Automation.InvokePattern]$pattern); $activated=$true
 }
 if(!$activated) {
     $pattern=$null
@@ -58,7 +83,7 @@ if(!$activated) {
 if(!$activated) {
     $pattern=$null
     if($e.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern,[ref]$pattern)) {
-        ([System.Windows.Automation.LegacyIAccessiblePattern]$pattern).DoDefaultAction(); $activated=$true
+        [PaintModalAction]::Legacy([System.Windows.Automation.LegacyIAccessiblePattern]$pattern); $activated=$true
     }
 }
 if(!$activated) {
@@ -97,7 +122,7 @@ if($matches.Count -ne 1){throw 'Paint controls moved or are ambiguous. Retry pre
 $e=$all.Item([int]$matches[0].id)
 '''
         if action=='invoke':
-            command+=_INVOKE_ACTION
+            command+=_INVOKE_HELPER+_INVOKE_ACTION
         elif action=='size':
             command+=r'''
 $pattern=$null
@@ -116,7 +141,7 @@ if([Math]::Abs($p.Current.Value-1) -gt 0.001){throw 'Paint did not accept 1 px.'
     try:
         while True:
             if cancelled():raise InterruptedError('Paint preparation cancelled.')
-            if time.monotonic()>deadline:raise TimeoutError('Paint controls did not respond. Close any open menu and retry.')
+            if time.monotonic()>deadline:raise TimeoutError('Paint controls did not respond during '+(action or 'control scan')+'. Keep Paint visible; if Edit colors is open, leave it in RGB mode and retry calibration.')
             try:out,err=process.communicate(timeout=.1);break
             except subprocess.TimeoutExpired:pass
         if process.returncode:raise ValueError(err.decode('utf-8',errors='replace').strip()[-1200:])
@@ -270,16 +295,26 @@ def calibrate_rgb_controls(handle, *, cancelled=lambda:False, backend=automation
     def scan():return backend(handle,cancelled=cancelled)
     def invoke(node):return backend(handle,element=node,action='invoke',cancelled=cancelled)
     nodes=scan()
+    if edit_colors_dialog_open(nodes):
+        # A previous provider timeout may have opened the dialog successfully.
+        # Capture it, close it, and resolve the opener from the enabled toolbar.
+        controls=rgb_controls(nodes)
+        close_edit_colors(handle,cancelled=cancelled,backend=backend)
+        opener=find_custom_color_opener(scan())
+        controls['OpenCustomColor']=center(opener)
+        return controls
     opener=find_custom_color_opener(nodes)
     invoke(opener)
     deadline=time.monotonic()+5
     while True:
+        if cancelled():raise InterruptedError('Paint preparation cancelled.')
         nodes=scan()
         try:
             controls=rgb_controls(nodes)
             break
         except ValueError:
             if time.monotonic()>deadline:raise ValueError('Paint Edit colors opened, but numeric RGB controls could not be calibrated. Keep the dialog in RGB mode and retry.')
+            time.sleep(.12)
     close_edit_colors(handle,cancelled=cancelled,backend=backend)
     controls['OpenCustomColor']=center(opener)
     return controls

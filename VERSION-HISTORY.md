@@ -1,3 +1,9 @@
+## v1.0.144-rc5 — Paint color-dialog responsiveness
+
+- Bound modal Invoke/Legacy actions on an MTA helper thread, then verify actual controls.
+- Recover calibration when the RGB dialog is already open.
+- Read values only from edit fields and pace RGB readiness scans.
+
 ## v1.0.144-rc4 — Getting started and contextual help
 
 - Six-section guide with target-specific setup, modes, preview and troubleshooting.
