@@ -1,6 +1,6 @@
-# Image Draw Bot — automatic image drawing bot for Paint and drawing games
+# Image Draw Bot — automatic image drawing for Windows
 
-![Image Draw Bot preview](assets/social-preview.svg)
+![Image Draw Bot: automatic image drawing for Microsoft Paint, Gartic Phone and Skribbl.io](assets/image-draw-bot-social-preview.png)
 
 [![Image Draw Bot CI](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml)
 ![Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-informational)
@@ -22,17 +22,21 @@ Image Draw Bot is a source-available Windows desktop app for automatic image dra
 | **Drawing game canvases** | Supports calibrated browser-canvas workflows for Gartic Phone, Skribbl.io and similar drawing apps. |
 | **Local privacy** | Processes images locally with no telemetry; network use is limited to explicit features such as updates or URL loading. |
 
-## Download — v1.0.144-rc1
+## Download for Windows
+
+The latest published build is **v1.0.143-rc4**, distributed under the previous
+Draw Studio name. The source on `main` uses **Image Draw Bot v1.0.144-rc1**;
+its renamed Windows packages will appear on the [releases page](https://github.com/Vxiey/Image-Draw-Bot/releases) after publication.
 
 | Download | How to use it |
 | --- | --- |
-| [Windows installer — recommended](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc1/ImageDrawBot-1.0.144-rc1-Windows-x64-Setup.exe) | Run Setup, then open Image Draw Bot. No separate Python installation needed. |
-| [Portable Windows ZIP](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc1/ImageDrawBot-1.0.144-rc1-Windows-x64.zip) | Extract the entire ZIP, open the ImageDrawBot folder and run ImageDrawBot.exe. Keep its supporting files together. |
-| [SHA-256 checksums](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.144-rc1/ImageDrawBot-1.0.144-rc1-SHA256.txt) | Verify the downloaded files. |
+| [Windows installer — recommended](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.143-rc4/DrawStudio-1.0.143-rc4-Windows-x64-Setup.exe) | Published v1.0.143-rc4. Run Setup; Python is included. |
+| [Portable Windows ZIP](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.143-rc4/DrawStudio-1.0.143-rc4-Windows-x64.zip) | Published v1.0.143-rc4. Extract the entire ZIP and run the included EXE. Keep its supporting files together. |
+| [SHA-256 checksums](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.143-rc4/DrawStudio-1.0.143-rc4-SHA256.txt) | Verify the downloaded files. |
 
 [All releases](https://github.com/Vxiey/Image-Draw-Bot/releases) ·
-[Release notes](RELEASE-NOTES-v1.0.144-rc1.md) ·
-[Documentation](README-INDEX.md)
+[Upcoming version notes](RELEASE-NOTES-v1.0.144-rc1.md) ·
+[Setup and troubleshooting](README-INDEX.md) · [Frequently asked questions](docs/FAQ.md)
 
 ## Core features
 
@@ -53,7 +57,7 @@ After loading an image and calibrating Paint, use **Custom color palette for pic
 Requires **Windows 10/11, 64-bit**. Run Image Draw Bot and the target app at the same
 privilege level, normally without administrator rights.
 
-**This release is unsigned.** Windows may display “Unknown publisher” or
+**Published Windows downloads are unsigned.** Windows may display “Unknown publisher” or
 SmartScreen warnings, and Smart App Control can block execution. Code signing
 has not been activated. Passing build tests does not mean Windows app-control
 approval.
@@ -129,7 +133,7 @@ Installed builds keep their installation folder. Portable/source builds use
 the normal installer destination. Updates use complete installers; they do not
 apply individual source-code patches. There are no background update checks.
 
-Install v1.0.144-rc1 once using the download above if you have an older build. RC builds
+Use the published installer above for a packaged build. RC builds
 accept newer RC/stable releases; stable builds do not automatically switch to
 prereleases. [Update details](docs/IN-APP-UPDATES.md)
 
@@ -145,7 +149,7 @@ prereleases. [Update details](docs/IN-APP-UPDATES.md)
   Actions artifacts. The current version must be older than the release.
 - **Download verification fails:** retry Check updates. A failed download does
   not replace the installed app.
-- **Windows blocks the app:** v1.0.144-rc1 is unsigned; Smart App Control compatibility
+- **Windows blocks the app:** published builds are unsigned; Smart App Control compatibility
   is not established. The project does not require disabling Windows protection.
 
 ## Run from source
@@ -178,8 +182,8 @@ python build_release.py --installer
 
 You can also use `Build-Release.bat` for the local Windows build.
 
-The v1.0.144-rc1 Windows workflow passed tests, packaging and a silent install/self-test/
-uninstall round trip. Real drawing speed, GPU behavior and compatibility with
+Windows releases must pass tests, packaging and a silent install/self-test/
+uninstall round trip before publication. Real drawing speed, GPU behavior and compatibility with
 every target layout require separate live testing.
 
 [Publishing](docs/PUBLISHING.md) · [Package layout](docs/RELEASE-STRUCTURE.md) ·

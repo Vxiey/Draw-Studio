@@ -8,4 +8,6 @@ Use:
 - `../../VERSION-HISTORY.md` for the compact root history used by the in-app Version History viewer
 - `../../README-INDEX.md` for milestone and release-note links
 
-The current release-candidate line is **v1.0.130-rc2 — Step 30 Release Candidate Hardening**.
+For the current source version and available downloads, use the [main README](../../README.md).
+
+[Legacy source archives](archives/README.md) preserve the older ZIP snapshots.

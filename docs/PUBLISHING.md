@@ -27,7 +27,7 @@ This validates source metadata, builds the PyInstaller application, runs the fro
 
 ## GitHub Actions
 
-`.github/workflows/build-windows.yml` builds when `.github/release-build-trigger` changes on main, on version tags, or through manual dispatch. For a new release, increment `APP_VERSION`, update matching metadata/tests and release notes, then change the trigger file and push main. A tag build must match `v{APP_VERSION}`.
+`.github/workflows/build-windows.yml` builds when `Version.py` or `.github/release-build-trigger` changes on main, on version tags, or through manual dispatch. For a new release, increment `APP_VERSION`, update matching metadata/tests and release notes, then change the trigger file and push main. A tag build must match `v{APP_VERSION}`.
 
 For RC releases the workflow also performs a silent installer round trip in an isolated temporary directory:
 
@@ -45,4 +45,4 @@ The in-app updater reads published Releases, not Actions artifacts or branch com
 
 ## Signing status
 
-Code signing is not activated. The published rc3 files remain unsigned. Optional local signing support exists for a future provisioned certificate, but do not claim signed binaries or Smart App Control compatibility without verification. Documentation-only changes on main do not replace immutable release downloads.
+Code signing is not activated. Published downloads remain unsigned. Optional local signing support exists for a future provisioned certificate, but do not claim signed binaries or Smart App Control compatibility without verification. Documentation-only changes on main do not replace immutable release downloads.

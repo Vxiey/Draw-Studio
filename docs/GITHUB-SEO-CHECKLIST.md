@@ -46,7 +46,7 @@ skribbl
 Recommended file:
 
 ```text
-assets/social-preview.png
+assets/image-draw-bot-social-preview.png
 ```
 
 The image should clearly show:
@@ -63,7 +63,7 @@ GitHub repository settings do not automatically use repository files as the soci
 
 Keep the first screen of `README.md` optimized for both humans and search indexing:
 
-- H1 should include the product name and the phrase `automatic image drawing bot`.
+- Use one concise H1 with the product name and its main purpose; avoid repeating "bot" or listing every keyword.
 - The first bold sentence should mention Microsoft Paint, Gartic Phone, Skribbl.io, mouse strokes, contours, fills and exact RGB colors.
 - Use descriptive image alt text, not generic words such as `screenshot`.
 - Keep download links high in the README.
@@ -106,9 +106,18 @@ Use these terms consistently across README, release notes and public docs:
 
 ## Avoid
 
-- old product names
+- old product names in current branding (historical release asset names must stay accurate)
 - claims that the project is fully signed while releases are unsigned
 - claims that every Paint/browser layout is verified
 - claims that GitHub Actions artifacts are official releases
 - saying AI image generation when the app performs deterministic local rendering
 - calling the repo open-source unless a proper license file has been added
+
+## Keep public assets consistent
+
+The editable source is [the social-preview SVG](../assets/image-draw-bot-social-preview.svg).
+Export it to [the PNG](../assets/image-draw-bot-social-preview.png) at 1280×640 whenever the artwork changes.
+The README and GitHub social-card upload should use that same PNG.
+Only link versioned downloads after verifying the release and its assets are published.
+
+References: [GitHub repository topics](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/classifying-your-repository-with-topics), [Google title guidance](https://developers.google.com/search/docs/appearance/title-link).

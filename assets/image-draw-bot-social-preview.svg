@@ -31,6 +31,6 @@
   <text x="330" y="238" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="92" font-weight="800" fill="#f8fcff">Image Draw Bot</text>
   <text x="335" y="310" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="43" font-weight="500" fill="url(#accent)">Automatic Image Drawing</text>
   <text x="335" y="376" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="31" fill="#c5d8ea">Microsoft Paint • Gartic Phone • Skribbl.io</text>
-  <rect x="335" y="445" width="585" height="56" rx="20" fill="#1c2d48" stroke="#4782be" stroke-width="2"/>
+  <rect x="335" y="445" width="700" height="56" rx="20" fill="#1c2d48" stroke="#4782be" stroke-width="2"/>
   <text x="363" y="481" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="25" fill="#e4eef8">smart strokes • fills • previews • safe automation</text>
 </svg>

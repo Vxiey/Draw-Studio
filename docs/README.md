@@ -1,16 +1,25 @@
-# Image Draw Bot documentation
+# Image Draw Bot setup, rendering and development guides
 
-This directory contains technical and historical documentation for Image Draw Bot.
+Image Draw Bot converts pictures into mouse paths for Microsoft Paint and calibrated drawing canvases on Windows.
 
-For normal installation and first-use instructions, start with the repository `README.md`.
+## Install and use
 
-Current release-candidate documents:
+- [Windows downloads and quick start](../README.md#download-for-windows)
+- [Frequently asked questions](FAQ.md)
+- [Microsoft Paint setup and RGB calibration](PAINT-AUTOMATIC-PREPARATION.md)
+- [In-app updates](IN-APP-UPDATES.md)
+- [Installer, portable ZIP and source packages](RELEASE-STRUCTURE.md)
 
-- `../RELEASE-CANDIDATE-HARDENING.md` — Release Candidate Hardening gates, installer/update validation and feature freeze
-- `../RELEASE-NOTES-v1.0.130-rc2.md` — RC2 release notes
-- `PUBLISHING.md` — local and GitHub publishing workflow
-- `RELEASE-NAMING.md` — versioned release/artifact naming policy
-- `VERSION-HISTORY.md` — detailed version history
-- `history/README.md` — historical documentation index
+## Rendering and performance
 
-Core roadmap documents remain linked from `../README-INDEX.md`.
+- [Extra Fast planning and benchmarks](EXTRA-FAST-REVIEW.md)
+- [GPU palette processing and lossless path optimization](gpu-pipeline-optimization.md)
+
+## Development and publishing
+
+- [Upcoming v1.0.144-rc1 source changes](../RELEASE-NOTES-v1.0.144-rc1.md)
+- [Release publishing](PUBLISHING.md)
+- [Release naming](RELEASE-NAMING.md)
+- [GitHub discovery and social preview](GITHUB-SEO-CHECKLIST.md)
+- [Historical versions and archives](history/README.md)
+- [Full documentation index](../README-INDEX.md)
