@@ -5,7 +5,7 @@ from Version import APP_VERSION, FILE_VERSION
 
 class PerGameInputEngineV1075Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.143-rc1')
+        self.assertEqual(APP_VERSION,'1.0.143-rc2')
         self.assertEqual(FILE_VERSION,'1.0.143')
 
     def test_three_games_have_distinct_policies(self):

@@ -6,16 +6,16 @@ Draw Studio is a Windows desktop app that recreates images with mouse paths,
 color matching, outlines and fills. It uses local image processing, not AI image
 generation. Each target profile keeps its own calibration and drawing settings.
 
-## Download — v1.0.143-rc1
+## Download — v1.0.143-rc2
 
 | Download | How to use it |
 | --- | --- |
-| [Windows installer — recommended](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.143-rc1/DrawStudio-1.0.143-rc1-Windows-x64-Setup.exe) | Run Setup, then open Draw Studio. No separate Python installation needed. |
-| [Portable Windows ZIP](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.143-rc1/DrawStudio-1.0.143-rc1-Windows-x64.zip) | Extract the entire ZIP, open the DrawStudio folder and run DrawStudio.exe. Keep its supporting files together. |
-| [SHA-256 checksums](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.143-rc1/DrawStudio-1.0.143-rc1-SHA256.txt) | Verify the downloaded files. |
+| [Windows installer — recommended](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.143-rc2/DrawStudio-1.0.143-rc2-Windows-x64-Setup.exe) | Run Setup, then open Draw Studio. No separate Python installation needed. |
+| [Portable Windows ZIP](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.143-rc2/DrawStudio-1.0.143-rc2-Windows-x64.zip) | Extract the entire ZIP, open the DrawStudio folder and run DrawStudio.exe. Keep its supporting files together. |
+| [SHA-256 checksums](https://github.com/Vxiey/Draw-Studio/releases/download/v1.0.143-rc2/DrawStudio-1.0.143-rc2-SHA256.txt) | Verify the downloaded files. |
 
 [All releases](https://github.com/Vxiey/Draw-Studio/releases) ·
-[Release notes](RELEASE-NOTES-v1.0.143-rc1.md) ·
+[Release notes](RELEASE-NOTES-v1.0.143-rc2.md) ·
 [Documentation](README-INDEX.md)
 
 

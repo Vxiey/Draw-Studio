@@ -1,3 +1,12 @@
+# v1.0.143-rc2
+
+- Fix false `Paint canvas visible area is too small` failures on modern Paint.
+- Replace the fixed 35% Paint-window width rule with a DPI-scaled minimum drawable size.
+- Detect compact blank canvases safely even when Paint is maximized and the document occupies only part of the window.
+- Ignore thin Paint resize-handle/edge chrome while finding the blank canvas rectangle, while still rejecting covered or non-blank interiors.
+- Preserve clipped-canvas safety insets and manual fallback for genuinely tiny or ambiguous areas.
+- Add compact-canvas, resize-handle and tiny-area regression coverage.
+
 # v1.0.143-rc1
 
 - Fix Microsoft Paint auto calibration when the blank document canvas extends beyond the visible window.
