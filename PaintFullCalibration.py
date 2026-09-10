@@ -18,6 +18,40 @@ def _run(mask):
     return best
 
 
+def _significant_runs(mask,min_length):
+    out=[];start=None
+    for i,value in enumerate(list(mask)+[False]):
+        if value and start is None:start=i
+        elif not value and start is not None:
+            if i-start>=min_length:out.append((start,i))
+            start=None
+    return out
+
+
+def _edge_supported_horizontal_span(white, *, top, bottom, scale, min_safe_w):
+    """Infer the document span from clean bands near its top/bottom edges.
+
+    Interior ink/overlays must not make calibration silently shrink to a smaller
+    white sub-rectangle.  Paint's top and bottom document bands normally retain
+    the true horizontal extent, while using the maximum of both bands tolerates
+    a resize handle or shadow affecting only one edge.  Significant separated
+    white runs are enveloped so an interior obstruction is caught later by the
+    blankness check instead of becoming a fake new canvas edge.
+    """
+    probe_h=max(3,round(6*scale));inset=max(3,round(10*scale))
+    profiles=[]
+    for y0 in (top+inset,bottom-inset-probe_h):
+        y0=int(y0)
+        if y0>=top and y0+probe_h<=bottom:
+            profiles.append(np.mean(white[y0:y0+probe_h],axis=0))
+    if not profiles:return (0,0)
+    support=np.maximum.reduce(profiles)
+    runs=_significant_runs(support>.985,max(8,round(20*scale)))
+    if not runs:return (0,0)
+    left,right=runs[0][0],runs[-1][1]
+    return (left,right) if right-left>=min_safe_w else (0,0)
+
+
 def _border_band_has_workspace(white, side, *, left, right, top, bottom, width, trim, toolbar_end):
     """Verify a visible canvas edge using an outside band, not one brittle pixel line.
 
@@ -61,38 +95,28 @@ def _border_band_has_workspace(white, side, *, left, right, top, bottom, width, 
 
 
 def _detect_visible_canvas(white, *, toolbar_end, w, h, scale, screen_origin, ratio):
-    """Return a safe visible Paint drawing area, including compact/clipped viewports.
-
-    The canvas does not need to occupy a fixed percentage of the Paint window.
-    Modern Paint can show a zoomed or scrolled document as a relatively narrow
-    white viewport while leaving a large grey workspace around it.  Detection is
-    therefore based on a DPI-scaled minimum drawable size plus blankness/border
-    verification, not on a 35% window-width heuristic.
-    """
+    """Return a safe visible Paint drawing area, including compact/clipped viewports."""
     min_safe_w=max(96,round(160*scale))
     min_safe_h=max(96,round(120*scale))
 
-    # Find rows that contain enough white pixels to hold a usable canvas.  The
-    # threshold follows the absolute safe width, so a valid narrow canvas in a
-    # maximized Paint window is not rejected merely because the window is wide.
     row_fraction=min(.35,max(.06,(min_safe_w/max(1,w))*.72))
     top,bottom=_run(np.mean(white,axis=1)>row_fraction)
     if bottom-top<min_safe_h:
         raise ValueError('Paint canvas visible area is too small. Enlarge Paint or select the drawing area manually.')
 
-    # Ignore a thin band near the horizontal canvas edges when finding columns.
-    # Paint can render resize handles/edge chrome there; requiring 99.5% white
-    # over the entire height used to split an otherwise blank canvas into small
-    # fragments and caused the false "visible area is too small" failure.
-    edge_trim=max(2,round(8*scale))
-    sample_top=min(bottom,top+edge_trim)
-    sample_bottom=max(sample_top+1,bottom-edge_trim)
-    column_white=np.mean(white[sample_top:sample_bottom],axis=0)
-    left,right=_run(column_white>.985)
+    # Prefer the document envelope inferred from near-edge bands.  This keeps a
+    # central obstruction inside the candidate so blankness verification rejects
+    # it rather than silently selecting one white side of the document.
+    left,right=_edge_supported_horizontal_span(white,top=top,bottom=bottom,scale=scale,min_safe_w=min_safe_w)
+    if right-left<min_safe_w:
+        edge_trim=max(2,round(8*scale))
+        sample_top=min(bottom,top+edge_trim)
+        sample_bottom=max(sample_top+1,bottom-edge_trim)
+        column_white=np.mean(white[sample_top:sample_bottom],axis=0)
+        left,right=_run(column_white>.985)
     if right-left<min_safe_w:
         raise ValueError('Paint canvas visible area is too small. Enlarge Paint or select the drawing area manually.')
 
-    # Verify the drawable interior, not Paint's resize handles at the border.
     verify_inset=max(2,round(5*scale))
     vy0=min(bottom,top+verify_inset);vy1=max(vy0+1,bottom-verify_inset)
     vx0=min(right,left+verify_inset);vx1=max(vx0+1,right-verify_inset)
@@ -106,10 +130,6 @@ def _detect_visible_canvas(white, *, toolbar_end, w, h, scale, screen_origin, ra
     if right>=w-edge_tol:clipped.append('right')
     if bottom>=h-edge_tol:clipped.append('bottom')
 
-    # Verify visible borders with a small outside band.  A one-pixel test is too
-    # brittle for modern Paint because its light shadow/resize chrome can be
-    # nearly white.  Clipped edges have no outside band and are protected by the
-    # larger safe inset below.
     band_width=max(3,round(6*scale));border_trim=max(4,round(12*scale))
     visible_sides=[]
     if left>edge_tol:visible_sides.append('left')
@@ -138,13 +158,11 @@ def _detect_visible_canvas(white, *, toolbar_end, w, h, scale, screen_origin, ra
 
 def detect_setup(image,screen_origin=(0,0),cancelled=lambda:False):
     if cancelled():raise InterruptedError()
-    # Bound detection arrays and component scans independently of screen DPI.
     ratio=min(1.,1920/image.width,1200/image.height)
     work=image.resize((round(image.width*ratio),round(image.height*ratio))).convert('RGB')
     w,h=work.size;rh=min(h//2,360)
     pos,colors,_=detect_color_swatches(work.crop((0,0,w,rh)))
     if cancelled():raise InterruptedError()
-    # Nine ordered colour anchors rule out arbitrary dense toolbar icons.
     matches=[]
     for expected in ROW1[1:]:
         hits=[p for p,c in zip(pos,colors) if max(abs(a-b) for a,b in zip(c,expected))<=8]
@@ -194,7 +212,7 @@ def detect_setup(image,screen_origin=(0,0),cancelled=lambda:False):
     clipped=bool(clipped_edges)
     return {'tools':tools,'positions':positions,'rgbs':rgbs,'canvas_box':box,'palette_count':len(rgbs),
             'confidence':.85 if compact else (.87 if clipped else .90),
-            'method':'modern-paint-grid-and-icons-v5',
+            'method':'modern-paint-grid-and-icons-v6',
             'canvas_visibility':'viewport-compact' if compact else ('viewport-clipped' if clipped else 'full'),
             'canvas_clipped_edges':list(clipped_edges)}
 
@@ -204,7 +222,6 @@ def save_setup(result,meta,palette_path,tool_path=None):
     from PaintTools import save_tool_calibration,TOOL_FILE
     from CalibrationAnchors import make_anchor
     anchor=make_anchor(meta['client_rect'])
-    # Detection is complete before either persisted calibration is changed.
     save_tool_calibration(result['tools'],path=tool_path or TOOL_FILE,anchor=anchor,
                           auto={'method':result['method'],'confidence':result['confidence'],'detected':list(result['tools'])})
     save_calibration(result['positions'],result['rgbs'],palette_path,anchor=anchor,profile_key='microsoft-paint',state='verified',verification={'method':str(result.get('method') or 'paint-auto-calibration'),'confidence':float(result.get('confidence',0) or 0),'source':'paint-screen-verification'})
