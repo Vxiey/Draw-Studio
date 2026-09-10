@@ -124,6 +124,44 @@ def _axis_candidate(group, edge_n, rows, points, cancelled):
     return candidate, len(horizontal), len(vertical), len(joined_vertical)
 
 
+def _vertical_alternative(group, edge_n, cancelled):
+    """Re-rasterize tall horizontal bodies losslessly, under a fixed work cap.
+
+    Keep outlines untouched. Sparse rows and holes remain holes. This is small
+    CPU mask work; GPU transfers would compete with the palette analysis here.
+    """
+    import numpy as np
+    body = group[edge_n:]
+    if len(body) < 32 or any(y0 != y1 for x0,y0,x1,y1 in body):
+        return None
+    xmin = min(min(s[0],s[2]) for s in body)
+    xmax = max(max(s[0],s[2]) for s in body)
+    ymin = min(s[1] for s in body)
+    ymax = max(s[1] for s in body)
+    width, height = xmax-xmin+1, ymax-ymin+1
+    if height < 2*width or height > 4096 or width*height > 1_048_576:
+        return None
+    mask = np.zeros((height+2, width), dtype=np.int8)
+    for x0,y,x1,_ in body:
+        if cancelled():
+            raise InterruptedError()
+        left,right = sorted((x0,x1))
+        mask[y-ymin+1,left-xmin:right-xmin+1] = 1
+    transitions = np.diff(mask, axis=0)
+    # Bound output size before constructing Python tuples.
+    if np.count_nonzero(transitions == 1) > len(body):
+        return None
+    result = list(group[:edge_n])
+    for x in range(width):
+        if cancelled():
+            raise InterruptedError()
+        starts = np.flatnonzero(transitions[:,x] == 1)
+        ends = np.flatnonzero(transitions[:,x] == -1)-1
+        result.extend((int(x+xmin),int(a+ymin),int(x+xmin),int(b+ymin))
+                      for a,b in zip(starts,ends))
+    return result
+
+
 def _intrinsic_cost(paths, model) -> float:
     return sum(float(model.path_seconds(path)) for path in paths if path)
 
@@ -218,6 +256,8 @@ def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lam
     travel_aware = _travel_selection_enabled(options)
 
     proposed = []
+    duplicate_candidates_skipped = 0
+    reoriented_groups = set()
     selected_rows = []
     intrinsic_before = 0.0
     intrinsic_proposed = 0.0
@@ -239,6 +279,9 @@ def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lam
         else:
             original_selection_cost = original_intrinsic
 
+        # Local to this group and invocation: no image/profile state is retained.
+        cost_cache = {tuple(tuple(path) for path in original):
+                      (original_intrinsic, original_selection_cost)}
         best = original
         best_intrinsic = original_intrinsic
         best_selection_cost = original_selection_cost
@@ -253,13 +296,19 @@ def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lam
             )
             if len(candidate) > len(original):
                 continue
-            candidate_intrinsic = _intrinsic_cost(candidate, model)
-            if travel_aware:
-                candidate_selection_cost, _ = _ordered_group_cost(
-                    candidate, options, model, cancelled,
-                )
+            key = tuple(tuple(path) for path in candidate)
+            if key in cost_cache:
+                candidate_intrinsic, candidate_selection_cost = cost_cache[key]
+                duplicate_candidates_skipped += 1
             else:
-                candidate_selection_cost = candidate_intrinsic
+                candidate_intrinsic = _intrinsic_cost(candidate, model)
+                if travel_aware:
+                    candidate_selection_cost, _ = _ordered_group_cost(
+                        candidate, options, model, cancelled,
+                    )
+                else:
+                    candidate_selection_cost = candidate_intrinsic
+                cost_cache[key] = (candidate_intrinsic, candidate_selection_cost)
 
             strictly_better = candidate_selection_cost < best_selection_cost - 1e-9
             equal_cost_fewer_paths = (
@@ -272,6 +321,26 @@ def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lam
                 best_selection_cost = candidate_selection_cost
                 best_limit = (candidate_rows, candidate_points)
                 best_h, best_v, best_vpaths = h_runs, v_runs, v_paths
+
+        alternate = _vertical_alternative(group, edge_n, cancelled)
+        if alternate is not None:
+            candidate, h_runs, v_runs, v_paths = _axis_candidate(
+                alternate, edge_n, rows, points, cancelled)
+            if len(candidate) <= len(original):
+                candidate_intrinsic = _intrinsic_cost(candidate, model)
+                if travel_aware:
+                    candidate_selection_cost, _ = _ordered_group_cost(
+                        candidate, options, model, cancelled)
+                else:
+                    candidate_selection_cost = candidate_intrinsic
+                if (candidate_selection_cost < best_selection_cost - 1e-9 or
+                    (len(candidate) < len(best) and candidate_selection_cost <= best_selection_cost + 1e-9)):
+                    best = candidate
+                    best_intrinsic = candidate_intrinsic
+                    best_selection_cost = candidate_selection_cost
+                    best_limit = (rows, points)
+                    best_h, best_v, best_vpaths = h_runs, v_runs, v_paths
+                    reoriented_groups.add(index)
 
         proposed.append(best)
         selected_rows.append((best_limit, best_h, best_v, best_vpaths, best is not original))
@@ -341,6 +410,8 @@ def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lam
 
     return result, dict(
         path_policy=policy,
+        duplicate_candidate_evaluations_skipped=duplicate_candidates_skipped,
+        lossless_axis_reoriented_colors=len(reoriented_groups) if downstream_accepted else 0,
         vertical_runs_joined=vertical_runs,
         vertical_paths=vertical_paths,
         vertical_colors_improved=vertical_colors,

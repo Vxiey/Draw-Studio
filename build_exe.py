@@ -63,6 +63,7 @@ def main():
         '--hidden-import', 'AutoUniversalGpuSetup',
         '--hidden-import', 'UniversalHardwareBenchmark',
         '--hidden-import', 'UniversalGpuAcceleration',
+        '--hidden-import', 'CudaPalette',
         '--hidden-import', 'FillOptimizer',
         '--hidden-import', 'RegionFillEngine',
         '--hidden-import', 'DrawTimeEstimate',

@@ -199,8 +199,8 @@ __kernel void ds_pairwise_lab(__global const float4 *lab, __global float *out, c
 __kernel void ds_edge_kernel(__global const float *src, __global float *dst, const int w, const int h) {
     int i=get_global_id(0); int n=w*h; if(i>=n)return; int x=i%w; int y=i/w;
     int xl=max(0,x-1),xr=min(w-1,x+1),yu=max(0,y-1),yd=min(h-1,y+1);
-    float gx=fabs(src[y*w+xr]-src[y*w+xl])*0.5f;
-    float gy=fabs(src[yd*w+x]-src[yu*w+x])*0.5f;
+    float gx=(x>0 && x<w-1)?fabs(src[y*w+xr]-src[y*w+xl])*0.5f:0.0f;
+    float gy=(y>0 && y<h-1)?fabs(src[yd*w+x]-src[yu*w+x])*0.5f:0.0f;
     dst[i]=sqrt(gx*gx+gy*gy);
 }
 __kernel void ds_absdiff_kernel(__global const float4 *a, __global const float4 *b,
@@ -232,7 +232,7 @@ __kernel void ds_palette_kernel(
         } else {
             float3 d=rgb-pal_rgb[p].xyz; dist=sqrt(dot(d,d)/3.0f)/255.0f*100.0f;
         }
-        if(fidelity>0){
+        if(perceptual && fidelity>0){
             float palL=pal_lab[p].x*100.0f;
             float palC=hypot(pal_lab[p].y,pal_lab[p].z)*100.0f;
             float palH=ds_hue(pal_lab[p].y,pal_lab[p].z);
@@ -434,7 +434,7 @@ def _palette_cost_cpu(rgb: np.ndarray, palette: np.ndarray, *, perceptual: bool,
     src=np.asarray(rgb,dtype=np.float32);pal=np.asarray(palette,dtype=np.float32)
     if not perceptual:
         diff=src[...,None,:]-pal;return np.sqrt(np.sum(diff*diff,axis=-1,dtype=np.float32)/3.0,dtype=np.float32)/255.0*100.0
-    src_lab=_oklab_cpu(src);pal_lab=_oklab_cpu(pal)
+    src_lab=_oklab_cpu(src / 255.0);pal_lab=_oklab_cpu(pal / 255.0)
     diff=src_lab[...,None,:]-pal_lab;dist=np.sqrt(np.sum(diff*diff,axis=-1,dtype=np.float32),dtype=np.float32)*100.0
     if fidelity in ("Balanced","Faithful"):
         srcL=src_lab[...,0]*100.0;palL=pal_lab[...,0]*100.0;light=np.abs(srcL[...,None]-palL);dark=np.maximum(srcL[...,None]-palL,0.0)
@@ -457,6 +457,11 @@ def palette_indices_rgba(image, palette: Sequence[Sequence[int]], candidate_indi
     is not profitable/usable it runs the same deterministic NumPy cost model.
     """
     from PIL import Image
+    _cancel(cancelled)
+    if not len(palette):
+        raise ValueError("palette must contain at least one color")
+    if len(palette) > 32768:
+        raise ValueError("palette exceeds the int16 index range")
     rgba=image.convert("RGBA") if isinstance(image,Image.Image) else Image.fromarray(np.asarray(image,dtype=np.uint8),"RGBA")
     raw=np.asarray(rgba,dtype=np.uint8);h,w=raw.shape[:2];pixels=h*w
     candidates=[int(i) for i in candidate_indices if 0<=int(i)<len(palette)] or list(range(len(palette)))
@@ -468,45 +473,76 @@ def palette_indices_rgba(image, palette: Sequence[Sequence[int]], candidate_indi
     route=select_route("palette_match",pixels=pixels,gpu_mode=gpu_mode,profile=profile)
     perceptual=color_rendering!="RGB nearest"; fidelity=2 if color_fidelity=="Faithful" else (1 if color_fidelity=="Balanced" else 0); custom_first=custom_mode=="Custom colors first" and bool(np.any(custom))
     def cpu():
-        # Bound memory just like the prior CPU planner.
-        out=np.empty((h,w),dtype=np.int16);rows=max(8,min(128,int(8_000_000/max(1,w*len(candidates)))))
-        for y0 in range(0,h,rows):
-            _cancel(cancelled);y1=min(h,y0+rows);dist=_palette_cost_cpu(rgb[y0:y1],pal,perceptual=perceptual,fidelity=color_fidelity);pos=np.argmin(dist,axis=2);best=np.take_along_axis(dist,pos[...,None],axis=2)[...,0];chosen=ids[pos]
+        # Bound both dimensions: even a one-row panorama or a large custom
+        # palette must never allocate a full pixel x palette distance cube.
+        flat = rgb.reshape(-1, 3)
+        out = np.empty(pixels, dtype=np.int16)
+        for start in range(0, pixels, 4096):
+            _cancel(cancelled)
+            end = min(pixels, start + 4096)
+            best = np.full(end-start, np.inf, dtype=np.float32)
+            custom_best = np.full_like(best, np.inf)
+            chosen = np.full(end-start, ids[0], dtype=np.int16)
+            custom_chosen = chosen.copy()
+            for p0 in range(0, len(ids), 32):
+                _cancel(cancelled)
+                p1 = min(len(ids), p0+32)
+                dist = _palette_cost_cpu(flat[start:end], pal[p0:p1],
+                                         perceptual=perceptual, fidelity=color_fidelity)
+                pos = np.argmin(dist, axis=1)
+                score = dist[np.arange(end-start), pos]
+                better = score < best
+                chosen[better] = ids[p0+pos[better]]
+                best = np.minimum(best, score)
+                if custom_first:
+                    dist[:, ~custom[p0:p1].astype(bool)] = np.inf
+                    pos = np.argmin(dist, axis=1)
+                    score = dist[np.arange(end-start), pos]
+                    better = score < custom_best
+                    custom_chosen[better] = ids[p0+pos[better]]
+                    custom_best = np.minimum(custom_best, score)
             if custom_first:
-                cd=np.where(custom[None,None,:].astype(bool),dist,np.inf);cp=np.argmin(cd,axis=2);cs=np.take_along_axis(cd,cp[...,None],axis=2)[...,0];chosen=np.where(cs<=best*1.06+0.0006,ids[cp],chosen)
-            out[y0:y1]=chosen.astype(np.int16,copy=False)
-        return out,visible.astype(np.bool_,copy=False)
+                chosen = np.where(custom_best <= best*1.06+0.0006, custom_chosen, chosen)
+            out[start:end] = chosen
+        return out.reshape(h,w), visible.astype(np.bool_,copy=False)
     if not route.accelerated:
         result=cpu();return result,route.as_dict()
     try:
         if route.backend_id.startswith("cuda:"):
             import cupy as cp
             with cp.cuda.Device(_cuda_device_id(route.backend_id)):
-                # Tile by palette count to avoid an HxWxP distance cube consuming VRAM.
-                out=np.empty((h,w),dtype=np.int16);rows=max(4,min(128,int(12_000_000/max(1,w*len(candidates)))))
-                p=cp.asarray(pal,dtype=cp.float32);cid=cp.asarray(ids);cflag=cp.asarray(custom.astype(bool));pal_lab=None
-                if perceptual:pal_lab=cp.asarray(_oklab_cpu(pal),dtype=cp.float32)
-                for y0 in range(0,h,rows):
-                    _cancel(cancelled);y1=min(h,y0+rows);x=cp.asarray(rgb[y0:y1],dtype=cp.float32)
-                    if perceptual:
-                        c=cp.clip(x/255.0,0.0,1.0);lin=cp.where(c<=0.04045,c/12.92,cp.power((c+0.055)/1.055,2.4));r,g,b=lin[...,0],lin[...,1],lin[...,2];l=cp.cbrt(.4122214708*r+.5363325363*g+.0514459929*b);m=cp.cbrt(.2119034982*r+.6806995451*g+.1073969566*b);s=cp.cbrt(.0883024619*r+.2817188376*g+.6299787005*b);sl=cp.stack((.2104542553*l+.7936177850*m-.0040720468*s,1.9779984951*l-2.4285922050*m+.4505937099*s,.0259040371*l+.7827717662*m-.8086757660*s),axis=-1);d=sl[...,None,:]-pal_lab;dist=cp.sqrt(cp.sum(d*d,axis=-1))*100.0
-                        if fidelity:
-                            srcL=sl[...,0]*100.0;palL=pal_lab[...,0]*100.0;light=cp.abs(srcL[...,None]-palL);dark=cp.maximum(srcL[...,None]-palL,0.0);srcC=cp.hypot(sl[...,1],sl[...,2])*100.0;palC=cp.hypot(pal_lab[...,1],pal_lab[...,2])*100.0;srcH=cp.mod(cp.degrees(cp.arctan2(sl[...,2],sl[...,1])),360.0);palH=cp.mod(cp.degrees(cp.arctan2(pal_lab[...,2],pal_lab[...,1])),360.0);chroma=cp.abs(srcC[...,None]-palC);hd=cp.abs(srcH[...,None]-palH);hue=cp.minimum(hd,360.0-hd);hue=cp.where(cp.minimum(srcC[...,None],palC)<2.5,0.0,hue);bright=1.0+cp.maximum(srcL-52.0,0.0)[...,None]/80.0;neutral_cut=cp.maximum(2.5,srcC[...,None]*.28);neutral=cp.where((srcC[...,None]>=5.0)&(palC<neutral_cut),srcC[...,None]-palC,0.0);hex=cp.maximum(hue-45.0,0.0);hext=cp.maximum(hue-85.0,0.0);dist += (light*.10+dark*.24*bright+chroma*.055+hue*.010+neutral*.18+hex*.035+hext*.060) if fidelity==1 else (light*.22+dark*.55*bright+chroma*.115+hue*.026+neutral*.32+hex*.080+hext*.120)
-                    else:
-                        d=x[...,None,:]-p;dist=cp.sqrt(cp.sum(d*d,axis=-1)/3.0)/255.0*100.0
-                    pos=cp.argmin(dist,axis=2);best=cp.take_along_axis(dist,pos[...,None],axis=2)[...,0];chosen=cid[pos]
-                    if custom_first:
-                        cd=cp.where(cflag[None,None,:],dist,cp.inf);cpos=cp.argmin(cd,axis=2);cs=cp.take_along_axis(cd,cpos[...,None],axis=2)[...,0];chosen=cp.where(cs<=best*1.06+0.0006,cid[cpos],chosen)
-                    out[y0:y1]=cp.asnumpy(chosen).astype(np.int16,copy=False)
-                cp.cuda.Stream.null.synchronize()
+                from CudaPalette import match
+                out = match(
+                    cp, rgb, pal, _oklab_cpu(pal / 255.0), ids, custom,
+                    perceptual=perceptual, fidelity=fidelity,
+                    custom_first=custom_first, cancelled=cancelled)
             return (out,visible.astype(np.bool_,copy=False)),route.as_dict()
         if route.backend_id.startswith("opencl:"):
             cl,ctx,queue,program=_opencl_context(route.backend_id);mf=cl.mem_flags
-            rgba4=np.empty((pixels,4),dtype=np.float32);rgba4[:,:3]=raw[...,:3].reshape(-1,3);rgba4[:,3]=raw[...,3].reshape(-1)
-            pal4=np.ones((len(candidates),4),dtype=np.float32);pal4[:,:3]=pal;pal_lab3=_oklab_cpu(pal);pl4=np.ones_like(pal4);pl4[:,:3]=pal_lab3
-            br=cl.Buffer(ctx,mf.READ_ONLY|mf.COPY_HOST_PTR,hostbuf=rgba4);bp=cl.Buffer(ctx,mf.READ_ONLY|mf.COPY_HOST_PTR,hostbuf=pal4);bl=cl.Buffer(ctx,mf.READ_ONLY|mf.COPY_HOST_PTR,hostbuf=pl4);bi=cl.Buffer(ctx,mf.READ_ONLY|mf.COPY_HOST_PTR,hostbuf=ids);bc=cl.Buffer(ctx,mf.READ_ONLY|mf.COPY_HOST_PTR,hostbuf=custom);bo=cl.Buffer(ctx,mf.WRITE_ONLY,pixels*2);bm=cl.Buffer(ctx,mf.WRITE_ONLY,pixels)
-            program.ds_palette_kernel(queue,(pixels,),None,br,bp,bl,bi,bc,bo,bm,np.int32(pixels),np.int32(len(candidates)),np.int32(1 if perceptual else 0),np.int32(fidelity),np.int32(1 if custom_first else 0),np.int32(1 if skip_white else 0))
-            oi=np.empty((pixels,),dtype=np.int16);om=np.empty((pixels,),dtype=np.uint8);cl.enqueue_copy(queue,oi,bo);cl.enqueue_copy(queue,om,bm);queue.finish();return (oi.reshape(h,w),om.reshape(h,w).astype(np.bool_)),route.as_dict()
+            # Reuse bounded buffers on AMD/Intel/NVIDIA OpenCL as well.
+            chunk = min(262144, max(1, 8_000_000 // len(candidates)))
+            pal4=np.ones((len(candidates),4),dtype=np.float32);pal4[:,:3]=pal
+            pl4=np.ones_like(pal4);pl4[:,:3]=_oklab_cpu(pal / 255.0)
+            bp=cl.Buffer(ctx,mf.READ_ONLY|mf.COPY_HOST_PTR,hostbuf=pal4)
+            bl=cl.Buffer(ctx,mf.READ_ONLY|mf.COPY_HOST_PTR,hostbuf=pl4)
+            bi=cl.Buffer(ctx,mf.READ_ONLY|mf.COPY_HOST_PTR,hostbuf=ids)
+            bc=cl.Buffer(ctx,mf.READ_ONLY|mf.COPY_HOST_PTR,hostbuf=custom)
+            br=cl.Buffer(ctx,mf.READ_ONLY,chunk*16)
+            bo=cl.Buffer(ctx,mf.WRITE_ONLY,chunk*2)
+            bm=cl.Buffer(ctx,mf.WRITE_ONLY,chunk)
+            oi=np.empty(pixels,dtype=np.int16);om=np.empty(pixels,dtype=np.uint8)
+            flat=raw.reshape(-1,4)
+            for start in range(0,pixels,chunk):
+                _cancel(cancelled)
+                end=min(pixels,start+chunk);n=end-start
+                tile=np.ascontiguousarray(flat[start:end],dtype=np.float32)
+                cl.enqueue_copy(queue,br,tile,is_blocking=True)
+                program.ds_palette_kernel(queue,(n,),None,br,bp,bl,bi,bc,bo,bm,
+                    np.int32(n),np.int32(len(candidates)),np.int32(perceptual),
+                    np.int32(fidelity),np.int32(custom_first),np.int32(skip_white))
+                cl.enqueue_copy(queue,oi[start:end],bo,is_blocking=True)
+                cl.enqueue_copy(queue,om[start:end],bm,is_blocking=True)
+            return (oi.reshape(h,w),om.reshape(h,w).astype(np.bool_)),route.as_dict()
         raise RuntimeError(f"unsupported backend {route.backend_id}")
     except InterruptedError:raise
     except Exception as exc:
