@@ -98,6 +98,15 @@ class PictureCustomPaletteTests(unittest.TestCase):
             self.assertFalse(pcp.start_picture_custom_palette(app))
             self.assertIn(needle,app.status.value)
 
+    def test_picture_palette_skips_edit_colors_for_single_color_or_black_sketch(self):
+        for single,outline,needle in ((True,False,'Single-color'),(False,True,'Black contour')):
+            app=SimpleNamespace(activity=None,closing=False,game=Var('Microsoft Paint'),original=picture(),
+                                paint_simple=Var(single),outline=Var(outline),paint_tool=Var('Pencil'),status=Status())
+            app.begin_worker=lambda *_a,**_k:self.fail('worker must not start')
+            self.assertFalse(pcp.start_picture_custom_palette(app))
+            self.assertIn(needle,app.status.value)
+            self.assertIn('will not be opened',app.status.value)
+
     def test_studio_ui_exposes_picture_palette_only_in_paint_scope(self):
         source=Path('StudioUI.py').read_text(encoding='utf-8')
         self.assertIn('Custom color palette for picture',source)

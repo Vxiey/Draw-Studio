@@ -5,7 +5,7 @@ from unittest.mock import patch
 from PIL import Image
 from PaintPreparation import (_INVOKE_ACTION, rgb_controls, prepare_controls, ensure_paint,
                               find_control, find_custom_color_opener, close_edit_colors,
-                              edit_colors_dialog_open)
+                              edit_colors_dialog_open, prepare_tool_controls)
 from DrawBot import DrawBotApp
 
 
@@ -60,6 +60,18 @@ class PaintPreparationTests(unittest.TestCase):
     def test_dialog_open_detection_is_based_on_rgb_controls(self):
         self.assertTrue(edit_colors_dialog_open(dialog('en')))
         self.assertFalse(edit_colors_dialog_open([node('Pencil'),node('Size','Slider')]))
+
+    def test_tool_only_preparation_never_opens_edit_colors(self):
+        main=[node('Pencil'),node('Size','Slider',(40,40,60,200)),node('Edit colors',rect=(80,10,120,40))]
+        actions=[]
+        def backend(handle,**kw):
+            if kw.get('action'):
+                actions.append((kw['action'],kw['element']['name']))
+            return main
+        self.assertTrue(prepare_tool_controls(42,backend=backend))
+        self.assertIn(('invoke','Pencil'),actions)
+        self.assertIn(('size','Size'),actions)
+        self.assertFalse(any(name=='Edit colors' for _action,name in actions))
 
     def test_prepare_captures_controls_then_cancels_dialog(self):
         main=[node('Penna'),node('Storlek','Slider',(40,40,60,200)),node('Redigera färger',rect=(80,10,100,30))]

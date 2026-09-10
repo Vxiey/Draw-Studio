@@ -244,13 +244,16 @@ def ensure_paint(enumerate_windows, *, cancelled=lambda:False, launch=None, wait
     raise ValueError('Paint did not open in time. Open it and retry.')
 
 
-def prepare_controls(handle, *, cancelled=lambda:False, backend=automation):
-    """Select Pencil/1 px, capture RGB controls, then prove Edit colors is closed."""
+def prepare_tool_controls(handle, *, cancelled=lambda:False, backend=automation):
+    """Prepare Pencil/1 px without ever opening Paint Edit colors.
+
+    This is the required path for black contour sketch, Single-color sketch
+    (current ink), and Eraser workflows.  It may close an already-open stale
+    Edit colors modal, but it never activates the custom-color opener.
+    """
     def scan():return backend(handle,cancelled=cancelled)
     def invoke(node):return backend(handle,element=node,action='invoke',cancelled=cancelled)
     nodes=scan()
-    # An already-open color dialog is dismissed without accepting changes. Do not
-    # continue until the modal is actually gone from the Paint UI tree.
     if edit_colors_dialog_open(nodes):
         close_edit_colors(handle,cancelled=cancelled,backend=backend)
         nodes=scan()
@@ -259,10 +262,16 @@ def prepare_controls(handle, *, cancelled=lambda:False, backend=automation):
     nodes=scan()
     size=find_control(nodes,('size','brush size','pencil size','storlek','penselstorlek','pennstorlek','thickness','tjocklek'),kind='Slider')
     backend(handle,element=size,action='size',cancelled=cancelled)
+    return True
+
+
+def calibrate_rgb_controls(handle, *, cancelled=lambda:False, backend=automation):
+    """Open Edit colors only to learn numeric RGB controls, then close it."""
+    def scan():return backend(handle,cancelled=cancelled)
+    def invoke(node):return backend(handle,element=node,action='invoke',cancelled=cancelled)
     nodes=scan()
     opener=find_custom_color_opener(nodes)
     invoke(opener)
-    # Poll the UI tree, not a fixed dialog coordinate or a canvas test stroke.
     deadline=time.monotonic()+5
     while True:
         nodes=scan()
@@ -271,9 +280,12 @@ def prepare_controls(handle, *, cancelled=lambda:False, backend=automation):
             break
         except ValueError:
             if time.monotonic()>deadline:raise ValueError('Paint Edit colors opened, but numeric RGB controls could not be calibrated. Keep the dialog in RGB mode and retry.')
-    # Critical invariant: automatic preparation must return with the modal gone.
-    # Canvas detection/verification is never allowed to inspect Paint while the
-    # calibration dialog itself is covering the document.
     close_edit_colors(handle,cancelled=cancelled,backend=backend)
     controls['OpenCustomColor']=center(opener)
     return controls
+
+
+def prepare_controls(handle, *, cancelled=lambda:False, backend=automation):
+    """Backward-compatible full Paint tool + exact-RGB preparation."""
+    prepare_tool_controls(handle,cancelled=cancelled,backend=backend)
+    return calibrate_rgb_controls(handle,cancelled=cancelled,backend=backend)

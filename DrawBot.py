@@ -5826,6 +5826,14 @@ class DrawBotApp:
         palette_path=Path(self.calibration_path)
         request={'image':self.original} if start_after else None
         self.paint_start_request=request
+        # Snapshot the render policy on the UI thread. Tk variables must not be
+        # read from the worker. Black contour sketch, Single-color sketch/current
+        # ink and Eraser do not need exact RGB and must never open Edit colors.
+        try:
+            _black_contour_sketch=bool(self.outline.get())
+        except Exception:
+            _black_contour_sketch=False
+        _skip_exact_rgb=bool(bypasses_palette(self) or _black_contour_sketch)
         # Snapshot an explicit user-selected canvas on the UI thread. Paint's
         # pale document border can be visually ambiguous, but a manual selection
         # is already the user's hard CanvasGuard boundary and should not be
@@ -5847,23 +5855,39 @@ class DrawBotApp:
                 from BrowserOneClick import _enumerate_windows
                 from ScreenGuard import WindowMonitor
                 from PIL import ImageGrab
-                from PaintPreparation import ensure_paint,prepare_controls
+                from PaintPreparation import ensure_paint,prepare_tool_controls,calibrate_rgb_controls
                 candidate=ensure_paint(_enumerate_windows,cancelled=self.stop.is_set,wait=self.stop.wait)
                 target=(int(candidate['handle']),tuple(candidate['rect']))
-                if not WindowMonitor().activate(target):
+                monitor=WindowMonitor()
+                if not monitor.activate(target):
                     raise ValueError('Could not activate Paint. Bring it into view and retry.')
                 if self.stop.wait(.35):raise InterruptedError()
                 meta=probe_handle_isolated(int(candidate['handle']))
-                exact_controls=prepare_controls(int(candidate['handle']),cancelled=self.stop.is_set)
-                # Edit colors is a modal Paint window. prepare_controls() now
-                # proves that it has disappeared, but explicitly return focus to
-                # the Paint document before taking any canvas/ribbon screenshot.
-                # This prevents our own RGB calibration dialog from being treated
-                # as an overlay covering the selected drawing area.
-                if not WindowMonitor().activate(target):
-                    raise ValueError('Paint Edit colors closed, but Paint could not be reactivated. Bring Paint into view and retry.')
-                if self.stop.wait(.15):raise InterruptedError()
-                meta=probe_handle_isolated(int(candidate['handle']))
+                prepare_tool_controls(int(candidate['handle']),cancelled=self.stop.is_set)
+                exact_controls=None
+                exact_reused=False
+                if not _skip_exact_rgb:
+                    # Do not reopen Edit colors on every Paint start. A valid
+                    # profile-scoped numeric calibration is resolved against the
+                    # current client geometry and reused. Only first-time/stale
+                    # setups need to open the dialog.
+                    try:
+                        from ExactColorTools import numeric_rgb_available,resolved_controls
+                        if numeric_rgb_available('microsoft-paint'):
+                            exact_controls=resolved_controls('microsoft-paint',tuple(meta['client_rect']))
+                            required=('OpenCustomColor','ConfirmColor','RedField','GreenField','BlueField')
+                            if not all(name in exact_controls for name in required):
+                                exact_controls=None
+                            else:
+                                exact_reused=True
+                    except (OSError,ValueError,TypeError):
+                        exact_controls=None
+                    if exact_controls is None:
+                        exact_controls=calibrate_rgb_controls(int(candidate['handle']),cancelled=self.stop.is_set)
+                        if not monitor.activate(target):
+                            raise ValueError('Paint Edit colors closed, but Paint could not be reactivated. Bring Paint into view and retry.')
+                        if self.stop.wait(.15):raise InterruptedError()
+                        meta=probe_handle_isolated(int(candidate['handle']))
                 rect=tuple(meta['client_rect'])
                 manual_canvas=None
                 if selected_canvas_state is not None:
@@ -5874,9 +5898,10 @@ class DrawBotApp:
                 # them as soon as Edit colors has been identified, so a clipped
                 # Paint canvas can fall back to manual area selection without
                 # losing working custom-color calibration.
-                from ExactColorTools import save as save_exact_colors
-                from CalibrationAnchors import make_anchor
-                save_exact_colors('microsoft-paint',exact_controls,anchor=make_anchor(rect))
+                if exact_controls is not None and not exact_reused:
+                    from ExactColorTools import save as save_exact_colors
+                    from CalibrationAnchors import make_anchor
+                    save_exact_colors('microsoft-paint',exact_controls,anchor=make_anchor(rect))
                 shot=ImageGrab.grab(bbox=rect,all_screens=True)
                 if shot.size!=(rect[2]-rect[0],rect[3]-rect[1]):raise ValueError('Paint window changed size. Try again.')
                 result=detect_setup(shot,screen_origin=rect[:2],cancelled=self.stop.is_set,canvas_box_override=manual_canvas)
@@ -5885,7 +5910,9 @@ class DrawBotApp:
                 if tuple(fresh['client_rect'])!=rect:raise ValueError('Paint moved during calibration. Try again.')
                 result=save_setup(result,meta,palette_path)
                 result['manual_canvas_reused']=manual_canvas is not None
-                result['exact_colors_ready']=True
+                result['exact_colors_ready']=bool(_skip_exact_rgb or exact_controls is not None)
+                result['exact_colors_bypassed']=bool(_skip_exact_rgb)
+                result['exact_colors_reused']=bool(exact_reused)
                 result['start_request']=request
                 self.events.put(('paint_auto_calibration_complete',result))
             except InterruptedError:

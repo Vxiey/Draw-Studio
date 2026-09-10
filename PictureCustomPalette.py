@@ -365,6 +365,22 @@ def start_picture_custom_palette(app) -> bool:
     if source is None:
         app.status.set("Load an image first, then build Custom color palette for picture.")
         return False
+    try:
+        single_color=bool(getattr(app,"paint_simple",None) and app.paint_simple.get())
+    except Exception:
+        single_color=False
+    try:
+        black_sketch=bool(getattr(app,"outline",None) and app.outline.get())
+    except Exception:
+        black_sketch=False
+    try:
+        eraser=bool(getattr(app,"paint_tool",None) and app.paint_tool.get()=="Eraser")
+    except Exception:
+        eraser=False
+    if single_color or black_sketch or eraser:
+        mode=("Single-color sketch/current ink" if single_color else ("Black contour sketch" if black_sketch else "Eraser"))
+        app.status.set(f"{mode} does not need custom RGB colors. Edit colors will not be opened.")
+        return False
 
     source_id = id(source)
     max_colors = _resolve_max_colors(app)
