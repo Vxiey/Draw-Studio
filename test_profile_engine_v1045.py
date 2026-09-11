@@ -77,8 +77,8 @@ class ProfileEngineV1045Tests(unittest.TestCase):
         self.assertIn("'profile_policy_meta':profile_policy_meta",bot)
 
     def test_release_version(self):
-        self.assertEqual(APP_VERSION,'1.0.144-rc14')
-        self.assertEqual(FILE_VERSION,'1.0.144')
+        self.assertEqual(APP_VERSION,'1.0.145-rc1')
+        self.assertEqual(FILE_VERSION,'1.0.145')
         self.assertIn('Profile Engine v2',policy_summary('Microsoft Paint'))
 
 if __name__=='__main__':unittest.main()

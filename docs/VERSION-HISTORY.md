@@ -1,3 +1,9 @@
+# Image Draw Bot v1.0.145-rc1 — Verified Drawing Baseline
+
+- Begin the 1.0.145 release-candidate line from the verified rc14 runtime.
+- Retain Total Draw Timer, Automatic Pixel Brush, Paint UI Automation sizing and profile-isolated ETA calibration.
+- Preserve existing drawing-engine, calibration, preview, profile and cancellation behavior.
+
 # Image Draw Bot v1.0.144-rc14 — Total Draw Timer & Automatic Pixel Brush
 
 - Add a visible live drawing timer with elapsed time, estimated remaining time and projected total while a real drawing is running.
