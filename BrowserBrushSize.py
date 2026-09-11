@@ -1,9 +1,9 @@
 """Automatic browser brush-size detection/selection for supported drawing games.
 
-v1.0.74 keeps this deliberately conservative: control locations are derived from
+The detector stays deliberately conservative: control locations are derived from
 an already verified canvas/palette layout, then checked visually before any click.
-If the control row cannot be verified, no guessed click is generated and Draw
-Studio uses a conservative brush guard fallback instead.
+If the control row cannot be verified, no guessed click is generated and Image
+Draw Bot uses a conservative brush guard fallback instead.
 """
 from __future__ import annotations
 
@@ -46,9 +46,6 @@ def _candidate_positions(profile_key, client_rect, canvas_box=None, palette_box=
     if profile_key == 'sketchheads':
         if palette:
             px0, py0, px1, py1 = palette; y = (py0+py1)//2
-            # SketchHeads places three grey brush-size circles immediately
-            # left of the first true color swatch. Reference layout spacing is
-            # deliberately expressed relative to client height for zoom/DPI.
             scale = max(18, min(34, int(ch*.030)))
             xs = (px0-4.95*scale, px0-3.95*scale, px0-2.45*scale)
             return [_clamp_point((x, y), client_rect) for x in xs]
@@ -100,6 +97,20 @@ def _nearest_index(sizes, brush_px):
     return min(range(len(sizes)), key=lambda i: abs(float(sizes[i])-brush))
 
 
+def _automatic_guard_px(sizes, requested, effective):
+    """Reserve enough CanvasGuard inset for one safe automatic upshift.
+
+    Auto Brush may choose a broader verified preset for large flat image regions,
+    but it may never jump to an arbitrary large game brush. The guard is capped
+    at about 2x the requested/effective brush and always resolves to a real
+    detected preset.
+    """
+    base=max(1,int(effective));requested=max(1,int(requested))
+    cap=max(base,requested*2)
+    allowed=[int(v) for v in sizes if int(v)<=cap]
+    return max(allowed) if allowed else base
+
+
 @dataclass(frozen=True)
 class BrowserBrushPlan:
     profile_key: str
@@ -148,13 +159,14 @@ def plan_browser_brush_size(profile_key, screenshot, client_rect, *, canvas_box=
     target_position=positions[target] if confidence>=.58 else None
     if target_position is not None and isinstance(canvas_box,(tuple,list)) and len(canvas_box)==4:
         cx0,cy0,cx1,cy1=map(int,canvas_box);tx,ty=target_position
-        # A browser brush control must never resolve inside the drawable canvas.
-        # If zoom/reflow leaves no toolbar space, refuse to invent a click and
-        # use the conservative no-click guard fallback instead.
         if cx0-4 <= tx <= cx1+4 and cy0-4 <= ty <= cy1+4:
             target_position=None;confidence=min(confidence,.40)
     effective=int(sizes[target]) if target_position is not None else int(sizes[safe_index])
-    safe_guard=max(effective,12 if target_position is None else effective)
+    safe_guard=(
+        _automatic_guard_px(sizes,requested,effective)
+        if target_position is not None
+        else max(effective,12)
+    )
     return BrowserBrushPlan(key,positions,sizes,target,selected,confidence,target_position,requested,effective,safe_guard,
                             'verified profile-relative brush controls' if target_position else 'visual confidence low; safe fallback')
 
