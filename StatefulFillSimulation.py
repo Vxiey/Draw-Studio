@@ -1,14 +1,16 @@
-"""Stateful discrete Fill simulation for Image Draw Bot v1.0.132-beta.
+"""Stateful discrete Fill simulation for Image Draw Bot.
 
-The existing FillOptimizer remains the topology detector and RegionFillEngine
-remains the first safety/cost gate. This module adds a second, state-at-operation
-check: it rasterizes the planned contour with the configured brush footprint,
-flood-fills from the planned seed, and rejects any region that can escape its
-intended row-span mask or loses too much interior to a narrow passage.
+FillOptimizer remains the topology detector and RegionFillEngine remains the
+first safety/cost gate. This module adds a state-at-operation check: it rasterizes
+the planned contour with the configured brush footprint, flood-fills from the
+planned seed, and rejects any region that can escape its intended row-span mask
+or loses too much interior to a narrow passage.
 
-This is a deterministic discrete brush model. Runtime CanvasGuard and the
-existing post-Fill guard-pixel verification remain authoritative against Paint/
-browser anti-aliasing and application-specific behaviour.
+Batch filtering simulates each candidate in a padded local ROI and updates one
+global painted-state mask in place. This preserves the same discrete safety
+rules while avoiding several full-canvas allocations and copies per Fill region.
+Runtime CanvasGuard and post-Fill guard-pixel verification remain authoritative
+against application-specific anti-aliasing and behaviour.
 """
 from __future__ import annotations
 
@@ -123,7 +125,7 @@ def simulate_fill_region(region: dict[str, Any], size: tuple[int, int], *,
                          brush_px: int = 1, painted_state: np.ndarray | None = None,
                          max_missing_percent: float = 8.0,
                          cancelled=lambda: False) -> tuple[FillSimulationResult, np.ndarray]:
-    """Simulate one contour+Fill operation against the current discrete canvas."""
+    """Simulate one contour+Fill operation against the supplied discrete canvas."""
     w,h=map(int,size)
     intended=_mask_from_spans(region,(w,h))
     intended_n=int(np.count_nonzero(intended))
@@ -190,24 +192,96 @@ def simulate_fill_region(region: dict[str, Any], size: tuple[int, int], *,
                                 0,missing,missing_pct,seed,max(1,int(brush_px)),guards),new_state
 
 
+def _region_roi(region: dict[str, Any], size: tuple[int,int], brush_px: int) -> tuple[int,int,int,int]:
+    """Return an exclusive padded ROI that cannot hide a one-step Fill escape."""
+    w,h=map(int,size);xs=[];ys=[]
+    for raw in region.get("row_spans") or ():
+        try:y,x0,x1=map(int,raw)
+        except (TypeError,ValueError):continue
+        xs.extend((x0,x1));ys.append(y)
+    for raw in region.get("contour") or ():
+        try:x,y=map(lambda value:int(round(float(value))),raw)
+        except (TypeError,ValueError):continue
+        xs.append(x);ys.append(y)
+    for key in ("seed_pixel",):
+        raw=region.get(key)
+        try:x,y=map(int,raw)
+        except (TypeError,ValueError):continue
+        xs.append(x);ys.append(y)
+    for raw in region.get("guard_pixels") or ():
+        try:x,y=map(int,raw)
+        except (TypeError,ValueError):continue
+        xs.append(x);ys.append(y)
+    if not xs or not ys:
+        return (0,0,w,h)
+    pad=max(3,(max(1,int(brush_px))+1)//2+2)
+    x0=max(0,min(xs)-pad);y0=max(0,min(ys)-pad)
+    x1=min(w,max(xs)+pad+1);y1=min(h,max(ys)+pad+1)
+    if x1<=x0 or y1<=y0:return (0,0,w,h)
+    return x0,y0,x1,y1
+
+
+def _local_region(region: dict[str,Any], x0: int, y0: int) -> dict[str,Any]:
+    """Translate only simulation geometry; all other metadata stays untouched."""
+    out=dict(region)
+    spans=[]
+    for raw in region.get("row_spans") or ():
+        try:y,left,right=map(int,raw)
+        except (TypeError,ValueError):continue
+        spans.append((y-y0,left-x0,right-x0))
+    out["row_spans"]=spans
+    contour=[]
+    for raw in region.get("contour") or ():
+        try:x,y=raw;contour.append((int(round(float(x)))-x0,int(round(float(y)))-y0))
+        except (TypeError,ValueError):continue
+    out["contour"]=contour
+    seed=region.get("seed_pixel")
+    try:out["seed_pixel"]=(int(seed[0])-x0,int(seed[1])-y0)
+    except Exception:pass
+    guards=[]
+    for raw in region.get("guard_pixels") or ():
+        try:x,y=map(int,raw);guards.append((x-x0,y-y0))
+        except (TypeError,ValueError):continue
+    out["guard_pixels"]=guards
+    return out
+
+
 def filter_stateful_fill_regions(regions: Iterable[dict[str, Any]], size: tuple[int, int], *,
                                  brush_px: int = 1, cancelled=lambda: False) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    rows=list(regions or ())
-    accepted=[];rejected=[];state=np.zeros((int(size[1]),int(size[0])),dtype=np.bool_)
+    rows=list(regions or ());w,h=map(int,size)
+    accepted=[];rejected=[];state=np.zeros((h,w),dtype=np.bool_)
+    peak_roi_pixels=0;total_roi_pixels=0
     for serial,raw in enumerate(rows):
         if cancelled():raise InterruptedError()
-        region=dict(raw)
-        result,next_state=simulate_fill_region(region,size,brush_px=brush_px,painted_state=state,cancelled=cancelled)
-        region["stateful_fill_simulation"]=result.as_dict()
+        region=dict(raw);x0,y0,x1,y1=_region_roi(region,(w,h),brush_px)
+        roi_w=max(1,x1-x0);roi_h=max(1,y1-y0);roi_pixels=roi_w*roi_h
+        peak_roi_pixels=max(peak_roi_pixels,roi_pixels);total_roi_pixels+=roi_pixels
+        local=_local_region(region,x0,y0)
+        # state[y0:y1,x0:x1] is a view; simulate_fill_region copies only this ROI,
+        # never the whole canvas. Safe results are committed back in place.
+        result,next_local_state=simulate_fill_region(
+            local,(roi_w,roi_h),brush_px=brush_px,
+            painted_state=state[y0:y1,x0:x1],cancelled=cancelled)
+        simulation=result.as_dict()
+        if simulation.get("seed_pixel") is not None:
+            sx,sy=simulation["seed_pixel"];simulation["seed_pixel"]=(int(sx)+x0,int(sy)+y0)
+        simulation["roi"]=(x0,y0,x1,y1);simulation["roi_pixels"]=roi_pixels
+        region["stateful_fill_simulation"]=simulation
         if result.safe:
             region["fill_sequence_index"]=serial
-            accepted.append(region);state=next_state
+            accepted.append(region)
+            state[y0:y1,x0:x1]=next_local_state
         else:
             rejected.append({"region_id":region.get("region_fill_id",serial),"reason":result.reason,
                              "spill_pixels":result.spill_pixels,"missing_percent":result.missing_percent})
+    canvas_pixels=max(1,w*h)
     return accepted,{
-        "enabled":True,"model":"stateful discrete contour + flood simulation",
+        "enabled":True,"model":"stateful local-ROI discrete contour + flood simulation",
         "runtime_guard_authoritative":True,"input_regions":len(rows),
         "accepted_regions":len(accepted),"rejected_regions":len(rejected),
         "painted_state_pixels":int(np.count_nonzero(state)),"rejections":rejected[:24],
+        "allocation_strategy":"one global state + bounded per-region ROI masks",
+        "peak_roi_pixels":int(peak_roi_pixels),"total_roi_pixels":int(total_roi_pixels),
+        "peak_roi_percent_of_canvas":round(peak_roi_pixels/canvas_pixels*100.0,3),
+        "full_canvas_state_copies_per_region":0,
     }
