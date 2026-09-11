@@ -1,10 +1,9 @@
 import unittest
 
-import numpy as np
-
 from AdaptiveBrushEngine import assign_adaptive_brushes, _collapse_transient_upshifts
 from DrawTimeEstimate import estimate_from_plan
 from ExtraFast import select_fast_regions
+from RegionFillEngine import _decision_fill_cost, estimate_fill_execution_seconds
 from StatefulFillSimulation import filter_stateful_fill_regions
 from Version import APP_VERSION, FILE_VERSION
 
@@ -79,6 +78,28 @@ class BottleneckFixesV10146Tests(unittest.TestCase):
         self.assertEqual(changed,1)
         self.assertEqual([row['brush_px'] for row in rows],[4,4,4])
         self.assertIn('switch-hysteresis',rows[1]['brush_reason'])
+
+    def test_region_fill_extra_fast_gate_uses_core_cost_before_batch_check(self):
+        self.assertEqual(_decision_fill_cost(1.0,.72,{'extra_fast':True}),.72)
+        self.assertEqual(_decision_fill_cost(1.0,.72,{'extra_fast':False}),1.0)
+
+    def test_region_fill_estimate_removes_per_region_switch_then_batches_once(self):
+        regions=[]
+        for offset in (0,70):
+            r=closed_region(10+offset,10,55+offset,55,color=3)
+            r.update(fill_cost_seconds=.52,fill_core_cost_seconds=.42,
+                     fill_batchable_overhead_seconds=.10)
+            regions.append(r)
+        meta=estimate_fill_execution_seconds(
+            regions,(200,100),(200,100),
+            {'fill_tool_available':True,'fill_tool_actions':[('fill',(1,1))],
+             'fill_restore_actions':[('brush',(2,2))],'ui_control_delay':.10})
+        self.assertTrue(meta['batch_aware'])
+        self.assertEqual(meta['fill_color_batches'],1)
+        self.assertAlmostEqual(meta['fill_contour_and_click_seconds'],.84,places=2)
+        self.assertAlmostEqual(meta['fill_tool_switch_seconds'],.20,places=2)
+        self.assertAlmostEqual(meta['total_seconds'],1.04,places=2)
+        self.assertAlmostEqual(meta['per_region_tool_switch_seconds_removed'],.20,places=2)
 
     def test_extra_fast_charges_shared_fill_controls_once_per_color_batch(self):
         regions=[]
