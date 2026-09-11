@@ -27,6 +27,13 @@ jobs:
         run: |
           sed -i 's/minimum=2)/minimum=1)/' .github/patch-total-time-auto-brush.py
           sed -i "s/if progress_count<2:/if progress_count<1:/" .github/patch-total-time-auto-brush.py
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('.github/patch-total-time-auto-brush.py')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace("_paint_brush_raw=str(self.brush_px.get()).strip()","_paint_brush_raw=str(getattr(getattr(self,'brush_px',None),'get',lambda:'1')()).strip()")
+          p.write_text(s,encoding='utf-8')
+          PY
           python .github/patch-total-time-auto-brush.py
       - name: Compile changed Python modules
         run: python -m py_compile AutoBrushWidth.py DrawBot.py StudioUI.py PaintPreparation.py DrawTimeCalibration.py test_auto_brush_total_time_v10144.py
