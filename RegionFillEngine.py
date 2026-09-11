@@ -192,6 +192,33 @@ def _region_cost(region: dict[str, Any], options: dict[str, Any], image_size: tu
     return max(.001,stroke_cost),max(.001,fill_cost)
 
 
+def _batchable_tool_cost(options: dict[str, Any]) -> float:
+    """Return only the per-region tool switch already embedded in Fill cost."""
+    try:
+        from HybridCostModel import build_cost_model
+        model = build_cost_model(options)
+        if model.calibrated:
+            return max(0.0, float(model.tool_change_seconds))
+    except Exception:
+        pass
+    delivery = resolve_stroke_delivery(options, dry_run=False)
+    return max(.08, float(delivery.ui_control_delay) * .45)
+
+
+def _region_cost_components(region: dict[str, Any], options: dict[str, Any], image_size: tuple[int, int], fitted: tuple[int, int]) -> tuple[float, float, float, float]:
+    stroke_cost, fill_cost = _region_cost(region, options, image_size, fitted)
+    batchable = max(0.0, min(_batchable_tool_cost(options), fill_cost * .50))
+    fill_core = max(.001, fill_cost - batchable)
+    return stroke_cost, fill_cost, fill_core, batchable
+
+
+def _decision_fill_cost(fill_cost: float, fill_core: float, options: dict[str, Any]) -> float:
+    # Extra Fast performs the authoritative same-colour batch check after this
+    # safety/value gate. Do not reject a candidate because the same shareable
+    # tool switch was charged once per region before batching.
+    return fill_core if options.get("extra_fast") else fill_cost
+
+
 def build_region_fill_plan(image, fitted: tuple[int, int], options: dict[str, Any], *, safe_margin_px: int = 0, cancelled=lambda: False) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Return accepted region dictionaries plus planner metadata.
 
@@ -251,12 +278,13 @@ def build_region_fill_plan(image, fitted: tuple[int, int], options: dict[str, An
         risk, confidence, safety_reason = _risk(
             region, aggressiveness=aggressiveness, quality=quality, brush_px=brush_px
         )
-        stroke_cost, fill_cost = _region_cost(region, options, image.size, fitted)
-        saving = max(0.0, stroke_cost - fill_cost)
+        stroke_cost, fill_cost, fill_core, batchable = _region_cost_components(region, options, image.size, fitted)
+        decision_fill_cost = _decision_fill_cost(fill_cost, fill_core, options)
+        saving = max(0.0, stroke_cost - decision_fill_cost)
         thin_score=_thin_neck_score(region, brush_px)
         visual_error=max(.005,min(1.0,risk*.62 + thin_score*.20 + (1.0-confidence)*.18))
         seconds_per_error=saving/max(.01,visual_error)
-        cost_ok = fill_cost <= stroke_cost * (1.0 - min_saving_ratio)
+        cost_ok = decision_fill_cost <= stroke_cost * (1.0 - min_saving_ratio)
         value_ok = saving >= absolute_saving_floor and seconds_per_error >= value_threshold
         safety_ok = safety_reason == "safe"
         accepted_here = bool(safety_ok and cost_ok and value_ok)
@@ -295,6 +323,8 @@ def build_region_fill_plan(image, fitted: tuple[int, int], options: dict[str, An
                 "thin_neck_score": round(decision.thin_neck_score, 5),
                 "stroke_cost_seconds": round(stroke_cost, 5),
                 "fill_cost_seconds": round(fill_cost, 5),
+                "fill_core_cost_seconds": round(fill_core, 5),
+                "fill_batchable_overhead_seconds": round(batchable, 5),
                 "estimated_time_saved_seconds": round(saving, 5),
                 "visual_error_cost": round(visual_error, 6),
                 "seconds_saved_per_visual_error": round(seconds_per_error, 4),
@@ -337,6 +367,7 @@ def build_region_fill_plan(image, fitted: tuple[int, int], options: dict[str, An
         "outline_simplification": "exact-collinear only",
         "region_merging": "disabled here; existing palette/grouping policy remains authoritative",
         "pixel_accurate_protected": False,
+        "extra_fast_batch_aware_costing": bool(options.get("extra_fast")),
         "decisions": [d.as_dict() for d in decisions[:80]],
         "decision_count": len(decisions),
     })
@@ -372,11 +403,12 @@ def evaluate_region_candidates(regions, image_size: tuple[int, int], fitted: tup
         if cancelled():raise InterruptedError()
         region=item.as_dict() if hasattr(item,'as_dict') else dict(item)
         risk,confidence,safety_reason=_risk(region,aggressiveness=aggressiveness,quality=quality,brush_px=brush_px)
-        stroke_cost,fill_cost=_region_cost(region,options,image_size,fitted)
-        saving=max(0.0,stroke_cost-fill_cost);thin_score=_thin_neck_score(region,brush_px)
+        stroke_cost,fill_cost,fill_core,batchable=_region_cost_components(region,options,image_size,fitted)
+        decision_fill_cost=_decision_fill_cost(fill_cost,fill_core,options)
+        saving=max(0.0,stroke_cost-decision_fill_cost);thin_score=_thin_neck_score(region,brush_px)
         visual_error=max(.005,min(1.0,risk*.62+thin_score*.20+(1.0-confidence)*.18))
         seconds_per_error=saving/max(.01,visual_error)
-        cost_ok=fill_cost<=stroke_cost*(1.0-min_saving_ratio)
+        cost_ok=decision_fill_cost<=stroke_cost*(1.0-min_saving_ratio)
         value_ok=saving>=absolute_saving_floor and seconds_per_error>=value_threshold
         safety_ok=safety_reason=='safe';accepted_here=bool(safety_ok and cost_ok and value_ok)
         reason='safe and high time-saved/visual-error value'
@@ -390,6 +422,7 @@ def evaluate_region_candidates(regions, image_size: tuple[int, int], fitted: tup
             region.update({'region_fill_id':idx,'render_method':'OUTLINE_FILL','fill_confidence':round(confidence,5),
                            'leak_risk':round(risk,5),'thin_neck_score':round(thin_score,5),
                            'stroke_cost_seconds':round(stroke_cost,5),'fill_cost_seconds':round(fill_cost,5),
+                           'fill_core_cost_seconds':round(fill_core,5),'fill_batchable_overhead_seconds':round(batchable,5),
                            'estimated_time_saved_seconds':round(saving,5),'visual_error_cost':round(visual_error,6),
                            'seconds_saved_per_visual_error':round(seconds_per_error,4),'outline_simplification':'exact-collinear'})
             accepted.append(region)
@@ -405,7 +438,8 @@ def evaluate_region_candidates(regions, image_size: tuple[int, int], fitted: tup
         'fill_value_threshold':value_threshold,'fill_absolute_saving_floor_seconds':absolute_saving_floor,
         'fill_color_batches':len({int(r.get('color_index',-1)) for r in accepted if int(r.get('color_index',-1))>=0}),
         'outline_simplification':'exact-collinear only','pixel_accurate_protected':False,
-        'fallback_render_method':'CONNECTED_SCANLINES','decisions':[d.as_dict() for d in decisions[:80]],'decision_count':len(decisions)})
+        'fallback_render_method':'CONNECTED_SCANLINES','extra_fast_batch_aware_costing':bool(options.get('extra_fast')),
+        'decisions':[d.as_dict() for d in decisions[:80]],'decision_count':len(decisions)})
     return accepted,meta
 
 def enrich_region_stats(meta: dict[str, Any] | None, *, source_strokes: int, final_paths: int) -> dict[str, Any]:
@@ -421,20 +455,34 @@ def enrich_region_stats(meta: dict[str, Any] | None, *, source_strokes: int, fin
 
 
 def estimate_fill_execution_seconds(regions: Iterable[dict[str, Any]], image_size: tuple[int, int], fitted: tuple[int, int], options: dict[str, Any]) -> dict[str, Any]:
-    """Operation-level fill estimate using the same configured delays as execution."""
+    """Batch-aware Fill estimate using the same configured delays as execution."""
     rows = [dict(r) for r in (regions or ())]
     delivery = resolve_stroke_delivery(options, dry_run=False)
     fill_seconds = 0.0
+    removed_per_region_switch = 0.0
+    inferred_batchable = _batchable_tool_cost(options)
     for region in rows:
-        stored = region.get("fill_cost_seconds")
-        if stored is not None:
+        stored_core = region.get("fill_core_cost_seconds")
+        if stored_core is not None:
             try:
-                fill_seconds += max(0.0, float(stored))
+                fill_seconds += max(0.0, float(stored_core))
+                removed_per_region_switch += max(0.0, float(region.get("fill_batchable_overhead_seconds", 0.0) or 0.0))
                 continue
             except Exception:
                 pass
-        _stroke, cost = _region_cost(region, options, image_size, fitted)
-        fill_seconds += cost
+        stored = region.get("fill_cost_seconds")
+        if stored is not None:
+            try:
+                total = max(0.0, float(stored))
+                batchable = max(0.0, min(inferred_batchable, total * .50))
+                fill_seconds += max(0.0, total - batchable)
+                removed_per_region_switch += batchable
+                continue
+            except Exception:
+                pass
+        _stroke, _total, core, batchable = _region_cost_components(region, options, image_size, fitted)
+        fill_seconds += core
+        removed_per_region_switch += batchable
     colors = {int(r.get("color_index", -1)) for r in rows if int(r.get("color_index", -1)) >= 0}
     tool_actions = len(options.get("fill_tool_actions") or ()) + len(options.get("fill_restore_actions") or ())
     # Preview planning intentionally does not resolve screen-coordinate tool
@@ -448,5 +496,7 @@ def estimate_fill_execution_seconds(regions: Iterable[dict[str, Any]], image_siz
         "fill_color_batches": len(colors),
         "fill_contour_and_click_seconds": round(fill_seconds, 4),
         "fill_tool_switch_seconds": round(tool_switch_seconds, 4),
+        "per_region_tool_switch_seconds_removed": round(removed_per_region_switch, 4),
+        "batch_aware": True,
         "total_seconds": round(fill_seconds + tool_switch_seconds, 4),
     }

@@ -2,11 +2,10 @@
 
 The planner keeps source geometry authoritative, then this module assigns a
 physically executable brush width to every path. Multi-size drawing is enabled
-only when BrowserBrushSize verified the target controls. The automatic selector
-uses planned image geometry (detail density, protected features, component
-thickness and path complexity) to choose a safe base brush, while corrections
-and small details always use the smallest verified brush. No mouse input occurs
-here.
+only when BrowserBrushSize verified the target controls. The selector uses the
+verified brush ladder, component geometry and path semantics while protecting
+corrections, small details and thin structures. A conservative hysteresis pass
+removes one-path brush upshifts that cost more UI time than they can save.
 """
 from __future__ import annotations
 
@@ -31,13 +30,7 @@ def _plan_confidence(plan: dict) -> float:
 
 def verified_brush_sizes(profile_key: str, browser_brush_plan: dict | None,
                          default_brush_px: int) -> tuple[tuple[int,...], bool]:
-    """Return only brush sizes whose UI controls and safety inset were verified.
-
-    Older plans do not expose ``safe_guard_px``; for those plans the historic
-    behavior is preserved and the manual/default brush remains the upper bound.
-    Newer browser preflight plans may expose a larger verified guard, which lets
-    Auto Brush use a broader preset without weakening CanvasGuard.
-    """
+    """Return only brush sizes whose UI controls and safety inset were verified."""
     default=max(1,int(default_brush_px or 1))
     plan=browser_brush_plan if isinstance(browser_brush_plan,dict) else {}
     sizes=_unique_sizes(plan.get('nominal_sizes'),default)
@@ -49,8 +42,7 @@ def verified_brush_sizes(profile_key: str, browser_brush_plan: dict | None,
     try:safe_guard=max(default,int(round(float(plan.get('safe_guard_px',default) or default))))
     except (TypeError,ValueError):safe_guard=default
     usable=tuple(v for v in sizes if v<=safe_guard)
-    if not usable:
-        usable=(default,)
+    if not usable:usable=(default,)
     return usable,True
 
 
@@ -75,111 +67,105 @@ def _component_thin(entry: dict) -> int | None:
 
 
 def analyze_brush_demand(execution_sequence: Sequence[dict]) -> dict:
-    """Classify the planned image geometry for automatic brush selection.
-
-    This intentionally analyzes planner output rather than re-reading pixels, so
-    preview and final rendering use the same source of truth and no extra image
-    buffer is allocated.
-    """
+    """Classify planned image geometry without allocating another image buffer."""
     total=0
     detail=protected=high_importance=turn_heavy=narrow=large_foundation=0
-    importance_sum=0.0
-    thin_values=[]
+    importance_sum=0.0;thin_values=[]
     for raw in execution_sequence or ():
-        if not isinstance(raw,dict):
-            continue
+        if not isinstance(raw,dict):continue
         total+=1
         phase=str(raw.get('phase') or 'fine_detail').rsplit('/',1)[-1]
         is_protected=bool(raw.get('protected'))
         importance=max(0.0,min(1.0,_safe_float(raw.get('importance',0),0)))
-        path=raw.get('path') or ()
-        turns=max(0,len(path)-2)
+        path=raw.get('path') or ();turns=max(0,len(path)-2)
         thin=_component_thin(raw)
         try:area=max(0,int(raw.get('component_area',0) or 0))
         except (TypeError,ValueError):area=0
-
-        if phase in ('fine_detail','cleanup') or phase.startswith('correction_'):
-            detail+=1
-        if is_protected:
-            protected+=1
-        if importance>=.58:
-            high_importance+=1
-        if turns>=2:
-            turn_heavy+=1
+        if phase in ('fine_detail','cleanup') or phase.startswith('correction_'):detail+=1
+        if is_protected:protected+=1
+        if importance>=.58:high_importance+=1
+        if turns>=2:turn_heavy+=1
         if thin is not None:
             thin_values.append(thin)
             if thin<=6:narrow+=1
-        if phase in ('fill','foundation','base') and area>=128 and importance<.58 and not is_protected:
-            large_foundation+=1
+        if phase in ('fill','foundation','base') and area>=128 and importance<.58 and not is_protected:large_foundation+=1
         importance_sum+=importance
-
     if total<=0:
-        return {
-            'classification':'balanced','detail_score':0.5,'flat_score':0.0,
-            'paths':0,'detail_ratio':0.0,'protected_ratio':0.0,
-            'narrow_ratio':0.0,'turn_ratio':0.0,'mean_importance':0.0,
-            'large_foundation_ratio':0.0,'median_thin_px':None,
-        }
-    detail_ratio=detail/total
-    protected_ratio=protected/total
-    high_ratio=high_importance/total
-    turn_ratio=turn_heavy/total
-    narrow_ratio=narrow/total
-    foundation_ratio=large_foundation/total
-    mean_importance=importance_sum/total
-    median_thin=None
+        return {'classification':'balanced','detail_score':0.5,'flat_score':0.0,'paths':0,
+                'detail_ratio':0.0,'protected_ratio':0.0,'narrow_ratio':0.0,'turn_ratio':0.0,
+                'mean_importance':0.0,'large_foundation_ratio':0.0,'median_thin_px':None}
+    detail_ratio=detail/total;protected_ratio=protected/total;high_ratio=high_importance/total
+    turn_ratio=turn_heavy/total;narrow_ratio=narrow/total;foundation_ratio=large_foundation/total
+    mean_importance=importance_sum/total;median_thin=None
     if thin_values:
         ordered=sorted(thin_values);median_thin=ordered[len(ordered)//2]
-
-    detail_score=min(1.0,
-        detail_ratio*.34 + protected_ratio*.22 + high_ratio*.18 +
-        turn_ratio*.10 + narrow_ratio*.10 + mean_importance*.06)
-    flat_score=min(1.0,
-        foundation_ratio*.72 + max(0.0,.45-detail_score)*.62)
-    if detail_score>=.48:
-        classification='detail-heavy'
-    elif flat_score>=.42 and detail_score<=.30:
-        classification='flat-shape'
-    else:
-        classification='balanced'
-    return {
-        'classification':classification,
-        'detail_score':round(detail_score,4),'flat_score':round(flat_score,4),
-        'paths':int(total),'detail_ratio':round(detail_ratio,4),
-        'protected_ratio':round(protected_ratio,4),'narrow_ratio':round(narrow_ratio,4),
-        'turn_ratio':round(turn_ratio,4),'mean_importance':round(mean_importance,4),
-        'large_foundation_ratio':round(foundation_ratio,4),
-        'median_thin_px':median_thin,
-    }
+    detail_score=min(1.0,detail_ratio*.34+protected_ratio*.22+high_ratio*.18+turn_ratio*.10+narrow_ratio*.10+mean_importance*.06)
+    flat_score=min(1.0,foundation_ratio*.72+max(0.0,.45-detail_score)*.62)
+    classification='detail-heavy' if detail_score>=.48 else 'flat-shape' if flat_score>=.42 and detail_score<=.30 else 'balanced'
+    return {'classification':classification,'detail_score':round(detail_score,4),'flat_score':round(flat_score,4),
+            'paths':int(total),'detail_ratio':round(detail_ratio,4),'protected_ratio':round(protected_ratio,4),
+            'narrow_ratio':round(narrow_ratio,4),'turn_ratio':round(turn_ratio,4),'mean_importance':round(mean_importance,4),
+            'large_foundation_ratio':round(foundation_ratio,4),'median_thin_px':median_thin}
 
 
 def _select_auto_levels(sizes: Sequence[int], default: int, demand: dict,
                         *, dynamic: bool) -> tuple[int,int,int,str]:
     values=tuple(sorted({max(1,int(v)) for v in sizes})) or (max(1,int(default)),)
-    smallest=values[0]
-    manual=_nearest_not_above(values,default)
-    if not dynamic or len(values)==1:
-        return manual,manual,smallest,'fixed-unverified-controls'
-
-    # Never jump more than ~2x the user's/default requested width even when the
-    # browser exposes very large presets. CanvasGuard remains the hard ceiling.
+    smallest=values[0];manual=_nearest_not_above(values,default)
+    if not dynamic or len(values)==1:return manual,manual,smallest,'fixed-unverified-controls'
+    # Base remains conservative. Large flat regions may independently climb the
+    # verified ladder after geometry checks in _foundation_brush().
     growth_cap=max(default,default*2)
     candidates=tuple(v for v in values if v<=growth_cap) or (manual,)
     classification=str(demand.get('classification') or 'balanced')
-    if classification=='flat-shape':
-        base=max(candidates)
-        reason='auto-flat-shape'
+    if classification=='flat-shape':base=max(candidates);reason='auto-flat-shape'
     elif classification=='detail-heavy':
-        target=max(smallest,int(round(default*.75)))
-        base=_nearest_not_above(candidates,target)
-        reason='auto-detail-heavy'
-    else:
-        base=_nearest_not_above(candidates,default)
-        reason='auto-balanced'
-
-    lower=[v for v in values if v<base]
-    middle=max(lower) if lower else smallest
+        target=max(smallest,int(round(default*.75)));base=_nearest_not_above(candidates,target);reason='auto-detail-heavy'
+    else:base=_nearest_not_above(candidates,default);reason='auto-balanced'
+    lower=[v for v in values if v<base];middle=max(lower) if lower else smallest
     return int(base),int(middle),int(smallest),reason
+
+
+def _foundation_brush(sizes: Sequence[int], base: int, entry: dict) -> tuple[int,int]:
+    """Choose the largest verified width that fits this component's real geometry."""
+    values=tuple(sorted({max(1,int(v)) for v in sizes})) or (max(1,int(base)),)
+    thin=_component_thin(entry)
+    try:area=max(0,int(entry.get('component_area',0) or 0))
+    except (TypeError,ValueError,AttributeError):area=0
+    path=entry.get('path') or ();turns=max(0,len(path)-2)
+    importance=max(0.0,min(1.0,_safe_float(entry.get('importance',0),0)))
+    ceiling=max(values)
+    # Keep a broad brush well inside the component rather than merely inside its bbox.
+    if thin is not None:ceiling=min(ceiling,max(1,int(thin*.45)))
+    if area>0:ceiling=min(ceiling,max(1,int((area**.5)*.42)))
+    if turns>=2:ceiling=min(ceiling,max(1,int(base)))
+    if importance>=.58:ceiling=min(ceiling,max(1,int(base)))
+    brush=_nearest_not_above(values,ceiling)
+    return int(brush),int(max(1,ceiling))
+
+
+def _sensitive(entry: dict) -> bool:
+    phase=str(entry.get('phase') or 'fine_detail').rsplit('/',1)[-1]
+    return bool(entry.get('protected')) or phase in ('fine_detail','cleanup') or phase.startswith('correction_')
+
+
+def _collapse_transient_upshifts(rows: list[dict]) -> int:
+    """Remove A-B-A one-path upshifts when B is only a speed optimization.
+
+    Replacing B with the smaller surrounding brush cannot reduce raster detail;
+    it only avoids two UI brush changes whose overhead dominates a single path.
+    """
+    changed=0
+    if len(rows)<3:return changed
+    for i in range(1,len(rows)-1):
+        previous,current,nxt=rows[i-1],rows[i],rows[i+1]
+        try:a=int(previous.get('brush_px',1));b=int(current.get('brush_px',1));c=int(nxt.get('brush_px',1))
+        except (TypeError,ValueError):continue
+        if a!=c or b<=a or _sensitive(current):continue
+        current['brush_px']=a
+        current['brush_reason']=str(current.get('brush_reason') or 'auto')+'+switch-hysteresis'
+        changed+=1
+    return changed
 
 
 def assign_adaptive_brushes(execution_sequence: Sequence[dict], *, profile_key: str = '',
@@ -190,56 +176,54 @@ def assign_adaptive_brushes(execution_sequence: Sequence[dict], *, profile_key: 
     demand=analyze_brush_demand(execution_sequence)
     base,middle,smallest,auto_reason=_select_auto_levels(sizes,default,demand,dynamic=dynamic)
 
-    result=[];reasons=Counter();counts=Counter();previous=None;switches=0
+    result=[]
     for raw in execution_sequence:
         entry=dict(raw);phase=str(entry.get('phase') or 'fine_detail').rsplit('/',1)[-1]
         protected=bool(entry.get('protected'))
         importance=max(0.0,min(1.0,_safe_float(entry.get('importance',0),0)))
-        thin=_component_thin(entry)
-        path=entry.get('path') or ();turns=max(0,len(path)-2)
-        brush=base;reason=auto_reason
-
+        thin=_component_thin(entry);path=entry.get('path') or ();turns=max(0,len(path)-2)
+        brush=base;reason=auto_reason;ceiling=base
         if not dynamic:
             brush=base;reason='fixed-unverified-controls'
         elif phase.startswith('correction_'):
-            brush=smallest;reason='accuracy-correction'
+            brush=smallest;reason='accuracy-correction';ceiling=smallest
         elif phase=='cleanup' or protected:
-            brush=smallest;reason='protected-detail'
+            brush=smallest;reason='protected-detail';ceiling=smallest
         elif phase=='fine_detail':
-            brush=smallest;reason='fine-detail'
+            brush=smallest;reason='fine-detail';ceiling=smallest
         elif phase=='mid_detail':
             thin_value=thin if thin is not None else 999999
             if thin_value<=max(3,base*2) or importance>=.58 or turns>=2:
-                brush=smallest;reason='edge-sensitive-mid-detail'
+                brush=smallest;reason='edge-sensitive-mid-detail';ceiling=smallest
             else:
-                brush=middle;reason='mid-detail'
-        elif phase in ('structure','contour','outline') and (
-            importance>=.46 or (thin is not None and thin<=max(5,base*2))
-        ):
-            brush=middle;reason='structure-detail-balance'
+                brush=middle;reason='mid-detail';ceiling=middle
+        elif phase in ('fill','foundation','base'):
+            brush,ceiling=_foundation_brush(sizes,base,entry);reason='geometry-foundation'
+        elif phase in ('structure','contour','outline'):
+            geometric,ceiling=_foundation_brush(sizes,base,entry)
+            brush=min(geometric,base if importance>=.46 or (thin is not None and thin<=max(5,base*2)) else geometric)
+            reason='structure-detail-balance'
         else:
-            brush=base;reason=auto_reason
+            brush=base;reason=auto_reason;ceiling=base
+        brush=int(max(1,brush));entry['brush_px']=brush;entry['brush_reason']=reason;entry['brush_ceiling_px']=int(max(1,ceiling))
+        result.append(entry)
 
-        brush=int(max(1,brush));entry['brush_px']=brush;entry['brush_reason']=reason
-        counts[brush]+=1;reasons[reason]+=1
+    collapsed=_collapse_transient_upshifts(result) if dynamic else 0
+    counts=Counter();reasons=Counter();previous=None;switches=0
+    for entry in result:
+        brush=int(entry.get('brush_px',base) or base);counts[brush]+=1;reasons[str(entry.get('brush_reason') or 'unknown')]+=1
         if previous is not None and brush!=previous:switches+=1
-        previous=brush;result.append(entry)
-
+        previous=brush
     return {'execution_sequence':result,'metadata':{
-        # Keep the historic engine name for compatibility with existing plan
-        # diagnostics/tests; policy_version identifies the smarter selector.
-        'engine':'Adaptive Brush Draw Motor v2','policy_version':3,
-        'automatic_image_brush_selection':bool(dynamic),
-        'dynamic_brush_enabled':bool(dynamic),
-        'profile_key':str(profile_key or ''),
-        'available_brush_sizes':tuple(map(int,sizes)),
-        'requested_brush_px':default,'default_brush_px':base,
-        'detail_brush_px':smallest,'mid_brush_px':middle,
-        'auto_base_reason':auto_reason,'image_brush_demand':demand,
-        'brush_path_counts':{str(k):int(v) for k,v in sorted(counts.items())},
+        'engine':'Adaptive Brush Draw Motor v2','policy_version':4,
+        'automatic_image_brush_selection':bool(dynamic),'dynamic_brush_enabled':bool(dynamic),
+        'profile_key':str(profile_key or ''),'available_brush_sizes':tuple(map(int,sizes)),
+        'used_brush_sizes':tuple(sorted(counts)),'requested_brush_px':default,'default_brush_px':base,
+        'detail_brush_px':smallest,'mid_brush_px':middle,'auto_base_reason':auto_reason,
+        'image_brush_demand':demand,'brush_path_counts':{str(k):int(v) for k,v in sorted(counts.items())},
         'brush_reason_counts':dict(reasons),'planned_brush_switches':int(switches),
-        'geometry_changed':False,
-        'quality_priority':'automatic image-aware base brush; protected/detail paths use the smallest verified brush'}}
+        'transient_upshifts_collapsed':int(collapsed),'geometry_changed':False,
+        'quality_priority':'all verified sizes for safe broad regions; protected/detail paths use the smallest verified brush'}}
 
 
 def brush_for_entry(entry: dict, default_brush_px: int) -> int:

@@ -1,8 +1,10 @@
 """Measured/calibrated draw-time estimates for Image Draw Bot.
 
-v1.0.119 keeps the planner's operation timing model, then—when available—uses
-completed local runtime samples to correct the estimate for the actual machine,
-profile, browser and input cadence. No network/telemetry is used.
+The visible estimate is based on the actual final execution sequence whenever it
+exists: ordered paths, colour changes, brush changes, Fill batches/clicks and
+verification operations. Completed local runtime samples then correct that
+cold-start operation model for the current profile/machine. No network telemetry
+is used.
 """
 from __future__ import annotations
 
@@ -97,6 +99,117 @@ def _local_calibration(options: dict[str, Any]) -> dict[str, Any]:
         return {"learned": False, "samples": 0, "ratio": 1.0, "mape": None}
 
 
+def _count_transitions(values, initial=None, *, count_first=True) -> int:
+    count=0;previous=initial;have_previous=initial is not None
+    for value in values:
+        if value is None:continue
+        if not have_previous:
+            count += 1 if count_first else 0
+            previous=value;have_previous=True;continue
+        if value != previous:
+            count+=1;previous=value
+    return count
+
+
+def _path_scale(plan: dict[str,Any], options: dict[str,Any]) -> tuple[float,float]:
+    sx=sy=1.0
+    image=plan.get("image")
+    fitted=plan.get("fitted")
+    try:
+        iw,ih=map(int,image.size);fw,fh=map(int,fitted)
+        if iw>0 and ih>0 and fw>0 and fh>0:sx=fw/iw;sy=fh/ih
+    except Exception:
+        pass
+    try:sx=float(options.get("_hybrid_scale_x",sx) or sx)
+    except Exception:pass
+    try:sy=float(options.get("_hybrid_scale_y",sy) or sy)
+    except Exception:pass
+    return max(.001,sx),max(.001,sy)
+
+
+def _sequence_operation_estimate(plan: dict[str,Any]) -> tuple[float,dict[str,Any]]:
+    """Cost the exact ordered final sequence with an unlearned operation model.
+
+    Calibration is deliberately disabled inside HybridCostModel here because the
+    visible estimator applies DrawTimeCalibration afterwards. This prevents the
+    same learned actual/predicted ratio from being applied twice.
+    """
+    sequence=[row for row in (plan.get("execution_sequence") or ()) if isinstance(row,dict)]
+    if not sequence:
+        return 0.0,{"used":False,"reason":"no final execution_sequence"}
+    options=plan.get("options") if isinstance(plan.get("options"),dict) else {}
+    model_options=dict(options)
+    sx,sy=_path_scale(plan,options)
+    model_options["_hybrid_scale_x"]=sx;model_options["_hybrid_scale_y"]=sy
+    model_options["_hybrid_cost_calibration_override"]={"samples":0,"ratio":1.0,"operation_runtime":{}}
+    try:
+        from HybridCostModel import build_cost_model
+        model=build_cost_model(model_options)
+    except Exception as exc:
+        return 0.0,{"used":False,"reason":f"cost model unavailable: {type(exc).__name__}"}
+
+    paths=[];colors=[];brushes=[]
+    for row in sequence:
+        path=tuple(row.get("path") or ())
+        if path:paths.append(path)
+        try:colors.append(int(row.get("color_index")))
+        except Exception:colors.append(None)
+        try:brushes.append(max(1,int(row.get("brush_px",options.get("brush_px",1)) or 1)))
+        except Exception:brushes.append(max(1,int(options.get("brush_px",1) or 1)))
+
+    color_changes=_count_transitions(colors,count_first=True)
+    try:initial_brush=max(1,int(options.get("brush_px",1) or 1))
+    except Exception:initial_brush=1
+    brush_changes=_count_transitions(brushes,initial=initial_brush,count_first=False)
+
+    fill_regions=[row for row in (options.get("fill_regions") or plan.get("fill_regions") or ()) if isinstance(row,dict)]
+    fill_colors=set();fill_contours=[]
+    for region in fill_regions:
+        contour=tuple(region.get("contour") or ())
+        if contour:fill_contours.append(contour)
+        try:fill_colors.add(int(region.get("color_index")))
+        except Exception:pass
+    # Outline+Fill executes the contour in addition to the ordinary sequence.
+    paths.extend(fill_contours)
+    fill_actions=len(fill_regions)
+    verification_actions=len(fill_regions)
+    tool_action_count=len(options.get("fill_tool_actions") or ())+len(options.get("fill_restore_actions") or ())
+    if fill_regions and tool_action_count==0 and options.get("fill_tool_available"):
+        tool_action_count=2
+    tool_changes=len(fill_colors)*tool_action_count
+
+    background=options.get("background_fill_plan") or {}
+    if isinstance(background,dict) and background.get("enabled"):
+        fill_actions+=1;verification_actions+=1
+        if tool_action_count:tool_changes+=tool_action_count
+
+    breakdown=model.execution_breakdown(
+        paths,color_changes=color_changes,tool_changes=tool_changes,
+        brush_changes=brush_changes,fill_actions=fill_actions,
+        verification_actions=verification_actions)
+    total=max(0.0,float(breakdown.get("total_seconds") or 0.0))
+
+    # Countdown and destructive clear are outside execution_sequence and are not
+    # represented by the operation terms above. Do not re-add palette/Fill/tool
+    # fixed overhead here because those operations are already explicitly counted.
+    deadline_meta=options.get("adaptive_deadline_meta") or {}
+    fixed=deadline_meta.get("fixed_overhead") or {}
+    outside_sequence=0.0
+    for key in ("countdown_seconds","clear_seconds"):
+        try:outside_sequence+=max(0.0,float(fixed.get(key,0.0) or 0.0))
+        except Exception:pass
+    total+=outside_sequence
+    return total,{
+        "used":True,"model":"final execution sequence + cold-start HybridCostModel",
+        "path_count":len(paths),"stroke_sequence_paths":len(sequence),
+        "fill_contour_paths":len(fill_contours),"color_changes":color_changes,
+        "brush_changes":brush_changes,"fill_actions":fill_actions,
+        "fill_color_batches":len(fill_colors),"tool_changes":tool_changes,
+        "verification_actions":verification_actions,"outside_sequence_seconds":round(outside_sequence,4),
+        "scale_x":round(sx,5),"scale_y":round(sy,5),"breakdown":breakdown,
+    }
+
+
 def _measured_throughput_floor(plan: dict[str, Any], seconds: float) -> tuple[float, int]:
     """Use only genuinely learned Real-Speed history, never fallback PPS guesses."""
     options = plan.get("options") if isinstance(plan.get("options"), dict) else {}
@@ -110,8 +223,6 @@ def _measured_throughput_floor(plan: dict[str, Any], seconds: float) -> tuple[fl
         if pps <= 0:
             return seconds, 0
         count = max(0, int(plan.get("count") or 0))
-        # operation_overhead_seconds excludes normal stroke paths and therefore
-        # can safely be added to measured path throughput.
         overhead = max(0.0, float(plan.get("operation_overhead_seconds") or 0.0))
         measured = count / pps + overhead
         return max(seconds, measured), int(stored.get("samples") or 0)
@@ -135,8 +246,6 @@ def _measured_operation_floor(plan: dict[str, Any], calibration: dict[str, Any],
             measured += avg*n; matched += n
     if matched:
         fixed=meta.get("fixed_overhead") or {}
-        # Runtime path measurements start after countdown. Add non-path setup
-        # that is not already represented by measured palette/tool operations.
         measured += max(0.0,float(fixed.get("countdown_seconds",3.0) or 0.0))
         measured += max(0.0,float(fixed.get("clear_seconds",0.0) or 0.0))
         measured += max(0.0,float(fixed.get("fill_seconds",0.0) or 0.0))
@@ -151,34 +260,25 @@ def _apply_measured_correction(plan: dict[str, Any], seconds: float) -> tuple[fl
     base, operation_samples = _measured_operation_floor(plan,cal,base)
     samples = int(cal.get("samples") or 0)
     ratio = float(cal.get("ratio") or 1.0)
-    # Cold-start guard: the old operation model was consistently optimistic on
-    # real browser input. Until this exact isolated profile has three completed
-    # draws, never present raw theoretical timing as machine-calibrated truth.
     if samples <= 0:
         guard = 1.12 if speed_samples else 1.28
         corrected = base * guard
         source = (f"measured path throughput + cold-start guard ({speed_samples} sample{'s' if speed_samples != 1 else ''})"
-                  if speed_samples else "conservative operation model; waiting for 3 completed draws")
+                  if speed_samples else "final operation sequence + conservative cold-start guard; waiting for 3 completed draws")
         effective_ratio=guard
     elif samples == 1:
-        effective_ratio=max(1.18,ratio)
-        corrected=base*effective_ratio
-        source="learning calibration (1/3 completed draws; conservative floor)"
+        effective_ratio=max(1.18,ratio);corrected=base*effective_ratio
+        source="final operation sequence + learning calibration (1/3 completed draws)"
     elif samples == 2:
-        effective_ratio=max(1.08,ratio)
-        corrected=base*effective_ratio
-        source="learning calibration (2/3 completed draws; conservative floor)"
+        effective_ratio=max(1.08,ratio);corrected=base*effective_ratio
+        source="final operation sequence + learning calibration (2/3 completed draws)"
     else:
-        effective_ratio=ratio
-        corrected=base*effective_ratio
-        source=f"measured local calibration ({samples} completed draws)"
-    if operation_samples:
-        source += f" + typed operation floor ({operation_samples} ops)"
+        effective_ratio=ratio;corrected=base*effective_ratio
+        source=f"final operation sequence + measured local calibration ({samples} completed draws)"
+    if operation_samples:source += f" + typed operation floor ({operation_samples} ops)"
     mape = cal.get("mape")
-    try:
-        mape = float(mape) if mape is not None else None
-    except Exception:
-        mape = None
+    try:mape = float(mape) if mape is not None else None
+    except Exception:mape = None
     return max(0.0, corrected), source, samples, effective_ratio, mape
 
 
@@ -190,57 +290,44 @@ def _range_for(seconds: float, *, projection: bool, samples: int, mape: float | 
     if samples >= 3:
         spread=max(.06,min(.25,float(mape if mape is not None else .12)))
         return max(0.0,seconds*(1-spread)),seconds*(1+spread),"measured"
-    if samples == 2:
-        return seconds*.92, seconds*1.18, "learning"
-    if samples == 1:
-        return seconds*.90, seconds*1.24, "learning"
-    # Asymmetric cold-start range: avoid a falsely precise number before real
-    # mouse/browser timing exists. Projection uncertainty is wider still.
+    if samples == 2:return seconds*.92, seconds*1.18, "learning"
+    if samples == 1:return seconds*.90, seconds*1.24, "learning"
     return seconds*(.88 if not projection else .82), seconds*(1.28 if not projection else 1.38), "cold-start"
 
 
 def estimate_from_plan(plan: dict[str, Any]) -> dict[str, Any]:
-    """Return visible estimate metadata for a plan.
-
-    The estimate is never randomized. It is derived from the exact planned
-    operations/delays, optional measured path throughput, and a locally learned
-    actual/predicted ratio from completed drawings.
-    """
+    """Return visible estimate metadata from the plan that will actually execute."""
     options = plan.get("options") if isinstance(plan.get("options"), dict) else {}
     path_stats = plan.get("path_stats") if isinstance(plan.get("path_stats"), dict) else {}
-    raw_preview_seconds = max(0.0, float(plan.get("estimate") or 0.0))
+    legacy_seconds=max(0.0,float(plan.get("estimate") or 0.0))
+    sequence_seconds,sequence_meta=_sequence_operation_estimate(plan)
+    raw_preview_seconds=sequence_seconds if sequence_meta.get("used") and sequence_seconds>0 else legacy_seconds
     preview_area = _area(plan.get("preview_area") or options.get("_preview_area") or plan.get("plan_area"))
     target_area = _area(plan.get("target_area") or options.get("_target_area") or plan.get("plan_area") or preview_area)
 
     is_projection = bool(preview_area and target_area and tuple(preview_area) != tuple(target_area) and not plan.get("full_detail_preview"))
-    reason = "native/full-detail operation plan"
-    multiplier = 1.0
-    projected_raw = raw_preview_seconds
+    reason = "native/full-detail final execution sequence" if sequence_meta.get("used") else "native/full-detail legacy operation plan"
+    multiplier = 1.0;projected_raw = raw_preview_seconds
     if is_projection:
-        p_area = max(1, preview_area[0] * preview_area[1])
-        t_area = max(1, target_area[0] * target_area[1])
-        area_ratio = max(1.0, t_area / p_area)
-        exponent, reason = _projection_exponent(options, path_stats)
-        multiplier = min(24.0, max(1.0, area_ratio ** exponent))
-        projected_raw = raw_preview_seconds * multiplier
-        # Planning/setup overhead does not scale with image area.
+        p_area = max(1, preview_area[0] * preview_area[1]);t_area = max(1, target_area[0] * target_area[1])
+        area_ratio = max(1.0, t_area / p_area);exponent, projection_reason = _projection_exponent(options, path_stats)
+        multiplier = min(24.0, max(1.0, area_ratio ** exponent));projected_raw = raw_preview_seconds * multiplier
         projected_raw += 6.0 + min(60.0, float(len(plan.get("groups") or ())) * .22)
+        reason=f"{projection_reason}; source={'final sequence' if sequence_meta.get('used') else 'legacy estimate'}"
 
     corrected, source, samples, ratio, mape = _apply_measured_correction(plan, projected_raw)
     low, high, confidence = _range_for(corrected, projection=is_projection, samples=samples, mape=mape)
-    return DrawTimeEstimate(
-        preview_seconds=raw_preview_seconds,
-        projected_seconds=corrected,
-        low_seconds=low,
-        high_seconds=high,
-        confidence=confidence,
-        multiplier=multiplier,
-        is_projection=is_projection,
-        reason=reason,
-        estimate_source=source,
-        measured_samples=samples,
-        calibration_ratio=ratio,
+    out=DrawTimeEstimate(
+        preview_seconds=raw_preview_seconds,projected_seconds=corrected,low_seconds=low,high_seconds=high,
+        confidence=confidence,multiplier=multiplier,is_projection=is_projection,reason=reason,
+        estimate_source=source,measured_samples=samples,calibration_ratio=ratio,
     ).as_dict()
+    out["sequence_model_used"]=bool(sequence_meta.get("used"))
+    out["sequence_operation_model"]=sequence_meta
+    out["legacy_planner_seconds"]=round(legacy_seconds,3)
+    if sequence_meta.get("used"):
+        out["legacy_vs_sequence_delta_seconds"]=round(raw_preview_seconds-legacy_seconds,3)
+    return out
 
 
 def attach_draw_time_estimate(plan: dict[str, Any]) -> dict[str, Any]:
@@ -254,7 +341,8 @@ def record_completed_draw(plan: dict[str, Any], actual_seconds: float, *, comple
     try:
         from DrawTimeCalibration import record_sample
         options = plan.get("options") if isinstance(plan.get("options"), dict) else {}
-        predicted = max(0.0, float(plan.get("raw_execution_estimate_seconds") or plan.get("estimate") or 0.0))
+        predicted_meta=plan.get("draw_time_estimate") or estimate_from_plan(plan)
+        predicted = max(0.0, float(predicted_meta.get("preview_seconds") or plan.get("raw_execution_estimate_seconds") or plan.get("estimate") or 0.0))
         fill_actions = len(options.get("fill_regions") or ()) + (1 if (options.get("background_fill_plan") or {}).get("enabled") else 0)
         operation_counts=(options.get('adaptive_deadline_meta') or {}).get('operation_counts') or {}
         operation_runtime=options.get('runtime_operation_timing') or {}
