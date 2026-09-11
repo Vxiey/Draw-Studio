@@ -1,4 +1,4 @@
-"""Region Fill Engine for Image Draw Bot v1.0.119-beta.
+"""Region Fill Engine for Image Draw Bot.
 
 This module deliberately builds on Image Draw Bot's existing conservative connected-
 component/bucket-fill detector. It adds a second safety/cost layer and produces a
@@ -62,8 +62,6 @@ def _resolve_detector_mode(aggressiveness: str, quality: str) -> str:
 
 
 def _candidate_cap(options: dict[str, Any], aggressiveness: str) -> int:
-    # Bound memory/runtime while allowing far more fill regions than the legacy
-    # 12-region cap. RAM budget may be supplied by ResourceAllocation.
     base = {"Safe": 128, "Balanced": 256, "Aggressive": 512}.get(aggressiveness, 256)
     try:
         ram = int(options.get("ram_budget_mb") or 512)
@@ -91,8 +89,6 @@ def _thin_neck_score(region: dict[str, Any], brush_px: int) -> float:
     widths = sorted(_span_widths(region))
     if not widths:
         return 1.0
-    # A single one-pixel tip should not condemn a huge otherwise-safe component;
-    # use the lower decile as a robust neck estimate.
     sample = widths[min(len(widths) - 1, max(0, int(len(widths) * .10)))]
     critical = max(2.0, float(brush_px) * 1.35)
     if sample >= critical * 2.25:
@@ -113,31 +109,19 @@ def _risk(region: dict[str, Any], *, aggressiveness: str, quality: str, brush_px
     shape_pressure = min(1.0, perimeter / max(8.0, area ** .5 * 14.0))
     vertex_pressure = min(1.0, vertices / 160.0)
     low_density = max(0.0, 1.0 - density)
-
-    # Detector has already hard-rejected holes, open/ambiguous contours and edge
-    # touching components. This score is a second conservative layer.
-    risk = (
-        (1.0 - safety) * .46
-        + thin * .24
-        + shape_pressure * .12
-        + vertex_pressure * .10
-        + low_density * .08
-    )
+    risk = ((1.0 - safety) * .46 + thin * .24 + shape_pressure * .12 + vertex_pressure * .10 + low_density * .08)
     if quality == "High Quality":
         risk *= 1.08
     elif quality == "Fast":
         risk *= .94
     risk = max(0.0, min(1.0, risk))
     confidence = 1.0 - risk
-
     limits = {"Safe": .14, "Balanced": .24, "Aggressive": .34}
     limit = limits.get(aggressiveness, .24)
     if quality == "High Quality":
         limit = min(limit, .20)
     if quality == "Pixel Accurate":
         limit = min(limit, .10)
-
-    # Hard blockers stay hard regardless of aggressiveness.
     if not contour or len(contour) < 5:
         return 1.0, 0.0, "missing closed contour"
     if thin >= .98 and min(_span_widths(region) or [0]) <= max(1, brush_px):
@@ -148,9 +132,6 @@ def _risk(region: dict[str, Any], *, aggressiveness: str, quality: str, brush_px
 
 
 def _region_cost(region: dict[str, Any], options: dict[str, Any], image_size: tuple[int, int], fitted: tuple[int, int]) -> tuple[float, float]:
-    # Preserve the established safe-fill decision boundary on cold start.  The
-    # calibrated model is allowed to change fill-vs-stroke selection only after
-    # this exact profile/tool/brush/color workflow has real completed samples.
     from HybridCostModel import build_cost_model
     model = build_cost_model(options)
     if not model.calibrated:
@@ -192,20 +173,39 @@ def _region_cost(region: dict[str, Any], options: dict[str, Any], image_size: tu
     return max(.001,stroke_cost),max(.001,fill_cost)
 
 
-def build_region_fill_plan(image, fitted: tuple[int, int], options: dict[str, Any], *, safe_margin_px: int = 0, cancelled=lambda: False) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Return accepted region dictionaries plus planner metadata.
+def _batchable_tool_cost(options: dict[str,Any]) -> float:
+    """Return the tool-switch portion already embedded in one RegionFill cost."""
+    try:
+        from HybridCostModel import build_cost_model
+        model=build_cost_model(options)
+        if model.calibrated:
+            return max(0.0,float(model.tool_change_seconds))
+    except Exception:
+        pass
+    delivery=resolve_stroke_delivery(options,dry_run=False)
+    return max(.08,float(delivery.ui_control_delay)*.45)
 
-    Pixel Accurate is intentionally protected in this first Region Fill Engine
-    release. Its exact simulator currently models strokes, not a bucket-fill
-    operation, so the engine refuses to substitute fill until exact fill
-    simulation can prove pixel equivalence. This preserves the invariant that
-    preview/final/error-map geometry cannot diverge.
-    """
+
+def _cost_components(region: dict[str,Any], options: dict[str,Any], image_size: tuple[int,int], fitted: tuple[int,int]):
+    stroke,total=_region_cost(region,options,image_size,fitted)
+    batchable=max(0.0,min(float(_batchable_tool_cost(options)),total*.50))
+    core=max(.001,total-batchable)
+    return stroke,total,core,batchable
+
+
+def _decision_fill_cost(total: float, core: float, options: dict[str,Any]) -> float:
+    # Extra Fast performs the authoritative same-colour batch check afterwards,
+    # so RegionFill must not reject a region just because a shareable tool switch
+    # was charged once per candidate. Normal modes keep the historic conservative
+    # per-region boundary.
+    return core if options.get("extra_fast") else total
+
+
+def build_region_fill_plan(image, fitted: tuple[int, int], options: dict[str, Any], *, safe_margin_px: int = 0, cancelled=lambda: False) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     quality = _resolve_quality(options)
     aggressiveness = str(options.get("fill_aggressiveness") or "Balanced")
     if aggressiveness not in AGGRESSIVENESS:
         aggressiveness = "Balanced"
-
     if quality == "Pixel Accurate":
         return [], {
             "enabled": True,
@@ -225,161 +225,94 @@ def build_region_fill_plan(image, fitted: tuple[int, int], options: dict[str, An
     detector_mode = _resolve_detector_mode(aggressiveness, quality)
     cap = _candidate_cap(options, aggressiveness)
     regions, base_meta = detect_fill_regions(
-        image,
-        detector_mode,
-        engine=options.get("fill_engine", "Auto"),
-        max_regions=cap,
-        cancelled=cancelled,
-        return_meta=True,
-        safe_margin_px=safe_margin_px,
+        image, detector_mode, engine=options.get("fill_engine", "Auto"), max_regions=cap,
+        cancelled=cancelled, return_meta=True, safe_margin_px=safe_margin_px,
     )
-    decisions: list[RegionDecision] = []
-    accepted: list[dict[str, Any]] = []
-    rejected_cost = 0
-    rejected_safety = 0
-    brush_px = max(1, int(options.get("brush_px", 1) or 1))
-    min_saving_ratio = {"Safe": .10, "Balanced": .04, "Aggressive": 0.0}[aggressiveness]
-    deadline_active=bool(options.get("time_budget_active"))
-    deadline_seconds=float(options.get("max_seconds",180) or 180)
+    decisions=[];accepted=[];rejected_cost=0;rejected_safety=0
+    brush_px=max(1,int(options.get("brush_px",1) or 1))
+    min_saving_ratio={"Safe":.10,"Balanced":.04,"Aggressive":0.0}[aggressiveness]
+    deadline_active=bool(options.get("time_budget_active"));deadline_seconds=float(options.get("max_seconds",180) or 180)
     value_threshold={"Safe":2.0,"Balanced":1.0,"Aggressive":.35}[aggressiveness] if deadline_active and deadline_seconds<=90 else {"Safe":3.0,"Balanced":1.5,"Aggressive":.55}[aggressiveness]
     absolute_saving_floor=.08 if deadline_active and deadline_seconds<=90 else .12
 
-    for idx, item in enumerate(regions):
-        if cancelled():
-            raise InterruptedError()
-        region = item.as_dict() if hasattr(item, "as_dict") else dict(item)
-        risk, confidence, safety_reason = _risk(
-            region, aggressiveness=aggressiveness, quality=quality, brush_px=brush_px
-        )
-        stroke_cost, fill_cost = _region_cost(region, options, image.size, fitted)
-        saving = max(0.0, stroke_cost - fill_cost)
-        thin_score=_thin_neck_score(region, brush_px)
-        visual_error=max(.005,min(1.0,risk*.62 + thin_score*.20 + (1.0-confidence)*.18))
+    for idx,item in enumerate(regions):
+        if cancelled():raise InterruptedError()
+        region=item.as_dict() if hasattr(item,"as_dict") else dict(item)
+        risk,confidence,safety_reason=_risk(region,aggressiveness=aggressiveness,quality=quality,brush_px=brush_px)
+        stroke_cost,fill_cost,fill_core,batchable=_cost_components(region,options,image.size,fitted)
+        decision_cost=_decision_fill_cost(fill_cost,fill_core,options)
+        saving=max(0.0,stroke_cost-decision_cost)
+        thin_score=_thin_neck_score(region,brush_px)
+        visual_error=max(.005,min(1.0,risk*.62+thin_score*.20+(1.0-confidence)*.18))
         seconds_per_error=saving/max(.01,visual_error)
-        cost_ok = fill_cost <= stroke_cost * (1.0 - min_saving_ratio)
-        value_ok = saving >= absolute_saving_floor and seconds_per_error >= value_threshold
-        safety_ok = safety_reason == "safe"
-        accepted_here = bool(safety_ok and cost_ok and value_ok)
-        reason = "safe and high time-saved/visual-error value"
-        if not safety_ok:
-            rejected_safety += 1
-            reason = safety_reason
-        elif not cost_ok:
-            rejected_cost += 1
-            reason = "stroke/run renderer is cheaper"
-        elif not value_ok:
-            rejected_cost += 1
-            reason = f"fill saves too little for visual risk ({seconds_per_error:.2f}s/error)"
-
-        decision = RegionDecision(
-            region_id=idx,
-            accepted=accepted_here,
-            render_method="OUTLINE_FILL" if accepted_here else "HORIZONTAL_RUNS",
-            fill_confidence=confidence,
-            leak_risk=risk,
-            thin_neck_score=thin_score,
-            stroke_cost_seconds=stroke_cost,
-            fill_cost_seconds=fill_cost,
-            estimated_time_saved_seconds=saving if accepted_here else 0.0,
-            visual_error_cost=visual_error,
-            seconds_saved_per_visual_error=seconds_per_error,
-            reason=reason,
-        )
+        cost_ok=decision_cost<=stroke_cost*(1.0-min_saving_ratio)
+        value_ok=saving>=absolute_saving_floor and seconds_per_error>=value_threshold
+        safety_ok=safety_reason=="safe";accepted_here=bool(safety_ok and cost_ok and value_ok)
+        reason="safe and high time-saved/visual-error value"
+        if not safety_ok:rejected_safety+=1;reason=safety_reason
+        elif not cost_ok:rejected_cost+=1;reason="stroke/run renderer is cheaper"
+        elif not value_ok:rejected_cost+=1;reason=f"fill saves too little for visual risk ({seconds_per_error:.2f}s/error)"
+        decision=RegionDecision(idx,accepted_here,"OUTLINE_FILL" if accepted_here else "HORIZONTAL_RUNS",confidence,risk,thin_score,
+                                stroke_cost,fill_cost,saving if accepted_here else 0.0,visual_error,seconds_per_error,reason)
         decisions.append(decision)
         if accepted_here:
             region.update({
-                "region_fill_id": idx,
-                "render_method": "OUTLINE_FILL",
-                "fill_confidence": round(confidence, 5),
-                "leak_risk": round(risk, 5),
-                "thin_neck_score": round(decision.thin_neck_score, 5),
-                "stroke_cost_seconds": round(stroke_cost, 5),
-                "fill_cost_seconds": round(fill_cost, 5),
-                "estimated_time_saved_seconds": round(saving, 5),
-                "visual_error_cost": round(visual_error, 6),
-                "seconds_saved_per_visual_error": round(seconds_per_error, 4),
-                "outline_simplification": "exact-collinear",
+                "region_fill_id":idx,"render_method":"OUTLINE_FILL","fill_confidence":round(confidence,5),
+                "leak_risk":round(risk,5),"thin_neck_score":round(thin_score,5),
+                "stroke_cost_seconds":round(stroke_cost,5),"fill_cost_seconds":round(fill_cost,5),
+                "fill_core_cost_seconds":round(fill_core,5),"fill_batchable_overhead_seconds":round(batchable,5),
+                "estimated_time_saved_seconds":round(saving,5),"visual_error_cost":round(visual_error,6),
+                "seconds_saved_per_visual_error":round(seconds_per_error,4),"outline_simplification":"exact-collinear",
             })
             accepted.append(region)
 
-    area = max(1, int(image.size[0]) * int(image.size[1]))
-    accepted_pixels = sum(max(0, int(r.get("area_pixels", 0) or 0)) for r in accepted)
-    saved_strokes = sum(max(0, int(r.get("estimated_saved_strokes", 0) or 0)) for r in accepted)
-    total_time_saved = sum(float(r.get("estimated_time_saved_seconds", 0.0) or 0.0) for r in accepted)
-    fill_colors = len({int(r.get("color_index", -1)) for r in accepted if int(r.get("color_index", -1)) >= 0})
-    total_regions = int(base_meta.get("total_components", 0) or 0)
-    fallback = max(0, total_regions - len(accepted))
-
-    meta = dict(base_meta)
-    meta.update({
-        "enabled": True,
-        "engine_name": "Region Fill Engine",
-        "quality_preset": quality,
-        "fill_aggressiveness": aggressiveness,
-        "detector_mode": detector_mode,
-        "candidate_cap": cap,
-        "total_regions": total_regions,
-        "fill_safe_regions": len(accepted),
-        "fill_actions": len(accepted),
-        "outline_paths": len(accepted),
-        "fallback_stroke_regions": fallback,
-        "rejected_by_cost": rejected_cost,
-        "rejected_by_safety": rejected_safety,
-        "fill_coverage_percent": round(accepted_pixels / area * 100.0, 3),
-        "estimated_saved_strokes": saved_strokes,
-        "estimated_time_saved_seconds": round(total_time_saved, 3),
-        "fill_value_policy": "seconds_saved_per_visual_error",
-        "fill_value_threshold": value_threshold,
-        "fill_absolute_saving_floor_seconds": absolute_saving_floor,
-        "average_seconds_saved_per_visual_error": round(sum(float(r.get("seconds_saved_per_visual_error",0) or 0) for r in accepted)/max(1,len(accepted)),3),
-        "hybrid_cost_model": __import__('HybridCostModel').build_cost_model(options).as_dict(),
-        "fill_color_batches": fill_colors,
-        "outline_simplification": "exact-collinear only",
-        "region_merging": "disabled here; existing palette/grouping policy remains authoritative",
-        "pixel_accurate_protected": False,
-        "decisions": [d.as_dict() for d in decisions[:80]],
-        "decision_count": len(decisions),
+    area=max(1,int(image.size[0])*int(image.size[1]))
+    accepted_pixels=sum(max(0,int(r.get("area_pixels",0) or 0)) for r in accepted)
+    saved_strokes=sum(max(0,int(r.get("estimated_saved_strokes",0) or 0)) for r in accepted)
+    total_time_saved=sum(float(r.get("estimated_time_saved_seconds",0.0) or 0.0) for r in accepted)
+    fill_colors=len({int(r.get("color_index",-1)) for r in accepted if int(r.get("color_index",-1))>=0})
+    total_regions=int(base_meta.get("total_components",0) or 0);fallback=max(0,total_regions-len(accepted))
+    meta=dict(base_meta);meta.update({
+        "enabled":True,"engine_name":"Region Fill Engine","quality_preset":quality,"fill_aggressiveness":aggressiveness,
+        "detector_mode":detector_mode,"candidate_cap":cap,"total_regions":total_regions,"fill_safe_regions":len(accepted),
+        "fill_actions":len(accepted),"outline_paths":len(accepted),"fallback_stroke_regions":fallback,
+        "rejected_by_cost":rejected_cost,"rejected_by_safety":rejected_safety,
+        "fill_coverage_percent":round(accepted_pixels/area*100.0,3),"estimated_saved_strokes":saved_strokes,
+        "estimated_time_saved_seconds":round(total_time_saved,3),"fill_value_policy":"seconds_saved_per_visual_error",
+        "fill_value_threshold":value_threshold,"fill_absolute_saving_floor_seconds":absolute_saving_floor,
+        "average_seconds_saved_per_visual_error":round(sum(float(r.get("seconds_saved_per_visual_error",0) or 0) for r in accepted)/max(1,len(accepted)),3),
+        "hybrid_cost_model":__import__('HybridCostModel').build_cost_model(options).as_dict(),"fill_color_batches":fill_colors,
+        "outline_simplification":"exact-collinear only","region_merging":"disabled here; existing palette/grouping policy remains authoritative",
+        "pixel_accurate_protected":False,"extra_fast_batch_aware_costing":bool(options.get("extra_fast")),
+        "decisions":[d.as_dict() for d in decisions[:80]],"decision_count":len(decisions),
     })
-    return accepted, meta
-
+    return accepted,meta
 
 
 def evaluate_region_candidates(regions, image_size: tuple[int, int], fitted: tuple[int, int], options: dict[str, Any], *,
                                base_meta: dict[str, Any] | None = None, cancelled=lambda: False) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Apply Region Fill Engine safety/value policy to pre-detected regions.
-
-    Extra Fast 2.0 uses this for Dynamic/Adaptive Exact groups whose color indexes
-    belong to the plan-local palette.  Geometry detection is separate, but the
-    same leak-risk, thin-neck and wall-clock value policy remains authoritative.
-    """
-    quality=_resolve_quality(options)
-    aggressiveness=str(options.get('fill_aggressiveness') or 'Balanced')
+    quality=_resolve_quality(options);aggressiveness=str(options.get('fill_aggressiveness') or 'Balanced')
     if aggressiveness not in AGGRESSIVENESS:aggressiveness='Balanced'
     if quality=='Pixel Accurate':
         return [],{'enabled':True,'quality_preset':quality,'fill_aggressiveness':'Safe','pixel_accurate_protected':True,
                    'reason':'Pixel Accurate keeps exact stroke simulation.','total_regions':0,'fill_safe_regions':0,
                    'fill_actions':0,'outline_paths':0,'fallback_stroke_regions':0,'fill_coverage_percent':0.0,
                    'estimated_time_saved_seconds':0.0}
-    base_meta=dict(base_meta or {})
-    decisions=[];accepted=[];rejected_cost=0;rejected_safety=0
-    brush_px=max(1,int(options.get('brush_px',1) or 1))
-    min_saving_ratio={'Safe':.10,'Balanced':.04,'Aggressive':0.0}[aggressiveness]
-    deadline_active=bool(options.get('time_budget_active'))
-    deadline_seconds=float(options.get('max_seconds',180) or 180)
+    base_meta=dict(base_meta or {});decisions=[];accepted=[];rejected_cost=0;rejected_safety=0
+    brush_px=max(1,int(options.get('brush_px',1) or 1));min_saving_ratio={'Safe':.10,'Balanced':.04,'Aggressive':0.0}[aggressiveness]
+    deadline_active=bool(options.get('time_budget_active'));deadline_seconds=float(options.get('max_seconds',180) or 180)
     value_threshold=({'Safe':2.0,'Balanced':1.0,'Aggressive':.35} if deadline_active and deadline_seconds<=90 else {'Safe':3.0,'Balanced':1.5,'Aggressive':.55})[aggressiveness]
     absolute_saving_floor=.08 if deadline_active and deadline_seconds<=90 else .12
     for idx,item in enumerate(regions or ()):
         if cancelled():raise InterruptedError()
         region=item.as_dict() if hasattr(item,'as_dict') else dict(item)
         risk,confidence,safety_reason=_risk(region,aggressiveness=aggressiveness,quality=quality,brush_px=brush_px)
-        stroke_cost,fill_cost=_region_cost(region,options,image_size,fitted)
-        saving=max(0.0,stroke_cost-fill_cost);thin_score=_thin_neck_score(region,brush_px)
-        visual_error=max(.005,min(1.0,risk*.62+thin_score*.20+(1.0-confidence)*.18))
-        seconds_per_error=saving/max(.01,visual_error)
-        cost_ok=fill_cost<=stroke_cost*(1.0-min_saving_ratio)
-        value_ok=saving>=absolute_saving_floor and seconds_per_error>=value_threshold
-        safety_ok=safety_reason=='safe';accepted_here=bool(safety_ok and cost_ok and value_ok)
-        reason='safe and high time-saved/visual-error value'
+        stroke_cost,fill_cost,fill_core,batchable=_cost_components(region,options,image_size,fitted)
+        decision_cost=_decision_fill_cost(fill_cost,fill_core,options)
+        saving=max(0.0,stroke_cost-decision_cost);thin_score=_thin_neck_score(region,brush_px)
+        visual_error=max(.005,min(1.0,risk*.62+thin_score*.20+(1.0-confidence)*.18));seconds_per_error=saving/max(.01,visual_error)
+        cost_ok=decision_cost<=stroke_cost*(1.0-min_saving_ratio);value_ok=saving>=absolute_saving_floor and seconds_per_error>=value_threshold
+        safety_ok=safety_reason=='safe';accepted_here=bool(safety_ok and cost_ok and value_ok);reason='safe and high time-saved/visual-error value'
         if not safety_ok:rejected_safety+=1;reason=safety_reason
         elif not cost_ok:rejected_cost+=1;reason='stroke/run renderer is cheaper'
         elif not value_ok:rejected_cost+=1;reason=f'fill saves too little for visual risk ({seconds_per_error:.2f}s/error)'
@@ -390,6 +323,7 @@ def evaluate_region_candidates(regions, image_size: tuple[int, int], fitted: tup
             region.update({'region_fill_id':idx,'render_method':'OUTLINE_FILL','fill_confidence':round(confidence,5),
                            'leak_risk':round(risk,5),'thin_neck_score':round(thin_score,5),
                            'stroke_cost_seconds':round(stroke_cost,5),'fill_cost_seconds':round(fill_cost,5),
+                           'fill_core_cost_seconds':round(fill_core,5),'fill_batchable_overhead_seconds':round(batchable,5),
                            'estimated_time_saved_seconds':round(saving,5),'visual_error_cost':round(visual_error,6),
                            'seconds_saved_per_visual_error':round(seconds_per_error,4),'outline_simplification':'exact-collinear'})
             accepted.append(region)
@@ -404,9 +338,11 @@ def evaluate_region_candidates(regions, image_size: tuple[int, int], fitted: tup
         'estimated_time_saved_seconds':round(total_time_saved,3),'fill_value_policy':'seconds_saved_per_visual_error',
         'fill_value_threshold':value_threshold,'fill_absolute_saving_floor_seconds':absolute_saving_floor,
         'fill_color_batches':len({int(r.get('color_index',-1)) for r in accepted if int(r.get('color_index',-1))>=0}),
-        'outline_simplification':'exact-collinear only','pixel_accurate_protected':False,
-        'fallback_render_method':'CONNECTED_SCANLINES','decisions':[d.as_dict() for d in decisions[:80]],'decision_count':len(decisions)})
+        'outline_simplification':'exact-collinear only','pixel_accurate_protected':False,'fallback_render_method':'CONNECTED_SCANLINES',
+        'extra_fast_batch_aware_costing':bool(options.get('extra_fast')),
+        'decisions':[d.as_dict() for d in decisions[:80]],'decision_count':len(decisions)})
     return accepted,meta
+
 
 def enrich_region_stats(meta: dict[str, Any] | None, *, source_strokes: int, final_paths: int) -> dict[str, Any]:
     if not isinstance(meta, dict):
@@ -421,32 +357,35 @@ def enrich_region_stats(meta: dict[str, Any] | None, *, source_strokes: int, fin
 
 
 def estimate_fill_execution_seconds(regions: Iterable[dict[str, Any]], image_size: tuple[int, int], fitted: tuple[int, int], options: dict[str, Any]) -> dict[str, Any]:
-    """Operation-level fill estimate using the same configured delays as execution."""
-    rows = [dict(r) for r in (regions or ())]
-    delivery = resolve_stroke_delivery(options, dry_run=False)
-    fill_seconds = 0.0
+    """Batch-aware Fill estimate using the same configured operation delays."""
+    rows=[dict(r) for r in (regions or ())];delivery=resolve_stroke_delivery(options,dry_run=False)
+    fill_core_seconds=0.0;removed_per_region_switch=0.0
+    inferred_batchable=_batchable_tool_cost(options)
     for region in rows:
-        stored = region.get("fill_cost_seconds")
+        core=region.get("fill_core_cost_seconds")
+        if core is not None:
+            try:
+                fill_core_seconds+=max(0.0,float(core))
+                removed_per_region_switch+=max(0.0,float(region.get("fill_batchable_overhead_seconds",0.0) or 0.0))
+                continue
+            except Exception:pass
+        stored=region.get("fill_cost_seconds")
         if stored is not None:
             try:
-                fill_seconds += max(0.0, float(stored))
-                continue
-            except Exception:
-                pass
-        _stroke, cost = _region_cost(region, options, image_size, fitted)
-        fill_seconds += cost
-    colors = {int(r.get("color_index", -1)) for r in rows if int(r.get("color_index", -1)) >= 0}
-    tool_actions = len(options.get("fill_tool_actions") or ()) + len(options.get("fill_restore_actions") or ())
-    # Preview planning intentionally does not resolve screen-coordinate tool
-    # actions. If calibration says Fill is available, model the final Fill +
-    # restore switch pair without inventing coordinates.
-    if tool_actions == 0 and options.get("fill_tool_available"):
-        tool_actions = 2
-    tool_switch_seconds = len(colors) * tool_actions * max(.02, float(delivery.ui_control_delay))
+                total=max(0.0,float(stored));batchable=max(0.0,min(inferred_batchable,total*.50))
+                fill_core_seconds+=max(0.0,total-batchable);removed_per_region_switch+=batchable;continue
+            except Exception:pass
+        _stroke,total,core,batchable=_cost_components(region,options,image_size,fitted)
+        fill_core_seconds+=core;removed_per_region_switch+=batchable
+    colors={int(r.get("color_index",-1)) for r in rows if int(r.get("color_index",-1))>=0}
+    tool_actions=len(options.get("fill_tool_actions") or ())+len(options.get("fill_restore_actions") or ())
+    if tool_actions==0 and options.get("fill_tool_available"):tool_actions=2
+    tool_switch_seconds=len(colors)*tool_actions*max(.02,float(delivery.ui_control_delay))
+    total=fill_core_seconds+tool_switch_seconds
     return {
-        "fill_regions": len(rows),
-        "fill_color_batches": len(colors),
-        "fill_contour_and_click_seconds": round(fill_seconds, 4),
-        "fill_tool_switch_seconds": round(tool_switch_seconds, 4),
-        "total_seconds": round(fill_seconds + tool_switch_seconds, 4),
+        "fill_regions":len(rows),"fill_color_batches":len(colors),
+        "fill_contour_and_click_seconds":round(fill_core_seconds,4),
+        "fill_tool_switch_seconds":round(tool_switch_seconds,4),
+        "per_region_tool_switch_seconds_removed":round(removed_per_region_switch,4),
+        "batch_aware":True,"total_seconds":round(total,4),
     }
