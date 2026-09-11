@@ -55,7 +55,7 @@ def entry(phase='foundation', *, width=100, height=100, area=10000, importance=.
 
 class BottleneckFixesV10146Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual((APP_VERSION,FILE_VERSION),('1.0.146-rc1','1.0.146'))
+        self.assertEqual((APP_VERSION,FILE_VERSION),('1.0.145-rc2','1.0.145'))
 
     def test_fill_simulation_uses_bounded_roi_not_full_canvas_per_region(self):
         regions=[closed_region(40,40,80,80),closed_region(160,140,205,185,color=2)]
@@ -94,7 +94,6 @@ class BottleneckFixesV10146Tests(unittest.TestCase):
         self.assertEqual(len(accepted),2)
         self.assertEqual(meta['fill_color_batches'],1)
         self.assertFalse(meta['per_region_tool_switch_double_charge'])
-        # 2 * .42 core + one shared (.2) control batch.
         self.assertAlmostEqual(meta['fill_estimated_seconds'],1.04,places=2)
 
     def test_estimator_prefers_final_execution_sequence(self):
