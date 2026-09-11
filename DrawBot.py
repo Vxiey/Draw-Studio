@@ -6531,11 +6531,18 @@ class DrawBotApp:
                     tool_data=load_tool_calibration()
                     fill_available=(tool_data.get('tools',{}).get('Fill') is not None and self._paint_tool_preflight_ready())
                 elif not paint_profile:
+                    profile_key_for_fill=PROFILES[self.game.get()][0]
                     from AppTools import load_calibration
-                    app_data=load_calibration(PROFILES[self.game.get()][0])
+                    app_data=load_calibration(profile_key_for_fill)
                     fill_available=all(name in app_data.get('tools',{}) for name in ('Brush','Fill'))
             except (OSError,ValueError,TypeError,AttributeError):
                 fill_available=False
+            if (not fill_available) and (not paint_profile):
+                try:
+                    from BrowserToolLayout import SUPPORTED as AUTO_BROWSER_TOOL_PROFILES
+                    fill_available=(PROFILES[self.game.get()][0] in AUTO_BROWSER_TOOL_PROFILES)
+                except Exception:
+                    fill_available=False
         effective_paint_tool=selected_tool
         if paint_profile and selected_tool=='Auto (recommended)':
             try:
@@ -8181,6 +8188,25 @@ class DrawBotApp:
                 options['canvas_guard_brush_px']=max(int(options.get('brush_px',3) or 3),12)
                 options['browser_brush_plan']={'target_position':None,'safe_guard_px':options['canvas_guard_brush_px'],'method':str(brush_error)}
                 log_event(f'Automatic browser brush detection fell back safely: {brush_error!r}.')
+            try:
+                from BrowserToolLayout import SUPPORTED as TOOL_PROFILES,plan_browser_tools
+                if profile_key in TOOL_PROFILES:
+                    from PIL import ImageGrab
+                    tool_shot=locals().get('shot')
+                    if tool_shot is None:
+                        tool_shot=ImageGrab.grab(bbox=tuple(current_client),all_screens=True).convert('RGB')
+                    tool_pal_box=None
+                    if palette:
+                        xs=[p[0] for p in palette];ys=[p[1] for p in palette]
+                        tool_pal_box=(min(xs),min(ys),max(xs)+1,max(ys)+1)
+                    x,y,w,h=area
+                    tool_plan=plan_browser_tools(profile_key,tool_shot,tuple(current_client),
+                        canvas_box=(x,y,x+w,y+h),palette_box=tool_pal_box)
+                    options['browser_tool_plan']=tool_plan.as_dict()
+                    log_event(f"Automatic browser tools preflight: profile={profile_key} tools={sorted((tool_plan.tools or {}).keys())} confidence={tool_plan.confidence:.3f} method={tool_plan.method!r}.")
+            except Exception as tool_error:
+                options['browser_tool_plan']={'tools':{},'confidence':0.0,'tool_scores':{},'method':str(tool_error)}
+                log_event(f'Automatic browser tool detection fell back safely: {tool_error!r}.')
             # Paint-only real preflight: resolve stale palette-only saved
             # settings against the *actual* profile calibration before planning.
             # This is what lets Image Draw Bot open Edit colors automatically when
@@ -8213,6 +8239,7 @@ class DrawBotApp:
             log_event(f"Draw preflight options resolved: area={area} source={getattr(self.original, 'size', None)} profile={self.game.get()!r} paint_profile={paint_profile!r} palette_points={len(palette)} {_resource_log_text(options)}.")
             # Real tool actions were previously built only for preview planning,
             # leaving real drawing with an empty action list. Resolve them here.
+            auto_browser_tool_plan=options.get('browser_tool_plan') or {}
             if paint_profile and options.get('effective_paint_tool',options.get('paint_tool'))!='Use current tool':
                 from PaintTools import build_tool_actions
                 options['tool_actions']=build_tool_actions(options.get('effective_paint_tool',options['paint_tool']),current_client_rect=current_client)
@@ -8220,6 +8247,12 @@ class DrawBotApp:
                     x,y=position
                     if area[0]<=x<=area[0]+area[2] and area[1]<=y<=area[1]+area[3]:
                         raise ValueError(f'The calibrated Paint {kind} control overlaps the drawing area. Recalibrate Paint tools.')
+            elif not paint_profile:
+                try:
+                    from BrowserToolLayout import build_browser_tool_action
+                    options['tool_actions']=[build_browser_tool_action(auto_browser_tool_plan,'Brush')]
+                except (OSError,ValueError):
+                    pass
             options['fill_tool_actions']=[];options['fill_restore_actions']=[]
             options['fill_unavailable_reason']=''
             if (options.get('background_fill')!='Off' or options.get('use_region_fill_engine')) and not bypasses_palette(self):
@@ -8238,6 +8271,13 @@ class DrawBotApp:
                         options['fill_restore_actions']=[build_tool_action(profile_key,'Brush',current_client)]
                     except (OSError,ValueError) as error:
                         options['fill_unavailable_reason']=str(error)
+                        try:
+                            from BrowserToolLayout import build_browser_tool_action
+                            options['fill_tool_actions']=[build_browser_tool_action(auto_browser_tool_plan,'Fill')]
+                            options['fill_restore_actions']=[build_browser_tool_action(auto_browser_tool_plan,'Brush')]
+                            options['fill_unavailable_reason']=''
+                        except (OSError,ValueError):
+                            pass
                 options['fill_tool_available']=bool(options.get('fill_tool_actions') and options.get('fill_restore_actions'))
                 for kind,position in options.get('fill_tool_actions',[])+options.get('fill_restore_actions',[]):
                     x,y=position
@@ -8256,6 +8296,10 @@ class DrawBotApp:
                         tool_data=load_app_tool_calibration(profile_key)
                     except (OSError,ValueError,TypeError):
                         tool_data={'tools':{}}
+                    merged_tools=dict(tool_data.get('tools',{}) or {})
+                    for tool_name,tool_position in (auto_browser_tool_plan.get('tools') or {}).items():
+                        merged_tools.setdefault(tool_name,tool_position)
+                    tool_data={'tools':merged_tools}
                 clear_strategy=resolve_clear_strategy(
                     paint_profile=paint_profile,
                     tools=tool_data.get('tools',{}),
@@ -8266,12 +8310,20 @@ class DrawBotApp:
                 options['canvas_clear_reason']=clear_strategy.reason
                 options['canvas_clear_estimate_seconds']=float(clear_strategy.estimated_seconds)
                 if clear_strategy.strategy in ('native-clear','eraser-sweep'):
-                    from AppTools import build_tool_action
-                    if clear_strategy.strategy=='native-clear':
-                        options['canvas_clear_actions']=[build_tool_action(profile_key,'Clear',current_client)]
-                    else:
-                        options['canvas_clear_actions']=[build_tool_action(profile_key,'Eraser',current_client)]
-                        options['canvas_clear_restore_actions']=[build_tool_action(profile_key,'Brush',current_client)]
+                    try:
+                        from AppTools import build_tool_action
+                        if clear_strategy.strategy=='native-clear':
+                            options['canvas_clear_actions']=[build_tool_action(profile_key,'Clear',current_client)]
+                        else:
+                            options['canvas_clear_actions']=[build_tool_action(profile_key,'Eraser',current_client)]
+                            options['canvas_clear_restore_actions']=[build_tool_action(profile_key,'Brush',current_client)]
+                    except (OSError,ValueError):
+                        from BrowserToolLayout import build_browser_tool_action
+                        if clear_strategy.strategy=='native-clear':
+                            options['canvas_clear_actions']=[build_browser_tool_action(auto_browser_tool_plan,'Clear')]
+                        else:
+                            options['canvas_clear_actions']=[build_browser_tool_action(auto_browser_tool_plan,'Eraser')]
+                            options['canvas_clear_restore_actions']=[build_browser_tool_action(auto_browser_tool_plan,'Brush')]
                     for kind,position in options['canvas_clear_actions']+options['canvas_clear_restore_actions']:
                         px,py=position
                         if area[0]<=px<=area[0]+area[2] and area[1]<=py<=area[1]+area[3]:

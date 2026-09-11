@@ -10,10 +10,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import sqrt
 
-SUPPORTED = frozenset({'gartic-phone', 'skribbl', 'skribbl-fast', 'sketchheads'})
+SUPPORTED = frozenset({'gartic-phone', 'gartic-io', 'skribbl', 'skribbl-fast', 'sketchheads'})
 
 POLICIES = {
     'gartic-phone': {'sizes': (2, 4, 8, 16, 28), 'safe_index': 1},
+    'gartic-io': {'sizes': (2, 4, 8, 16, 28), 'safe_index': 1},
     'skribbl': {'sizes': (4, 8, 16, 32), 'safe_index': 1},
     'skribbl-fast': {'sizes': (4, 8, 16, 32), 'safe_index': 1},
     'sketchheads': {'sizes': (4, 8, 14), 'safe_index': 1},
@@ -33,7 +34,7 @@ def _candidate_positions(profile_key, client_rect, canvas_box=None, palette_box=
     l, t, r, b = map(int, client_rect); cw, ch = r-l, b-t
     canvas = tuple(map(int, canvas_box)) if isinstance(canvas_box, (tuple, list)) and len(canvas_box) == 4 else None
     palette = tuple(map(int, palette_box)) if isinstance(palette_box, (tuple, list)) and len(palette_box) == 4 else None
-    if profile_key == 'gartic-phone' and canvas:
+    if profile_key in ('gartic-phone', 'gartic-io') and canvas:
         x0, y0, x1, y1 = canvas; w = x1-x0; h = y1-y0
         y = y1 + max(28, min(int(ch*.095), int(h*.17)))
         xs = [x0 + w*f for f in (.05, .118, .186, .254, .322)]

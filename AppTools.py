@@ -22,13 +22,13 @@ GENERIC_TOOLS = ("Brush", "Fill", "Eraser", "Clear")
 PROFILE_CAPABILITIES = {
     "microsoft-paint": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Native Paint tools; Paint-specific calibration is preferred."},
     "generic": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Calibrate the controls visible in your drawing app."},
-    "gartic-phone": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Current layout: Brush is top-left, Eraser top-right, Fill is row 4 right. Coordinates are still user-calibrated and anchored; recalibrate after zoom/layout changes."},
+    "gartic-phone": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Brush, Fill, Eraser and Clear can be inferred automatically after browser visual preflight; manual anchored calibration remains the fallback."},
     "skribbl": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Calibrate with the canvas/tool bar in its final browser layout."},
     "skribbl-fast": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Fast profile uses the same visible Skribbl controls; recalibrate after browser zoom/layout changes."},
     "sketchheads": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Auto setup handles the palette/canvas. Manual tool capture is optional for Fill/Eraser workflows."},
     "sketchful": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Auto setup can detect the palette; manual tool capture is optional."},
     "drawize": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Tool positions are profile-specific and must be calibrated."},
-    "gartic-io": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Tool positions are profile-specific and must be calibrated."},
+    "gartic-io": {"brush": True, "fill": True, "eraser": True, "clear": True, "note": "Uses the conservative Gartic browser tool detector when the verified layout matches; manual calibration remains the fallback."},
     "kleki": {"brush": True, "fill": True, "eraser": True, "clear": False, "note": "Kleki controls are manually calibrated and anchored to this profile; no layout coordinates are assumed."},
     "magma": {"brush": True, "fill": True, "eraser": True, "clear": False, "note": "Magma controls are manually calibrated per canvas/profile; collaborative UI changes require recalibration."},
 }
