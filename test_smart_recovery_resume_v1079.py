@@ -49,7 +49,7 @@ def plan():
 
 class SmartRecoveryV1079Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.144-rc11');self.assertEqual(FILE_VERSION,'1.0.144')
+        self.assertEqual(APP_VERSION,'1.0.144-rc12');self.assertEqual(FILE_VERSION,'1.0.144')
 
     def test_path_checkpoint_resumes_same_unfinished_path(self):
         p=plan();items=p['execution_groups'][0]
