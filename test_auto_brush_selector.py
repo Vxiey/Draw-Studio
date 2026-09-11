@@ -1,6 +1,7 @@
 import unittest
 
 from AdaptiveBrushEngine import analyze_brush_demand, assign_adaptive_brushes, verified_brush_sizes
+from BrowserBrushSize import _automatic_guard_px
 
 
 def brush_plan(*, safe_guard=8):
@@ -36,6 +37,12 @@ class AutoBrushSelectorTests(unittest.TestCase):
         self.assertEqual(sizes,(2,4,8))
         sizes,_=verified_brush_sizes('gartic-phone',brush_plan(safe_guard=4),4)
         self.assertEqual(sizes,(2,4))
+
+    def test_browser_guard_allows_only_one_bounded_auto_upshift(self):
+        self.assertEqual(_automatic_guard_px((2,4,8,16,28),4,4),8)
+        self.assertEqual(_automatic_guard_px((4,8,16,32),8,8),16)
+        self.assertEqual(_automatic_guard_px((4,8,14),4,4),8)
+        self.assertEqual(_automatic_guard_px((2,4,8,16,28),2,2),4)
 
     def test_flat_image_plan_uses_broader_verified_brush(self):
         sequence=[entry('foundation',w=80,h=60,area=4800) for _ in range(8)]
