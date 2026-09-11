@@ -12,7 +12,7 @@ class ImageDrawBotIdentityV10144Tests(unittest.TestCase):
     def test_public_identity(self):
         self.assertEqual(APP_NAME, 'Image Draw Bot')
         self.assertEqual(APP_TAGLINE, 'Automatic Image Drawing')
-        self.assertEqual(APP_VERSION, '1.0.144-rc12')
+        self.assertEqual(APP_VERSION, '1.0.144-rc13')
         self.assertEqual(FILE_VERSION, '1.0.144')
         self.assertEqual(EXECUTABLE_NAME, 'ImageDrawBot.exe')
         self.assertEqual(UpdateCenter.GITHUB_REPOSITORY, 'Vxiey/Image-Draw-Bot')

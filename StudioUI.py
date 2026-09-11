@@ -445,7 +445,7 @@ def build_ui(a, quality, speed):
     timer_switch.pack(anchor='w',pady=(0,8))
     tooltip(timer_switch,'Gartic Phone only: watch the round pie timer for about 6 seconds at Start to estimate remaining time. Keep it visible. Uncertain readings stop Start; turn this off to use a manual time budget.')
     setting_row(step4, 'Quality preset', a.quality, list(quality), width=160)
-    numeric_row(step4, 'Brush width (px)', a.brush_px, 'Match Paint.', width=70)
+    numeric_row(step4, 'Brush width (px)', a.brush_px, 'Auto Brush baseline · verified sizes adapt to image detail.', width=70)
     focus_menu = setting_row(step4, 'Subject focus', a.subject_focus,
                              ['Off', 'Subject first', 'Subject only'],
                              'Pixel Accurate · 1 px pencil. No AI detection.', width=160)

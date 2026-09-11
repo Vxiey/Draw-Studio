@@ -121,7 +121,7 @@ PAGES = [
 ]
 HELP = {
   "Quality preset": "Start with Balanced or the default. Extra Fast suits short rounds and simple shapes. Pixel Accurate emphasizes detail and can take longer. Build a new preview after changing the preset.",
-  "Brush width (px)": "Match the width to the real target tool. A wide brush covers areas faster but can hide small details. A narrow brush preserves edges but needs more strokes. Check the actual mark with a small test.",
+  "Brush width (px)": "This is the Auto Brush baseline. On supported targets, Image Draw Bot verifies available brush sizes and automatically uses broader brushes for large flat regions and smaller brushes for contours, protected details and corrections. Low-confidence layouts keep the fixed baseline and never guess brush-control clicks.",
   "Rendering style": "Start with Auto. Portrait / shaded suits faces and gradients; Standard / pixel suits flat artwork. Quick Sketch prioritizes recognizable outlines when time is short.",
   "Drawing mode": "Smart paths connects nearby pixels to reduce mouse actions. Lines draws runs; Dots places individual marks and can be much slower. Start with Smart paths.",
   "GPU acceleration": "Auto uses a supported backend when available and falls back to CPU. GPU acceleration helps supported image-processing work; it does not make the target accept unlimited mouse input.",

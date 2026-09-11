@@ -8,7 +8,7 @@ Start with Balanced or the default. Extra Fast suits short rounds and simple sha
 
 ## Brush width (px)
 
-Match the width to the real target tool. A wide brush covers areas faster but can hide small details. A narrow brush preserves edges but needs more strokes. Check the actual mark with a small test.
+This is the Auto Brush baseline. On supported targets, Image Draw Bot verifies available brush sizes and automatically uses broader brushes for large flat regions and smaller brushes for contours, protected details and corrections. Low-confidence layouts keep the fixed baseline and never guess brush-control clicks.
 
 ## Rendering style
 
