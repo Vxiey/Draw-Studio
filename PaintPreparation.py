@@ -115,7 +115,7 @@ _CUSTOM_COLOR_NAMES = (
 )
 
 
-def automation(handle, *, element=None, action=None, cancelled=lambda:False):
+def automation(handle, *, element=None, action=None, size_px=1, cancelled=lambda:False):
     if os.name!='nt':raise OSError('Automatic Paint preparation requires Windows.')
     if cancelled():raise InterruptedError('Paint preparation cancelled.')
     command=''
@@ -131,13 +131,14 @@ $e=$all.Item([int]$matches[0].id)
         if action=='invoke':
             command+=_INVOKE_HELPER+_INVOKE_ACTION
         elif action=='size':
-            command+=r'''
+            target_size=max(1,min(50,int(size_px or 1)))
+            command+=f'$targetSize={target_size}\n'+r'''
 $pattern=$null
 if(!$e.TryGetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern,[ref]$pattern)) {throw 'Paint size control does not expose RangeValuePattern.'}
 $p=[System.Windows.Automation.RangeValuePattern]$pattern
-if($p.Current.Minimum -gt 1 -or $p.Current.Maximum -lt 1){throw 'Paint size does not expose a 1 px value.'}
-$p.SetValue(1)
-if([Math]::Abs($p.Current.Value-1) -gt 0.001){throw 'Paint did not accept 1 px.'}
+if($p.Current.Minimum -gt $targetSize -or $p.Current.Maximum -lt $targetSize){throw ('Paint size does not expose the requested '+$targetSize+' px value.')}
+$p.SetValue($targetSize)
+if([Math]::Abs($p.Current.Value-$targetSize) -gt 0.001){throw ('Paint did not accept '+$targetSize+' px.')}
 '''
         else:raise ValueError('Unsupported Paint control action.')
     script=_SCRIPT.replace('HANDLE',str(int(handle))).replace('ACTION',command)
@@ -299,8 +300,8 @@ def ensure_paint(enumerate_windows, *, cancelled=lambda:False, launch=None, wait
     raise ValueError('Paint did not open in time. Open it and retry.')
 
 
-def prepare_tool_controls(handle, *, cancelled=lambda:False, backend=automation):
-    """Prepare Pencil/1 px without ever opening Paint Edit colors.
+def prepare_tool_controls(handle, *, brush_px=1, cancelled=lambda:False, backend=automation):
+    """Prepare Pencil and the requested verified pixel size without opening Paint Edit colors.
 
     This is the required path for black contour sketch, Single-color sketch
     (current ink), and Eraser workflows.  It may close an already-open stale
@@ -316,7 +317,7 @@ def prepare_tool_controls(handle, *, cancelled=lambda:False, backend=automation)
     invoke(pencil)
     nodes=scan()
     size=find_control(nodes,('size','brush size','pencil size','storlek','penselstorlek','pennstorlek','thickness','tjocklek'),kind='Slider')
-    backend(handle,element=size,action='size',cancelled=cancelled)
+    backend(handle,element=size,action='size',size_px=max(1,min(50,int(brush_px or 1))),cancelled=cancelled)
     return True
 
 
@@ -350,7 +351,7 @@ def calibrate_rgb_controls(handle, *, cancelled=lambda:False, backend=automation
     return controls
 
 
-def prepare_controls(handle, *, cancelled=lambda:False, backend=automation):
+def prepare_controls(handle, *, brush_px=1, cancelled=lambda:False, backend=automation):
     """Backward-compatible full Paint tool + exact-RGB preparation."""
-    prepare_tool_controls(handle,cancelled=cancelled,backend=backend)
+    prepare_tool_controls(handle,brush_px=brush_px,cancelled=cancelled,backend=backend)
     return calibrate_rgb_controls(handle,cancelled=cancelled,backend=backend)

@@ -2640,6 +2640,30 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
         # handoff, but before brush/tool setup, canvas clear, region fills and
         # normal strokes. This matches what the UI calls final draw time.
         execution_measure_started=clock()
+        _draw_timer_last=[execution_measure_started]
+        try:_planned_draw_seconds=max(0.0,float((plan.get('draw_time_estimate') or {}).get('projected_seconds') or plan.get('estimate') or 0.0))
+        except Exception:_planned_draw_seconds=0.0
+        def report_draw_timer(*,force=False,completed=False):
+            if dry_run or execution_measure_started is None:return
+            now=clock()
+            if not force and now-_draw_timer_last[0]<.50:return
+            _draw_timer_last[0]=now
+            elapsed=max(0.0,now-execution_measure_started)
+            total_paths=max(1,int(plan.get('count') or 0))
+            if completed:
+                predicted=elapsed;remaining=0.0
+            else:
+                path_projection=(elapsed*total_paths/max(1,done)) if done>0 else 0.0
+                if path_projection>0:
+                    weight=min(.65,max(.15,done/total_paths))
+                    predicted=max(elapsed,((_planned_draw_seconds*(1.0-weight)+path_projection*weight) if _planned_draw_seconds>0 else path_projection))
+                else:
+                    predicted=max(elapsed,_planned_draw_seconds)
+                remaining=max(0.0,predicted-elapsed)
+            report('draw_timer',{'elapsed_seconds':elapsed,'remaining_seconds':remaining,
+                                  'predicted_total_seconds':predicted,'done':int(done),'total':int(plan.get('count') or 0),
+                                  'state':'completed' if completed else 'running'})
+        report_draw_timer(force=True)
         if (plan['options'].get('paint_profile') or stroke_delivery.profile_key in ('gartic-phone','skribbl','skribbl-fast','sketchheads')) and not dry_run:
             report('status',f'{stroke_delivery.label}: <= {stroke_delivery.step_px:.0f}px interpolation, {stroke_delivery.min_path_delay*1000:.2f}ms path floor, palette settle={stroke_delivery.palette_click_delay*1000:.0f}ms, backend={stroke_delivery.drag_backend}.')
         brush_plan=plan['options'].get('browser_brush_plan') or {}
@@ -2911,6 +2935,7 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                     done += 1
                     if done % progress_every == 0 or done == plan['count']:
                         report('progress', (done, plan['count']))
+                        report_draw_timer()
                 return {'matched': True, 'skipped': True, 'reason': 'outside safe canvas'}
             canvas_points=[p for path in clipped_subpaths for p in path]
             drawn_pairs=[(a,b) for path in clipped_subpaths for a,b in zip(path,path[1:]) if a!=b]
@@ -3552,6 +3577,13 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
             _correction_meta=run_post_draw_correction_pass(_initial_post_meta,_initial_elapsed)
             if isinstance(_correction_meta,dict) and int(_correction_meta.get('executed_paths',0) or 0)>0:
                 execution_measure_completed_at=clock()
+        actual_draw_seconds=None
+        if (not dry_run) and execution_measure_started is not None:
+            actual_draw_seconds=max(.001,(execution_measure_completed_at or clock())-execution_measure_started)
+            plan['options']['actual_draw_seconds']=round(actual_draw_seconds,4)
+            report_draw_timer(force=True,completed=True)
+            report('draw_time_actual',{'seconds':actual_draw_seconds,'paths':int(done),
+                                       'correction_paths':int((plan['options'].get('post_draw_correction_meta') or {}).get('executed_paths',0) or 0)})
         runtime_safety.mark_completed()
         speed_measure_completed=True
         correction_only_retry=bool(plan['options'].get('correction_only_retry'))
@@ -3564,7 +3596,12 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
             _planned=int(_corr.get('correction_paths',0) or 0)
             report('status', f'Correction-only retry finished: {_executed}/{_planned} correction path(s) sent. Also verify the final result in the target application.')
         else:
-            report('status', f'Finished locally: {done:,} brush strokes sent. Also verify the final result in the target application.')
+            try:
+                from DrawTimeEstimate import format_duration
+                _actual_label=format_duration(actual_draw_seconds or 0.0)
+            except Exception:
+                _actual_label=f'{float(actual_draw_seconds or 0.0):.1f}s'
+            report('status', f'Finished locally: {done:,} brush strokes sent · total draw time {_actual_label}. Also verify the final result in the target application.')
     except DryRunBudgetComplete:
         # Reaching the configured Fast Dry run budget is the expected end of a
         # bounded safety sample. It must not invalidate an otherwise clean run.
@@ -3858,6 +3895,8 @@ class DrawBotApp:
         self.exact_color_text = tk.StringVar(value='Smart custom palette is optional. If unavailable, nearest calibrated palette color is used.')
         self.color_plan_text = tk.StringVar(value='Color verification: waiting for drawing.')
         self.draw_time_text = tk.StringVar(value='Estimated draw time appears after Build preview.')
+        self.draw_live_time_text = tk.StringVar(value='Drawing timer: starts when drawing begins.')
+        self.total_draw_time_text = tk.StringVar(value='Total draw time: —')
         self.preview_diagnostics_text = tk.StringVar(value='Preview diagnostics appear after Build preview.')
         self.correction_review_text = tk.StringVar(value='Correction Review: no completed real drawing yet.')
         self.correction_review_meta = {}
@@ -3890,7 +3929,7 @@ class DrawBotApp:
         self.skip_white = tk.BooleanVar(value=True)
         self.contrast = tk.DoubleVar(value=1.0)
         self.outline = tk.BooleanVar(value=False)
-        self.brush_px = tk.StringVar(value='3')
+        self.brush_px = tk.StringVar(value='Auto')
         self.max_seconds = tk.StringVar(value='180')
         self.area_text = tk.StringVar(value='Drawing area not selected')
         self.palette_text = tk.StringVar(value='Colors need calibration')
@@ -5864,6 +5903,33 @@ class DrawBotApp:
         except Exception:
             _black_contour_sketch=False
         _skip_exact_rgb=bool(bypasses_palette(self) or _black_contour_sketch)
+        _paint_brush_meta=None
+        try:
+            _paint_brush_raw=str(getattr(getattr(self,'brush_px',None),'get',lambda:'1')()).strip()
+            if _paint_brush_raw.casefold()=='auto':
+                from AutoBrushWidth import resolve_brush_width
+                _target_size=None
+                try:
+                    if len(self.corners)==2:
+                        _area=self.area();_target_size=(int(_area[2]),int(_area[3]))
+                except Exception:
+                    _target_size=None
+                _decision=resolve_brush_width(
+                    self.original,target_size=_target_size,
+                    draw_quality=getattr(getattr(self,'draw_quality',None),'get',lambda:'High likeness')(),
+                    render_preset=getattr(getattr(self,'render_preset',None),'get',lambda:'Auto')(),
+                    render_style=getattr(getattr(self,'render_style',None),'get',lambda:'Auto')(),
+                    outline=_black_contour_sketch,
+                    subject_focus=getattr(getattr(self,'subject_focus',None),'get',lambda:'Off')(),
+                    profile_key='microsoft-paint',speed=normalize_speed(self.speed.get()),quality=self.quality.get())
+                _paint_brush_px=int(_decision.brush_px);_paint_brush_meta=_decision.as_dict()
+            else:
+                _paint_brush_px=int(_paint_brush_raw)
+                if not 1<=_paint_brush_px<=50:raise ValueError('out of range')
+        except (TypeError,ValueError,tk.TclError):
+            self.paint_start_request=None
+            self.status.set('Brush width must be Auto or 1–50 px before Paint preparation can start.')
+            return False
         # Snapshot an explicit user-selected canvas on the UI thread. Paint's
         # pale document border can be visually ambiguous, but a manual selection
         # is already the user's hard CanvasGuard boundary and should not be
@@ -5893,7 +5959,7 @@ class DrawBotApp:
                     raise ValueError('Could not activate Paint. Bring it into view and retry.')
                 if self.stop.wait(.35):raise InterruptedError()
                 meta=probe_handle_isolated(int(candidate['handle']))
-                prepare_tool_controls(int(candidate['handle']),cancelled=self.stop.is_set)
+                prepare_tool_controls(int(candidate['handle']),brush_px=_paint_brush_px,cancelled=self.stop.is_set)
                 exact_controls=None
                 exact_reused=False
                 if not _skip_exact_rgb:
@@ -5943,6 +6009,8 @@ class DrawBotApp:
                 result['exact_colors_ready']=bool(_skip_exact_rgb or exact_controls is not None)
                 result['exact_colors_bypassed']=bool(_skip_exact_rgb)
                 result['exact_colors_reused']=bool(exact_reused)
+                result['prepared_brush_px']=int(_paint_brush_px)
+                result['auto_brush_width_meta']=dict(_paint_brush_meta or {})
                 result['start_request']=request
                 self.events.put(('paint_auto_calibration_complete',result))
             except InterruptedError:
@@ -5958,7 +6026,7 @@ class DrawBotApp:
                     }))
                     return
                 raise
-        self.status.set('Preparing Paint: pencil, 1 px, canvas, palette and RGB color controls…')
+        self.status.set(f'Preparing Paint: pencil, {_paint_brush_px} px, canvas, palette and RGB color controls…')
         started=bool(self.begin_worker('paint-auto-calibration',work))
         if not started:self.paint_start_request=None
         return started
@@ -6282,10 +6350,16 @@ class DrawBotApp:
             if hasattr(self,'sketch_detail'):self.sketch_detail.set(data.get('sketch_detail') if data.get('sketch_detail') in ('Auto','Simple','Balanced','Detailed') else 'Auto')
             value=data.get('contrast',1)
             if isinstance(value,(float,int)) and math.isfinite(value) and .5<=value<=2:self.contrast.set(value)
-            for key,var,low,high in [('brush_px',self.brush_px,1,50),('max_seconds',self.max_seconds,5,3600)]:
-                raw=data.get(key)
-                if type(raw) is int and low<=raw<=high:var.set(str(raw))
-                elif isinstance(raw,str) and raw.isdecimal() and low<=int(raw)<=high:var.set(str(int(raw)))
+            raw_brush=data.get('brush_px','Auto')
+            if isinstance(raw_brush,str) and raw_brush.strip().casefold()=='auto':
+                self.brush_px.set('Auto')
+            elif type(raw_brush) is int and 1<=raw_brush<=50:
+                self.brush_px.set(str(raw_brush))
+            elif isinstance(raw_brush,str) and raw_brush.isdecimal() and 1<=int(raw_brush)<=50:
+                self.brush_px.set(str(int(raw_brush)))
+            raw_limit=data.get('max_seconds')
+            if type(raw_limit) is int and 5<=raw_limit<=3600:self.max_seconds.set(str(raw_limit))
+            elif isinstance(raw_limit,str) and raw_limit.isdecimal() and 5<=int(raw_limit)<=3600:self.max_seconds.set(str(int(raw_limit)))
             if hasattr(self,'paint_simple') and type(data.get('paint_simple')) is bool:self.paint_simple.set(data['paint_simple'])
             if hasattr(self,'paint_tool') and data.get('paint_tool') in ('Auto (recommended)','Use current tool','Brush','Pencil','Eraser'):
                 self.paint_tool.set(data['paint_tool'])
@@ -6326,12 +6400,16 @@ class DrawBotApp:
         if uses_paint_color(self) and self.game.get()!='Microsoft Paint':
             self.outline.set(True)
             self.subject_focus.set('Off')
+        brush_raw=str(self.brush_px.get()).strip()
+        brush_auto=brush_raw.casefold()=='auto'
         try:
-            brush=int(self.brush_px.get());limit=int(self.max_seconds.get())
+            brush=None if brush_auto else int(brush_raw)
+            limit=int(self.max_seconds.get())
         except (TypeError,ValueError,tk.TclError) as error:
-            raise ValueError('Brush width and time limit must be whole numbers.') from error
-        if not 1<=brush<=50 or not 5<=limit<=3600:
-            raise ValueError('Brush width: 1–50 px. Time limit: 5–3600 seconds.')
+            raise ValueError('Brush width must be Auto or a whole number, and time limit must be a whole number.') from error
+        if (brush is not None and not 1<=brush<=50) or not 5<=limit<=3600:
+            raise ValueError('Brush width: Auto or 1–50 px. Time limit: 5–3600 seconds.')
+        auto_brush_width_meta=None
         quality=self.quality.get();speed=normalize_speed(self.speed.get());precision=self.precision.get();mode=self.mode.get();shape_order=getattr(getattr(self,'shape_order',None),'get',lambda:'Fill first')();shape_model=getattr(getattr(self,'shape_model',None),'get',lambda:'Auto')();max_stroke_cap=getattr(getattr(self,'max_stroke_cap',None),'get',lambda:'Auto')();progressive_rendering=getattr(getattr(self,'progressive_rendering',None),'get',lambda:'Auto')();planning_watchdog=getattr(getattr(self,'planning_watchdog',None),'get',lambda:'Auto')();time_budget_mode=getattr(getattr(self,'time_budget_mode',None),'get',lambda:'Manual')();target_stroke_count=getattr(getattr(self,'target_stroke_count',None),'get',lambda:'Auto')();target_stroke_custom=getattr(getattr(self,'target_stroke_custom',None),'get',lambda:'2500')();render_style=self.render_style.get();draw_quality=getattr(getattr(self,'draw_quality',None),'get',lambda:'High likeness')();human_mode='Off';gpu_mode=getattr(getattr(self,'gpu_mode',None),'get',lambda:'Auto')();gpu_vram=getattr(getattr(self,'gpu_vram',None),'get',lambda:'Auto')();gpu_performance=getattr(getattr(self,'gpu_performance',None),'get',lambda:'High throughput')();cpu_workers=getattr(getattr(self,'cpu_workers',None),'get',lambda:'Auto')();cpu_engine=getattr(getattr(self,'cpu_engine',None),'get',lambda:'Auto')();ram_budget=getattr(getattr(self,'ram_budget',None),'get',lambda:'Auto')();ram_custom_mb=getattr(getattr(self,'ram_custom_mb',None),'get',lambda:'4096')();planning_resolution=getattr(getattr(self,'planning_resolution',None),'get',lambda:'High')();resource_scheduler=getattr(getattr(self,'resource_scheduler',None),'get',lambda:'Auto')();profile_engine=getattr(getattr(self,'profile_engine',None),'get',lambda:'Manual settings')();edge_behavior=getattr(getattr(self,'edge_behavior',None),'get',lambda:'Auto')();background_fill=getattr(getattr(self,'background_fill',None),'get',lambda:'Balanced')();fill_engine=getattr(getattr(self,'fill_engine',None),'get',lambda:'Auto')();background_simplification=getattr(getattr(self,'background_simplification',None),'get',lambda:'Balanced')();color_grouping=getattr(getattr(self,'color_grouping',None),'get',lambda:'Smart')();color_workflow=getattr(getattr(self,'color_workflow',None),'get',lambda:'Finish color first')();stroke_optimizer=getattr(getattr(self,'stroke_optimizer',None),'get',lambda:'Auto')();adaptive_detail=getattr(getattr(self,'adaptive_detail',None),'get',lambda:'Auto')();detail_zoom=getattr(getattr(self,'detail_zoom',None),'get',lambda:'Auto')();quick_sketch_style=getattr(getattr(self,'quick_sketch_style',None),'get',lambda:'Balanced')();quick_sketch_fill_preference=getattr(getattr(self,'quick_sketch_fill_preference',None),'get',lambda:'Safe Fill First')();hybrid_mode=getattr(getattr(self,'hybrid_mode',None),'get',lambda:'Auto Hybrid')();visual_verification=getattr(getattr(self,'visual_verification',None),'get',lambda:'Auto')();color_rendering=getattr(getattr(self,'color_rendering',None),'get',lambda:'Perceptual match')();color_fidelity=getattr(getattr(self,'color_fidelity',None),'get',lambda:'Faithful')();color_layers=getattr(getattr(self,'color_layers',None),'get',lambda:'Off')();custom_color_workflow=getattr(getattr(self,'custom_color_workflow',None),'get',lambda:'Calibrated palette')();exact_color_limit=getattr(getattr(self,'exact_color_limit',None),'get',lambda:'Auto')();preview_mode=getattr(getattr(self,'preview_mode',None),'get',lambda:'Manual')();preview_detail_level=getattr(getattr(self,'preview_detail_level',None),'get',lambda:'Detailed')();tool_strategy=getattr(getattr(self,'tool_strategy',None),'get',lambda:'Auto')()
         use_region_fill_engine=bool(getattr(getattr(self,'use_region_fill_engine',None),'get',lambda:True)())
         adaptive_deadline_renderer=bool(getattr(getattr(self,'adaptive_deadline_renderer',None),'get',lambda:True)())
@@ -6432,6 +6510,15 @@ class DrawBotApp:
         validate_tool_strategy(tool_strategy)
         validate_edge_behavior(edge_behavior)
         paint_profile=self.game.get()=='Microsoft Paint'
+        if brush is None:
+            from AutoBrushWidth import resolve_brush_width
+            _auto_brush=resolve_brush_width(
+                getattr(self,'original',None),target_size=area_size,draw_quality=draw_quality,
+                render_preset=getattr(getattr(self,'render_preset',None),'get',lambda:'Auto')(),
+                render_style=render_style,outline=bool(self.outline.get()),
+                subject_focus=self.subject_focus.get() if hasattr(self,'subject_focus') else 'Off',
+                profile_key=PROFILES[self.game.get()][0],speed=speed,quality=quality)
+            brush=int(_auto_brush.brush_px);auto_brush_width_meta=_auto_brush.as_dict()
         selected_tool=self.paint_tool.get() if paint_profile else 'Use current tool'
         if selected_tool not in ('Auto (recommended)','Use current tool','Brush','Pencil','Eraser'):
             raise ValueError('Choose a valid Paint drawing tool.')
@@ -6498,7 +6585,7 @@ class DrawBotApp:
         except Exception:
             calibration_state={'profile_key':profile_key,'fingerprint':calibration_fingerprint}
         result={'detail':QUALITY[quality],'delay':SPEED[speed],'speed':speed,'precision':precision,'profile_name':self.game.get(),'profile_key':profile_key,'paint_profile':bool(paint_profile),'calibration_fingerprint':calibration_fingerprint,'calibration_state':calibration_state,
-                'lines':mode!=DOT_MODE,'drawing_mode':mode,'smart_paths':mode==SMART_PATH_MODE,'shape_order':shape_order,'shape_model':shape_model,'max_stroke_cap':max_stroke_cap,'progressive_rendering':progressive_rendering,'planning_watchdog':planning_watchdog,'planning_timeout_seconds':45 if mode==SHAPE_PATH_MODE else 75,'render_style':render_style,'draw_quality':draw_quality,'human_mode':human_mode,'gpu_mode':gpu_mode,'gpu_vram':gpu_vram,'gpu_performance':gpu_performance,'cpu_workers':cpu_workers,'cpu_engine':cpu_engine,'ram_budget':ram_budget,'ram_custom_mb':ram_custom_mb,'planning_resolution':planning_resolution,'resource_scheduler':resource_scheduler,'profile_engine':profile_engine,'profile_policy_meta':profile_policy_meta,'profile_polish_meta':profile_polish_meta,**allocation,'background_fill':background_fill,'fill_engine':fill_engine,'background_simplification':background_simplification,'color_grouping':color_grouping,'color_workflow':color_workflow,'stroke_optimizer':stroke_optimizer,'stroke_optimizer_resolved':resolve_stroke_optimizer(stroke_optimizer,drawing_mode=mode),'adaptive_detail':adaptive_detail,'detail_zoom':detail_zoom,'quick_sketch_style':quick_sketch_style,'quick_sketch_fill_preference':quick_sketch_fill_preference,'hybrid_mode':hybrid_mode,'visual_verification':visual_verification,'visual_verification_resolved':resolve_visual_verification(visual_verification,paint_profile=paint_profile,dry_run=False,test=False),'color_rendering':color_rendering,'color_fidelity':color_fidelity,'color_layers':color_layers,'custom_color_workflow':custom_color_workflow,'exact_color_limit':exact_color_limit,'exact_color_limit_resolved':resolve_exact_color_limit(exact_color_limit,draw_quality=draw_quality,preview=False),'exact_color_available':custom_rgb_available(PROFILES[self.game.get()][0]),'preview_mode':preview_mode,'preview_detail_level':preview_detail_level,'auto_clear_canvas':bool(getattr(getattr(self,'auto_clear_canvas',None),'get',lambda:False)()),'canvas_clear_strategy':'pending','canvas_clear_actions':[],'canvas_clear_restore_actions':[],'canvas_clear_estimate_seconds':0.0,'tool_strategy':tool_strategy,'subject_focus':self.subject_focus.get() if hasattr(self,'subject_focus') else 'Off','subject_region':getattr(self,'subject_region',None),'portrait_focus':bool(self.portrait_focus.get()),'skip_white':bool(self.skip_white.get()),'contrast':contrast,'outline':bool(self.outline.get()),'sketch_detail':getattr(getattr(self,'sketch_detail',None),'get',lambda:'Auto')(),'brush_px':brush,'canvas_edge_verification':'Auto','canvas_edge_margin_px':24,'canvas_edge_tolerance_px':4,'canvas_edge_search_px':24,'edge_behavior':edge_behavior,'edge_behavior_resolved':resolve_edge_behavior(edge_behavior, profile_name=self.game.get(), drawing_mode=mode, outline=bool(self.outline.get())),'max_seconds':effective_limit,'manual_max_seconds':limit,'time_budget_mode':time_budget_mode,'time_budget_seconds':effective_limit,'time_budget_active':time_budget_active,'adaptive_deadline_renderer':adaptive_deadline_renderer,'deadline_safety_reserve':deadline_safety_reserve,'target_stroke_count':target_stroke_count,'target_stroke_custom':target_stroke_custom,'target_stroke_count_resolved':target_cap,**target_meta,
+                'lines':mode!=DOT_MODE,'drawing_mode':mode,'smart_paths':mode==SMART_PATH_MODE,'shape_order':shape_order,'shape_model':shape_model,'max_stroke_cap':max_stroke_cap,'progressive_rendering':progressive_rendering,'planning_watchdog':planning_watchdog,'planning_timeout_seconds':45 if mode==SHAPE_PATH_MODE else 75,'render_style':render_style,'draw_quality':draw_quality,'human_mode':human_mode,'gpu_mode':gpu_mode,'gpu_vram':gpu_vram,'gpu_performance':gpu_performance,'cpu_workers':cpu_workers,'cpu_engine':cpu_engine,'ram_budget':ram_budget,'ram_custom_mb':ram_custom_mb,'planning_resolution':planning_resolution,'resource_scheduler':resource_scheduler,'profile_engine':profile_engine,'profile_policy_meta':profile_policy_meta,'profile_polish_meta':profile_polish_meta,**allocation,'background_fill':background_fill,'fill_engine':fill_engine,'background_simplification':background_simplification,'color_grouping':color_grouping,'color_workflow':color_workflow,'stroke_optimizer':stroke_optimizer,'stroke_optimizer_resolved':resolve_stroke_optimizer(stroke_optimizer,drawing_mode=mode),'adaptive_detail':adaptive_detail,'detail_zoom':detail_zoom,'quick_sketch_style':quick_sketch_style,'quick_sketch_fill_preference':quick_sketch_fill_preference,'hybrid_mode':hybrid_mode,'visual_verification':visual_verification,'visual_verification_resolved':resolve_visual_verification(visual_verification,paint_profile=paint_profile,dry_run=False,test=False),'color_rendering':color_rendering,'color_fidelity':color_fidelity,'color_layers':color_layers,'custom_color_workflow':custom_color_workflow,'exact_color_limit':exact_color_limit,'exact_color_limit_resolved':resolve_exact_color_limit(exact_color_limit,draw_quality=draw_quality,preview=False),'exact_color_available':custom_rgb_available(PROFILES[self.game.get()][0]),'preview_mode':preview_mode,'preview_detail_level':preview_detail_level,'auto_clear_canvas':bool(getattr(getattr(self,'auto_clear_canvas',None),'get',lambda:False)()),'canvas_clear_strategy':'pending','canvas_clear_actions':[],'canvas_clear_restore_actions':[],'canvas_clear_estimate_seconds':0.0,'tool_strategy':tool_strategy,'subject_focus':self.subject_focus.get() if hasattr(self,'subject_focus') else 'Off','subject_region':getattr(self,'subject_region',None),'portrait_focus':bool(self.portrait_focus.get()),'skip_white':bool(self.skip_white.get()),'contrast':contrast,'outline':bool(self.outline.get()),'sketch_detail':getattr(getattr(self,'sketch_detail',None),'get',lambda:'Auto')(),'brush_px':brush,'brush_px_requested':brush_raw,'auto_brush_width_meta':auto_brush_width_meta,'canvas_edge_verification':'Auto','canvas_edge_margin_px':24,'canvas_edge_tolerance_px':4,'canvas_edge_search_px':24,'edge_behavior':edge_behavior,'edge_behavior_resolved':resolve_edge_behavior(edge_behavior, profile_name=self.game.get(), drawing_mode=mode, outline=bool(self.outline.get())),'max_seconds':effective_limit,'manual_max_seconds':limit,'time_budget_mode':time_budget_mode,'time_budget_seconds':effective_limit,'time_budget_active':time_budget_active,'adaptive_deadline_renderer':adaptive_deadline_renderer,'deadline_safety_reserve':deadline_safety_reserve,'target_stroke_count':target_stroke_count,'target_stroke_custom':target_stroke_custom,'target_stroke_count_resolved':target_cap,**target_meta,
                 **anchor_options,
                 'render_preset':getattr(getattr(self,'render_preset',None),'get',lambda:'Manual')(),'unlimited_time':time_budget_mode=='Unlimited',
                 'read_gartic_timer':bool(getattr(getattr(self,'read_gartic_timer',None),'get',lambda:True)()),
@@ -9267,6 +9354,29 @@ class DrawBotApp:
                     self.status.set(f'Dry run: {done:,} / {total:,} cursor paths simulated • no clicks • Esc stops')
                 else:
                     self.status.set(f'Drawing: {done:,} / {total:,} brush strokes • Esc stops • F6 pauses')
+        elif kind=='draw_timer':
+            data=value if isinstance(value,dict) else {}
+            try:
+                from DrawTimeEstimate import format_duration
+                elapsed=max(0.0,float(data.get('elapsed_seconds',0) or 0))
+                remaining=max(0.0,float(data.get('remaining_seconds',0) or 0))
+                predicted=max(elapsed,float(data.get('predicted_total_seconds',elapsed) or elapsed))
+                if str(data.get('state') or '')=='completed':
+                    self.draw_live_time_text.set(f'Drawing timer: {format_duration(elapsed)} elapsed · complete')
+                else:
+                    self.draw_live_time_text.set(f'Drawing timer: {format_duration(elapsed)} elapsed · ≈ {format_duration(remaining)} remaining · ≈ {format_duration(predicted)} total')
+                    self.total_draw_time_text.set('Total draw time: drawing…')
+            except (TypeError,ValueError,tk.TclError,AttributeError):
+                pass
+        elif kind=='draw_time_actual':
+            data=value if isinstance(value,dict) else {}
+            try:
+                from DrawTimeEstimate import format_duration
+                seconds=max(0.0,float(data.get('seconds',0) or 0))
+                self.total_draw_time_text.set(f'Total draw time: {format_duration(seconds)}')
+                self.draw_live_time_text.set(f'Drawing timer: completed in {format_duration(seconds)}')
+            except (TypeError,ValueError,tk.TclError,AttributeError):
+                pass
         elif kind=='upscaled':
             self._suppress_recovery=False
             if self.stop.is_set() and value[1] is not None: return
@@ -9294,6 +9404,10 @@ class DrawBotApp:
             self.file_label.set(image_label(self.original,str(label)))
             self._mark_plan_stale('Image loaded. Preview was not rebuilt automatically in Manual mode.')
             try:self.draw_time_text.set('Estimated draw time appears after Build preview.')
+            except (tk.TclError,AttributeError):pass
+            try:self.draw_live_time_text.set('Drawing timer: starts when drawing begins.')
+            except (tk.TclError,AttributeError):pass
+            try:self.total_draw_time_text.set('Total draw time: —')
             except (tk.TclError,AttributeError):pass
             DrawBotApp._queue_drop_in_start(self,_action,source_label=str(label))
             if normalize_drop_in_action(_action)!=DROP_IN_ACTION:

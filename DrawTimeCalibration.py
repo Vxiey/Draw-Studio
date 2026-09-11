@@ -1,6 +1,6 @@
 """Local measured calibration for Image Draw Bot draw-time estimates.
 
-Step 9 isolates persisted timing by drawing profile. Paint, Gartic and Skribbl
+Timing data is isolated by drawing profile and execution policy. Paint, Gartic and Skribbl
 now have separate files, and each timing key also includes the active tool,
 brush width and color workflow so learned costs cannot silently leak between
 materially different delivery setups.
@@ -18,7 +18,7 @@ from ProfileStorage import profile_timing_file, safe_profile_key
 
 # Legacy shared database. It is read only for one-time per-profile migration.
 FILE = data_dir() / "draw-time-calibration.json"
-VERSION = 2
+VERSION = 3
 
 
 def _empty() -> dict[str, Any]:
@@ -37,22 +37,36 @@ def _legacy_key(options: dict[str, Any]) -> str:
     return f"{profile}|{speed}|{precision}|{region}"
 
 
-def _key(options: dict[str, Any]) -> str:
+def _token(value: Any, fallback: str) -> str:
+    text=str(value or fallback).strip().lower().replace(" ", "-")
+    return text or fallback
+
+
+def _v2_key(options: dict[str, Any]) -> str:
     base = _legacy_key(options)
-    tool = str(options.get("effective_paint_tool") or options.get("paint_tool") or options.get("tool_strategy") or "default").strip().lower().replace(" ", "-")
+    tool = _token(options.get("effective_paint_tool") or options.get("paint_tool") or options.get("tool_strategy"), "default")
     try:
         brush = max(1, min(128, int(options.get("brush_px") or 1)))
     except Exception:
         brush = 1
-    workflow = str(options.get("custom_color_workflow") or "calibrated-palette").strip().lower().replace(" ", "-")
+    workflow = _token(options.get("custom_color_workflow"), "calibrated-palette")
     return f"{base}|tool={tool}|brush={brush}|color={workflow}"
+
+
+def _key(options: dict[str, Any]) -> str:
+    base=_v2_key(options)
+    mode=_token(options.get("drawing_mode") or options.get("mode"),"default")
+    preset=_token(options.get("render_preset"),"manual")
+    quality=_token(options.get("draw_quality"),"balanced")
+    style=_token(options.get("render_style"),"auto")
+    return f"{base}|mode={mode}|preset={preset}|quality={quality}|style={style}"
 
 
 def _load_raw(path: Path, *, accept_legacy_version: bool = False) -> dict[str, Any]:
     try:
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
         version = int(raw.get("version", 0)) if isinstance(raw, dict) else 0
-        valid_version = version == VERSION or (accept_legacy_version and version == 1)
+        valid_version = version == VERSION or (accept_legacy_version and version in (1,2))
         if not isinstance(raw, dict) or not valid_version or not isinstance(raw.get("profiles"), dict):
             return _empty()
         return {"version": VERSION, "profiles": dict(raw["profiles"])}
@@ -91,6 +105,8 @@ def _ensure_profile_db(options: dict[str, Any], path: Path | None) -> tuple[Path
 def load_profile(options: dict[str, Any], path: Path | None = None) -> dict[str, Any] | None:
     _resolved, db = _ensure_profile_db(options, path)
     item = db["profiles"].get(_key(options))
+    if not isinstance(item, dict):
+        item = db["profiles"].get(_v2_key(options))
     if not isinstance(item, dict):
         item = db["profiles"].get(_legacy_key(options))
     return dict(item) if isinstance(item, dict) else None
@@ -144,6 +160,8 @@ def record_sample(options: dict[str, Any], predicted_seconds: float, actual_seco
     key = _key(options)
     old = db["profiles"].get(key)
     if not isinstance(old, dict):
+        old = db["profiles"].get(_v2_key(options))
+    if not isinstance(old, dict):
         old = db["profiles"].get(_legacy_key(options)) if isinstance(db["profiles"].get(_legacy_key(options)), dict) else {}
     samples = int(old.get("samples") or 0)
     old_ratio = float(old.get("ratio_ema") or ratio)
@@ -182,9 +200,11 @@ def reset_profile(options: dict[str, Any], *, path: Path | None = None) -> dict[
     """Delete learned timing for exactly one isolated profile/tool/brush/workflow key."""
     resolved, db = _ensure_profile_db(options, path)
     key = _key(options)
+    v2 = _v2_key(options)
     legacy = _legacy_key(options)
-    existed = key in db["profiles"] or legacy in db["profiles"]
+    existed = key in db["profiles"] or v2 in db["profiles"] or legacy in db["profiles"]
     db["profiles"].pop(key, None)
+    db["profiles"].pop(v2, None)
     db["profiles"].pop(legacy, None)
     resolved.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_text(resolved, json.dumps(db, ensure_ascii=False, indent=2))
