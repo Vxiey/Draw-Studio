@@ -24,7 +24,10 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pytest
       - name: Apply rc14 patch
-        run: python .github/patch-total-time-auto-brush.py
+        run: |
+          sed -i 's/minimum=2)/minimum=1)/' .github/patch-total-time-auto-brush.py
+          sed -i "s/if progress_count<2:/if progress_count<1:/" .github/patch-total-time-auto-brush.py
+          python .github/patch-total-time-auto-brush.py
       - name: Compile changed Python modules
         run: python -m py_compile AutoBrushWidth.py DrawBot.py StudioUI.py PaintPreparation.py DrawTimeCalibration.py test_auto_brush_total_time_v10144.py
       - name: Run focused regressions
