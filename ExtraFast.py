@@ -36,27 +36,9 @@ def _finite_cost(value, fallback=None):
     return value if math.isfinite(value) and value>0 else fallback
 
 
-def _regionfill_batchable_overhead(options):
-    """Mirror only RegionFill's per-region tool-switch part, not Fill/verify work."""
-    try:
-        from HybridCostModel import build_cost_model
-        model=build_cost_model(options)
-        if getattr(model,'calibrated',False):
-            return max(0.0,float(model.tool_change_seconds))
-    except Exception:
-        pass
-    try:
-        from StrokeDelivery import resolve_stroke_delivery
-        delivery=resolve_stroke_delivery(options,dry_run=False)
-        return max(.08,float(delivery.ui_control_delay)*.45)
-    except Exception:
-        return .08
-
-
 def select_fast_regions(regions,source_size,target_size,options,cancelled=lambda:False):
     transform=CanvasTransform(*source_size,target_size)
     by_color=defaultdict(list);rejected=0
-    inferred_batchable=_regionfill_batchable_overhead(options)
     for region in regions:
         if cancelled():raise InterruptedError()
         contour=list(region.get('contour') or ())
@@ -66,17 +48,24 @@ def select_fast_regions(regions,source_size,target_size,options,cancelled=lambda
         scan_cost=_finite_cost(region.get('stroke_cost_seconds'))
         total_fill=_finite_cost(region.get('fill_cost_seconds'))
         fill_core=_finite_cost(region.get('fill_core_cost_seconds'))
+        removed_batchable=0.0
         if fill_core is None and total_fill is not None:
+            # Backward compatibility: legacy/external region metadata defines
+            # fill_cost_seconds as its authoritative core cost. Only the new
+            # RegionFill contract may explicitly identify an already embedded,
+            # shareable per-region switch cost.
             explicit=_finite_cost(region.get('fill_batchable_overhead_seconds'))
-            batchable=inferred_batchable if explicit is None else explicit
-            # Never subtract more than half of a tiny stored Fill estimate. This
-            # keeps malformed/stale metadata conservative while still removing
-            # the known RegionFill per-region tool-switch charge.
-            batchable=max(0.0,min(float(batchable),total_fill*.50))
-            fill_core=max(.001,total_fill-batchable)
+            if explicit is None:
+                fill_core=total_fill
+            else:
+                removed_batchable=max(0.0,min(float(explicit),total_fill*.50))
+                fill_core=max(.001,total_fill-removed_batchable)
+        elif fill_core is not None and total_fill is not None:
+            removed_batchable=max(0.0,total_fill-fill_core)
         if scan_cost is None or fill_core is None:
             scan_cost,fill_core=_legacy_cost(region,transform,options,cancelled)
             total_fill=fill_core
+            removed_batchable=0.0
 
         # Only the non-shareable Fill cost is compared here. Shared Fill/restore
         # UI actions are evaluated once after regions are grouped by colour.
@@ -87,7 +76,7 @@ def select_fast_regions(regions,source_size,target_size,options,cancelled=lambda
         item['extra_fast_scanline_cost_seconds']=round(scan_cost,5)
         item['extra_fast_fill_core_cost_seconds']=round(fill_core,5)
         item['extra_fast_fill_cost_seconds']=round(total_fill if total_fill is not None else fill_core,5)
-        item['extra_fast_inferred_batchable_overhead_seconds']=round(max(0.0,(total_fill or fill_core)-fill_core),5)
+        item['extra_fast_removed_batchable_overhead_seconds']=round(removed_batchable,5)
         try:key=int(item.get('color_index',-1))
         except (TypeError,ValueError):key=-1
         by_color[key].append(item)
@@ -123,7 +112,7 @@ def select_fast_regions(regions,source_size,target_size,options,cancelled=lambda
         'fill_pixels':pixels,'fill_estimated_seconds':round(seconds,3),
         'estimated_seconds_saved_vs_scanlines':round(saved,3),
         'fallback_strategy':'connected serpentine scanlines',
-        'tool_switch_cost_model':'RegionFill per-region switch removed; real controls shared once per color batch',
+        'tool_switch_cost_model':'explicit RegionFill batchable cost removed; real controls shared once per color batch',
         'per_region_tool_switch_double_charge':False,
-        'inferred_regionfill_batchable_overhead_seconds':round(inferred_batchable,5),
+        'legacy_fill_cost_semantics_preserved':True,
     }
