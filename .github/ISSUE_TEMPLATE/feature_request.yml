@@ -1,0 +1,51 @@
+name: Feature request
+description: Suggest a focused improvement for Image Draw Bot
+title: "[Feature] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests are most useful when they describe the target workflow and measurable benefit.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Drawing engine
+        - Microsoft Paint
+        - Gartic Phone
+        - Skribbl.io
+        - Preview / ETA
+        - Calibration
+        - Performance / GPU / CPU
+        - UI / usability
+        - Packaging / updater
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What workflow is currently difficult, slow, inaccurate or missing?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement
+      description: Describe the behavior you would like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Expected benefit
+      description: Explain how this would improve image quality, stability, real draw time, resource use or usability.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add examples, screenshots, logs or links if relevant.
