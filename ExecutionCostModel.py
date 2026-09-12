@@ -93,7 +93,8 @@ class ExecutionCostModel:
                              float(phase_delay(self.delay, self.speed, "path")))
         self.travel_wait = max(.0005, float(phase_delay(self.delay, self.speed, "travel")))
         self.boundary_wait = max(.0005, float(phase_delay(self.delay, self.speed, "boundary")))
-        self.calibration = correction_for(self.options)
+        _override = self.options.get("_execution_cost_calibration_override")
+        self.calibration = dict(_override) if isinstance(_override, dict) else correction_for(self.options)
         self.runtime = dict(self.calibration.get("operation_runtime") or {})
         self.samples = max(0, int(self.calibration.get("samples") or 0))
         learned_ratio = max(.55, min(4.0, _safe_float(self.calibration.get("ratio"), 1.0)))
@@ -181,9 +182,24 @@ class ExecutionCostModel:
         for raw in sequence or ():
             entry = dict(raw)
             operation = str(entry.get("operation_type") or "stroke")
-            if operation == "fill":
-                c = self.switch_cost("fill")
-                totals["fill"] += c; totals["ops"] += 1
+            if operation in ("fill", "fill_action"):
+                totals["fill"] += self.switch_cost("fill"); totals["ops"] += 1
+                continue
+            if operation == "verification":
+                totals["verification"] += self.switch_cost("verification"); totals["ops"] += 1
+                continue
+            if operation == "tool_change":
+                totals["tool"] += self.switch_cost("tool_change"); totals["tool_n"] += 1; totals["ops"] += 1
+                continue
+            if operation == "palette_change":
+                totals["palette"] += self.switch_cost("palette_change"); totals["palette_n"] += 1; totals["ops"] += 1
+                if entry.get("color_index") is not None:
+                    color = int(entry.get("color_index"))
+                continue
+            if operation == "brush_change":
+                totals["brush"] += self.switch_cost("brush_change"); totals["brush_n"] += 1; totals["ops"] += 1
+                if entry.get("brush_px") is not None:
+                    brush = max(1, int(entry.get("brush_px")))
                 continue
             new_color = int(entry.get("color_index", color if color is not None else 0))
             new_brush = max(1, int(entry.get("brush_px") or self.options.get("brush_px") or 1))

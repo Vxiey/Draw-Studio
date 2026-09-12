@@ -128,93 +128,79 @@ def _path_scale(plan: dict[str,Any], options: dict[str,Any]) -> tuple[float,floa
     return max(.001,sx),max(.001,sy)
 
 
-def _sequence_operation_estimate(plan: dict[str,Any]) -> tuple[float,dict[str,Any]]:
-    """Cost the exact ordered final sequence with an unlearned operation model.
 
-    Calibration is deliberately disabled inside HybridCostModel here because the
-    visible estimator applies DrawTimeCalibration afterwards. This prevents the
-    same learned actual/predicted ratio from being applied twice.
+def _sequence_operation_estimate(plan: dict[str,Any]) -> tuple[float,dict[str,Any]]:
+    """Cost the exact final execution order with the planner's stateful cost model.
+
+    The underlying ExecutionCostModel is deliberately forced to cold/unlearned
+    calibration here. DrawTimeEstimate applies DrawTimeCalibration once, after the
+    complete stroke + Fill + fixed-overhead estimate has been assembled.
     """
     sequence=[row for row in (plan.get("execution_sequence") or ()) if isinstance(row,dict)]
     if not sequence:
         return 0.0,{"used":False,"reason":"no final execution_sequence"}
     options=plan.get("options") if isinstance(plan.get("options"),dict) else {}
     model_options=dict(options)
-    sx,sy=_path_scale(plan,options)
-    model_options["_hybrid_scale_x"]=sx;model_options["_hybrid_scale_y"]=sy
-    model_options["_hybrid_cost_calibration_override"]={"samples":0,"ratio":1.0,"operation_runtime":{}}
+    cold={"learned":False,"samples":0,"ratio":1.0,"mape":None,"operation_runtime":{}}
+    model_options["_execution_cost_calibration_override"]=cold
+    model_options["_hybrid_cost_calibration_override"]=cold
+
+    image_size=None
+    image=plan.get("image")
+    try:image_size=tuple(map(int,image.size))
+    except Exception:image_size=None
+    if not image_size:
+        image_size=_area(plan.get("plan_area") or options.get("_preview_area") or options.get("_target_area")) or (1,1)
+    try:fitted=tuple(map(int,plan.get("fitted")))
+    except Exception:fitted=None
+    if not fitted:
+        fitted=_area(plan.get("target_area") or options.get("_target_area") or plan.get("plan_area")) or image_size
+
     try:
-        from HybridCostModel import build_cost_model
-        model=build_cost_model(model_options)
+        from ExecutionCostModel import build_cost_model as build_execution_cost_model
+        model=build_execution_cost_model(model_options,image_size,fitted)
     except Exception as exc:
-        return 0.0,{"used":False,"reason":f"cost model unavailable: {type(exc).__name__}"}
+        return 0.0,{"used":False,"reason":f"execution cost model unavailable: {type(exc).__name__}"}
 
-    paths=[];colors=[];brushes=[];operation_counts={}
-    path_operation_kinds=set()
-    for row in sequence:
-        path=tuple(row.get("path") or ())
-        if path:
-            paths.append(path)
-            kind=str(row.get("operation_type") or ("dot" if len(path)<=1 else "stroke"))
-            operation_counts[kind]=operation_counts.get(kind,0)+1
-            path_operation_kinds.add(kind)
-        try:colors.append(int(row.get("color_index")))
-        except Exception:colors.append(None)
-        try:brushes.append(max(1,int(row.get("brush_px",options.get("brush_px",1)) or 1)))
-        except Exception:brushes.append(max(1,int(options.get("brush_px",1) or 1)))
-
-    color_changes=_count_transitions(colors,count_first=True)
     try:initial_brush=max(1,int(options.get("brush_px",1) or 1))
     except Exception:initial_brush=1
-    brush_changes=_count_transitions(brushes,initial=initial_brush,count_first=False)
+    breakdown=model.sequence_cost(sequence,initial_brush=initial_brush)
+    sequence_seconds=max(0.0,float(breakdown.total_seconds or 0.0))
+    total=sequence_seconds
+
+    path_rows=[];path_kinds=set();operation_counts={}
+    for row in sequence:
+        operation=str(row.get("operation_type") or ("dot" if len(row.get("path") or ())<=1 else "stroke"))
+        if row.get("path"):
+            path_rows.append(row);path_kinds.add(operation)
+        operation_counts[operation]=operation_counts.get(operation,0)+1
 
     fill_regions=[row for row in (options.get("fill_regions") or plan.get("fill_regions") or ()) if isinstance(row,dict)]
-    fill_colors=set();fill_contours=[]
-    for region in fill_regions:
-        contour=tuple(region.get("contour") or ())
-        if contour:fill_contours.append(contour)
-        try:fill_colors.add(int(region.get("color_index")))
-        except Exception:pass
-    # Outline+Fill executes the contour in addition to the ordinary sequence.
-    paths.extend(fill_contours)
-    if fill_contours:
-        operation_counts["stroke"]=operation_counts.get("stroke",0)+len(fill_contours)
-        path_operation_kinds.add("stroke")
-    fill_actions=len(fill_regions)
-    verification_actions=len(fill_regions)
-    tool_action_count=len(options.get("fill_tool_actions") or ())+len(options.get("fill_restore_actions") or ())
-    if fill_regions and tool_action_count==0 and options.get("fill_tool_available"):
-        tool_action_count=2
-    tool_changes=len(fill_colors)*tool_action_count
+    fill_meta={"fill_regions":0,"fill_color_batches":0,"total_seconds":0.0,
+               "fill_contour_and_click_seconds":0.0,"fill_tool_switch_seconds":0.0}
+    if fill_regions:
+        try:
+            from RegionFillEngine import estimate_fill_execution_seconds
+            fill_meta=dict(estimate_fill_execution_seconds(fill_regions,image_size,fitted,model_options) or {})
+        except Exception:
+            fill_meta={"fill_regions":len(fill_regions),"fill_color_batches":0,
+                       "total_seconds":len(fill_regions)*model.switch_cost("fill"),
+                       "fill_contour_and_click_seconds":len(fill_regions)*model.switch_cost("fill"),
+                       "fill_tool_switch_seconds":0.0,"fallback":True}
+        total+=max(0.0,float(fill_meta.get("total_seconds") or 0.0))
 
+    # Background Fill is a separate prelude and is not part of region Fill rows.
     background=options.get("background_fill_plan") or {}
+    background_seconds=0.0;background_fill_actions=0;background_tool_changes=0;background_verifications=0
     if isinstance(background,dict) and background.get("enabled"):
-        fill_actions+=1;verification_actions+=1
-        if tool_action_count:tool_changes+=tool_action_count
+        background_fill_actions=1;background_verifications=1
+        tool_action_count=len(options.get("fill_tool_actions") or ())+len(options.get("fill_restore_actions") or ())
+        if tool_action_count==0 and options.get("fill_tool_available"):tool_action_count=2
+        background_tool_changes=tool_action_count
+        background_seconds=(model.switch_cost("fill")+model.switch_cost("verification")+
+                            background_tool_changes*model.switch_cost("tool_change"))
+        total+=background_seconds
 
-    breakdown=model.execution_breakdown(
-        paths,color_changes=color_changes,tool_changes=tool_changes,
-        brush_changes=brush_changes,fill_actions=fill_actions,
-        verification_actions=verification_actions)
-    total=max(0.0,float(breakdown.get("total_seconds") or 0.0))
-    if color_changes:operation_counts["palette_change"]=color_changes
-    combined_tool_changes=tool_changes+brush_changes
-    if combined_tool_changes:operation_counts["tool_change"]=combined_tool_changes
-    if fill_actions:operation_counts["fill_action"]=fill_actions
-    if verification_actions:operation_counts["verification"]=verification_actions
-    model_average_seconds={}
-    if paths:
-        path_average=max(0.0,float(breakdown.get("path_seconds") or 0.0))/max(1,len(paths))
-        for kind in path_operation_kinds:model_average_seconds[str(kind)]=path_average
-    if color_changes:model_average_seconds["palette_change"]=max(0.0,float(breakdown.get("color_seconds") or 0.0))/color_changes
-    if combined_tool_changes:model_average_seconds["tool_change"]=(max(0.0,float(breakdown.get("tool_seconds") or 0.0))+max(0.0,float(breakdown.get("brush_seconds") or 0.0)))/combined_tool_changes
-    if fill_actions:model_average_seconds["fill_action"]=max(0.0,float(breakdown.get("fill_seconds") or 0.0))/fill_actions
-    if verification_actions:model_average_seconds["verification"]=max(0.0,float(breakdown.get("verification_seconds") or 0.0))/verification_actions
-    modeled_operation_seconds=sum(max(0,int(operation_counts.get(kind,0) or 0))*max(0.0,float(avg or 0.0)) for kind,avg in model_average_seconds.items())
-
-    # Countdown and destructive clear are outside execution_sequence and are not
-    # represented by the operation terms above. Do not re-add palette/Fill/tool
-    # fixed overhead here because those operations are already explicitly counted.
     deadline_meta=options.get("adaptive_deadline_meta") or {}
     fixed=deadline_meta.get("fixed_overhead") or {}
     outside_sequence=0.0
@@ -222,19 +208,55 @@ def _sequence_operation_estimate(plan: dict[str,Any]) -> tuple[float,dict[str,An
         try:outside_sequence+=max(0.0,float(fixed.get(key,0.0) or 0.0))
         except Exception:pass
     total+=outside_sequence
+
+    # Operation-level measured correction uses the same final counts, but is
+    # applied later. Keep model averages here cold to prevent double learning.
+    model_average_seconds={}
+    path_seconds=(max(0.0,float(breakdown.drag_seconds))+max(0.0,float(breakdown.travel_seconds))+
+                  max(0.0,float(breakdown.press_release_seconds))+max(0.0,float(breakdown.target_processing_seconds)))
+    if path_rows:
+        avg=path_seconds/max(1,len(path_rows))
+        for kind in path_kinds:model_average_seconds[str(kind)]=avg
+    palette_n=max(0,int(breakdown.palette_switches or 0))
+    brush_n=max(0,int(breakdown.brush_switches or 0))
+    tool_n=max(0,int(breakdown.tool_switches or 0))+background_tool_changes
+    if palette_n:
+        operation_counts["palette_change"]=palette_n
+        model_average_seconds["palette_change"]=max(0.0,float(breakdown.palette_seconds))/palette_n
+    if brush_n:
+        operation_counts["tool_change"]=operation_counts.get("tool_change",0)+brush_n
+        model_average_seconds["tool_change"]=max(0.0,float(breakdown.brush_seconds))/brush_n
+    if tool_n:
+        operation_counts["tool_change"]=operation_counts.get("tool_change",0)+tool_n
+        prior=model_average_seconds.get("tool_change",0.0)
+        direct=(max(0.0,float(breakdown.tool_seconds))+background_tool_changes*model.switch_cost("tool_change"))/max(1,tool_n)
+        model_average_seconds["tool_change"]=max(prior,direct)
+    fill_n=max(0,int(fill_meta.get("fill_regions") or 0))+background_fill_actions
+    if fill_n:
+        operation_counts["fill_action"]=fill_n
+        fill_seconds=max(0.0,float(fill_meta.get("fill_contour_and_click_seconds") or 0.0))+background_fill_actions*model.switch_cost("fill")
+        model_average_seconds["fill_action"]=fill_seconds/max(1,fill_n)
+    verification_n=max(0,int(fill_meta.get("fill_regions") or 0))+background_verifications
+    if verification_n:
+        operation_counts["verification"]=verification_n
+        model_average_seconds["verification"]=model.switch_cost("verification")
+
+    modeled_operation_seconds=sum(max(0,int(operation_counts.get(kind,0) or 0))*max(0.0,float(avg or 0.0))
+                                  for kind,avg in model_average_seconds.items())
     return total,{
-        "used":True,"model":"final execution sequence + cold-start HybridCostModel",
-        "path_count":len(paths),"stroke_sequence_paths":len(sequence),
-        "fill_contour_paths":len(fill_contours),"color_changes":color_changes,
-        "brush_changes":brush_changes,"fill_actions":fill_actions,
-        "fill_color_batches":len(fill_colors),"tool_changes":tool_changes,
-        "verification_actions":verification_actions,"outside_sequence_seconds":round(outside_sequence,4),
+        "used":True,"model":"stateful ExecutionCostModel + RegionFill batch model",
+        "execution_cost_model":"ExecutionCostModel","execution_cost_calibration":"cold override; measured correction applied once",
+        "path_count":len(path_rows),"stroke_sequence_paths":len(path_rows),
+        "color_changes":palette_n,"brush_changes":brush_n,
+        "fill_actions":fill_n,"fill_color_batches":int(fill_meta.get("fill_color_batches") or 0),
+        "tool_changes":tool_n,"verification_actions":verification_n,
+        "sequence_seconds":round(sequence_seconds,5),"fill_seconds":round(max(0.0,float(fill_meta.get("total_seconds") or 0.0)),5),
+        "background_fill_seconds":round(background_seconds,5),"outside_sequence_seconds":round(outside_sequence,5),
         "operation_counts":{str(k):int(v) for k,v in operation_counts.items() if int(v)>0},
         "operation_model_average_seconds":{str(k):round(float(v),7) for k,v in model_average_seconds.items() if float(v)>0},
         "modeled_operation_seconds":round(modeled_operation_seconds,5),
-        "scale_x":round(sx,5),"scale_y":round(sy,5),"breakdown":breakdown,
+        "breakdown":breakdown.as_dict(),"fill_breakdown":fill_meta,
     }
-
 
 def _measured_throughput_floor(plan: dict[str, Any], seconds: float) -> tuple[float, int]:
     """Use only genuinely learned Real-Speed history, never fallback PPS guesses."""

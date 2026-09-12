@@ -1,3 +1,9 @@
+# Image Draw Bot v1.0.145-rc17 — Unified Execution Cost ETA
+
+- Estimated Draw Time now shares the planner's stateful execution-cost model.
+- Region Fill timing reuses the batch-aware Fill estimator.
+- Local measured timing is applied once, not inside both base model and visible ETA correction.
+
 # Image Draw Bot v1.0.145-rc16 — Preview Planner Parity
 
 - Manual / Auto full Build preview now uses the same full-detail planner path as final Draw.
