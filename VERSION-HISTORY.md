@@ -1,3 +1,10 @@
+# Image Draw Bot v1.0.145-rc8 — Dynamic Replanner
+
+- Added live runtime replanning on top of the existing DeadlineScheduler.
+- CATCH_UP/PANIC can reorder only remaining already-safe stroke paths inside contiguous phase barriers; geometry, colors and brush widths are never rewritten.
+- Non-stroke operations remain hard barriers and candidate replans are rejected if they increase color/brush transitions.
+- Replanning is throttled by measured runtime samples and exposed through deadline telemetry.
+
 # Image Draw Bot v1.0.145-rc6 — Region Brush Packing
 
 - Added exact multi-brush region packing for verified browser brush ladders such as Gartic 2 / 4 / 8 / 16 / 28 px.

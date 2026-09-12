@@ -3395,7 +3395,7 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
             report('status',f'Adaptive brush: {effective}px selected for the current detail pass.')
             return True
 
-        execution_sequence=plan.get('execution_sequence') or []
+        execution_sequence=list(plan.get('execution_sequence') or [])
         if execution_sequence:
             if plan['options'].get('visual_verification_enabled',False) and visual_mode!='Off' and not dry_run:
                 report('visual_verification',{'current':0,'total':0,'ok':True,'confidence':0.0,'summary':'skipped for progressive passes'})
@@ -3448,7 +3448,7 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                 phase_numbers={'foundation':1,'contour':2,'details':3}
                 phase_names={'foundation':'large forms','contour':'important contours','details':'small details'}
                 phase_total=3
-            for entry in execution_sequence:
+            for _execution_index, entry in enumerate(execution_sequence):
                 if stop.is_set():
                     raise InterruptedError()
                 pause_guard()
@@ -3499,6 +3499,11 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                 note_runtime_operation(entry.get('operation_type','stroke'),max(0.0,clock()-_path_started-(paused_seconds-_pause_before_path)))
                 if deadline_scheduler is not None:
                     deadline_scheduler.after(entry,excluded_seconds=paused_seconds-_pause_before_entry)
+                    _tail=list(execution_sequence[_execution_index+1:])
+                    _replanned=deadline_scheduler.replan_remaining(_tail)
+                    if _replanned != _tail:
+                        execution_sequence[_execution_index+1:]=_replanned
+                        report('status',f'Dynamic Replanner: {deadline_scheduler.mode} reordered remaining safe paths without changing geometry.')
                     _now=clock()
                     if _now-deadline_last_telemetry>=.75:
                         deadline_last_telemetry=_now

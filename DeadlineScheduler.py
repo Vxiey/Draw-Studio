@@ -107,6 +107,12 @@ class DeadlineScheduler:
         self._last_actual_seconds = 0.0
         self._last_predicted_seconds = self._remaining_raw
         self._recovered_from_catchup = 0
+        self.replan_count = 0
+        self.reordered_paths = 0
+        self.replan_rejected_switch_cost = 0
+        self._last_replan_sample = -1
+        self._last_replan_mode = NORMAL
+        self._last_replan_scale = 1.0
         self.current_phase = ""
         self.current_strategy = "planned-quality"
         self.phase_executed: dict[str, int] = defaultdict(int)
@@ -369,6 +375,76 @@ class DeadlineScheduler:
         if self._is_structural(entry):
             self.structural_done += self._structural_weight(entry)
 
+    @staticmethod
+    def _transition_count(entries) -> int:
+        """Count colour/brush transitions without assigning any UI timing."""
+        transitions=0;last_color=object();last_brush=object();started=False
+        for raw in entries or ():
+            entry=dict(raw)
+            if str(entry.get("operation_type") or "stroke") != "stroke":
+                continue
+            color=entry.get("color_index");brush=entry.get("brush_px")
+            if started and (color!=last_color or brush!=last_brush):transitions+=1
+            last_color=color;last_brush=brush;started=True
+        return transitions
+
+    def _replan_priority(self, entry, original_index: int):
+        phase=self._phase(entry);importance=self._score(entry,"importance",.5)
+        structural=self._score(entry,"structural_score",0.0);optional=bool(entry.get("optional"))
+        adjusted=self._cost(entry)*self._runtime_scale(self._op_type(entry))
+        if self.mode == PANIC:
+            if phase in ("major_coverage","structure"):tier=0
+            elif phase == "important_details" and importance >= RUNTIME_POLICY["panic_detail_min_importance"]:tier=1
+            else:tier=2
+            value=max(structural,importance)
+        else:
+            value=max(structural*.92,importance)
+            tier=0 if (not optional and value>=.70) else (1 if not optional else 2)
+        # Original index is the final tie-breaker, keeping the sort deterministic.
+        return (tier,-round(value,6),round(adjusted,6),original_index)
+
+    def replan_remaining(self, remaining, *, force: bool = False):
+        """Reorder only already-safe remaining paths inside contiguous phase barriers.
+
+        Geometry, colour, brush width and phase membership are immutable. Non-stroke
+        operations are hard barriers. A candidate is rejected when it would increase
+        colour/brush transitions, so catch-up cannot become slower by UI thrashing.
+        """
+        rows=[dict(entry) for entry in (remaining or ())]
+        if len(rows)<2 or self.budget_seconds is None or self.mode == NORMAL:return rows
+        scale=self._runtime_scale()
+        if not force:
+            if self._global_samples < 2:return rows
+            sample_gap=self._global_samples-self._last_replan_sample
+            scale_delta=abs(scale-self._last_replan_scale)
+            if self.mode==self._last_replan_mode and sample_gap<2 and scale_delta<.12:return rows
+        output=[];moved=0;rejected=0;start=0
+        while start<len(rows):
+            first=rows[start];op=self._op_type(first);phase=self._phase(first)
+            if op!='stroke':
+                output.append(first);start+=1;continue
+            end=start+1
+            while end<len(rows) and self._op_type(rows[end])=='stroke' and self._phase(rows[end])==phase:
+                end+=1
+            block=rows[start:end]
+            indexed=list(enumerate(block))
+            ranked=sorted(indexed,key=lambda pair:self._replan_priority(pair[1],pair[0]))
+            candidate=[entry for _idx,entry in ranked]
+            if [idx for idx,_entry in ranked] != list(range(len(block))):
+                if self._transition_count(candidate) <= self._transition_count(block):
+                    moved += sum(1 for pos,(idx,_entry) in enumerate(ranked) if pos!=idx)
+                    block=candidate
+                else:
+                    rejected+=1
+            output.extend(block);start=end
+        self._last_replan_sample=self._global_samples
+        self._last_replan_mode=self.mode
+        self._last_replan_scale=scale
+        if moved:
+            self.replan_count+=1;self.reordered_paths+=moved
+        self.replan_rejected_switch_cost+=rejected
+        return output
+
     def prediction_interval(self):
         """Heuristic variability envelope, not a statistical confidence interval."""
         center=self.predicted_remaining()
@@ -413,6 +489,10 @@ class DeadlineScheduler:
             "phase_skipped": dict(self.phase_skipped),
             "skip_reasons": dict(self.skip_reasons),
             "recovered_from_catchup": int(self._recovered_from_catchup),
+            "dynamic_replans": int(self.replan_count),
+            "reordered_remaining_paths": int(self.reordered_paths),
+            "replans_rejected_switch_cost": int(self.replan_rejected_switch_cost),
+            "last_replan_mode": self._last_replan_mode,
         }
 
     def meta(self) -> dict[str, Any]:
