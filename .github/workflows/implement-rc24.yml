@@ -37,7 +37,7 @@ jobs:
         run: python ReleaseCandidateHardening.py --source-gate --soak-cycles 5000
 
       - name: Run rc24 axis and sketch regressions
-        run: python -m pytest -q test_axis_region_hybrid_v10145.py test_gartic_sketch_v1098.py
+        run: python -m unittest -v test_axis_region_hybrid_v10145.py test_gartic_sketch_v1098.py
 
       - name: Run complete regression suite
         run: python -m unittest discover -v
