@@ -1,6 +1,6 @@
 # Image Draw Bot — AutoDraw & Drawing Bot for Windows
 
-![Image Draw Bot AutoDraw application for Microsoft Paint, Gartic Phone and Skribbl.io](assets/image-draw-bot-app-screenshot.png)
+![Image Draw Bot AutoDraw application for Microsoft Paint, Gartic Phone and Skribbl.io](assets/assets/0912.gif)
 
 [![Image Draw Bot CI](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml)
 ![Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-informational)
