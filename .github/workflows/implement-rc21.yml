@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Apply rc21 cost-model cleanup patch
-        run: python .github/scripts/implement_rc21.py
+        run: python .github/scripts/run_rc21_retry.py
       - name: Compile touched modules
         run: python -m py_compile RegionFillEngine.py benchmark_engine.py PixelStrokeEngine.py ExecutionCostModel.py
       - name: Run rc21 focused regressions
