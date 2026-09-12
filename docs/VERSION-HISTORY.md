@@ -1,3 +1,9 @@
+# Image Draw Bot v1.0.145-rc21 — Complete Cost Model Unification
+
+- Live planner cost decisions now converge on one stateful ExecutionCostModel.
+- Fill seals and engine benchmarks use the same model; Region Fill fallback is deterministic.
+- HybridCostModel remains only for compatibility, not live planner selection.
+
 # Image Draw Bot v1.0.145-rc20 — Pixel Accurate Unified Execution Cost
 
 - Pixel Accurate local orientation and component order now use the same stateful execution-cost model as Extra Fast, Region Fill and visible ETA.

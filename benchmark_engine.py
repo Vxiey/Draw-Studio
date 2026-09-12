@@ -35,7 +35,7 @@ def main():
     from HybridBenchmark import CASES
     from PixelAccuratePlanner import build_pixel_map
     from PixelStrokeEngine import build_pixel_stroke_plan
-    from HybridCostModel import build_cost_model
+    from ExecutionCostModel import build_cost_model
     from Version import APP_VERSION
     palette=((255,255,255),(0,0,0),(255,0,0),(0,0,255),(255,204,64),(54,160,92),(70,145,225),(128,128,128))
     options=dict(profile_key='isolated-benchmark',gpu_mode='CPU',speed='Balanced',precision='High',
@@ -78,12 +78,9 @@ def main():
                 else:draw.line(path,fill=ci,width=1)
             actual=np.asarray(rendered);expected=np.where(pm.drawable_mask,pm.palette_index,-1)
             wrong=int(np.count_nonzero(actual!=expected))
-            model=build_cost_model(options);seconds=0.;cursor=None;color=None;switches=0
-            for e in plan['execution_sequence']:
-                if e['color_index']!=color:
-                    seconds+=model.color_change_seconds;switches+=1
-                seconds+=model.path_seconds(e['path'],cursor=cursor)
-                cursor=e['path'][-1];color=e['color_index']
+            model=build_cost_model(options,image.size,image.size)
+            breakdown=model.sequence_cost(plan['execution_sequence'],initial_brush=1)
+            seconds=float(breakdown.total_seconds);switches=int(breakdown.palette_switches)
             row={'case':name,'size':image.size,'source_sha256':hashlib.sha256(image.tobytes()).hexdigest(),
                  'palette_mapping_seconds':mapping,'cold_planning_seconds':cold,
                  'warm_planning_seconds':timings,'median_planning_seconds':statistics.median(timings),

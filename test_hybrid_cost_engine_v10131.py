@@ -3,7 +3,7 @@ from pathlib import Path
 from PIL import Image,ImageDraw
 from PixelAccuratePlanner import build_pixel_map
 from PixelStrokeEngine import connected_components,build_component_paths,build_pixel_stroke_plan
-from HybridCostModel import build_cost_model
+from ExecutionCostModel import build_cost_model
 from HybridBenchmark import CASES
 
 PALETTE=((255,255,255),(0,0,0),(255,0,0),(0,0,255))
@@ -14,8 +14,8 @@ def opts(**kw):
 
 class HybridCostEngineTests(unittest.TestCase):
     def test_cold_start_is_explicit_not_fake_calibrated(self):
-        m=build_cost_model(opts())
-        self.assertIn(m.source,('conservative-default','calibrated-profile'))
+        m=build_cost_model(opts(),(32,24),(32,24))
+        self.assertIn(m.source,('deterministic profile model','measured local calibration','learning local calibration (1/3)','learning local calibration (2/3)'))
         self.assertGreater(m.path_fixed_seconds,0)
     def test_six_required_benchmark_cases_exist(self):
         self.assertEqual(len(CASES),6);self.assertEqual({n for n,_ in CASES},{'icon','line-art','text-small-detail','cartoon-large-colour','photo-gradient','fill-risk'})
@@ -33,18 +33,21 @@ class HybridCostEngineTests(unittest.TestCase):
         im=Image.new('RGBA',(12,10),'white');d=ImageDraw.Draw(im);d.rectangle((1,1,8,6),fill='red');d.rectangle((4,3,5,4),fill='white')
         pm=build_pixel_map(im,PALETTE,gpu_mode='CPU',skip_white=True);comps,cmap,_=connected_components(pm)
         red=max((c for c in comps if c.color_index==2),key=lambda c:c.area)
-        paths,meta=build_component_paths(red,cmap,cost_model=build_cost_model(opts()))
+        paths,meta=build_component_paths(red,cmap,cost_model=build_cost_model(opts(),(12,10),(12,10)))
         self.assertTrue(paths);self.assertIn(meta['selection'],('calibrated-time','legacy-run-count'))
         # Exact planner fallback/verification is authoritative for holes.
         self.assertTrue(meta['safe_verified'] or meta['fallback'])
     def test_drawbot_forwards_full_options_to_subject_planner(self):
         text=Path('DrawBot.py').read_text(encoding='utf-8');self.assertIn('options=options,cancelled=cancelled)',text)
     def test_region_fill_uses_shared_cost_model(self):
-        text=Path('RegionFillEngine.py').read_text(encoding='utf-8');self.assertIn('from HybridCostModel import build_cost_model',text);self.assertIn('hybrid_cost_model',text)
-    def test_region_fill_cold_start_preserves_legacy_cost_gate(self):
         text=Path('RegionFillEngine.py').read_text(encoding='utf-8')
-        self.assertIn('if not model.calibrated:',text)
-        self.assertIn('fill_cost += max(.08, delivery.ui_control_delay * .45) + .24',text)
+        self.assertIn('from ExecutionCostModel import build_cost_model',text)
+        self.assertNotIn('from HybridCostModel import build_cost_model',text)
+    def test_region_fill_fallback_is_deterministic(self):
+        text=Path('RegionFillEngine.py').read_text(encoding='utf-8')
+        section=text[text.index('def _legacy_region_cost'):text.index('def _region_cost')]
+        self.assertNotIn('correction_for',section);self.assertNotIn('HybridCostModel',section)
+        self.assertIn('fill_cost += max(.08, delivery.ui_control_delay*.45) + .24',section)
     def test_gartic_specialized_route_not_replaced(self):
         text=Path('DrawBot.py').read_text(encoding='utf-8');self.assertIn('optimize_gartic_phone_groups',text);self.assertIn('build_gartic_execution_paths',text)
     def test_no_human_mode_added_to_new_engine(self):
