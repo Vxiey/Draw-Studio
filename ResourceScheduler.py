@@ -125,6 +125,31 @@ def recommended_workers(allocation: dict[str, Any], *, mode: str = "Auto", previ
     return cap, "auto safe cap"
 
 
+\
+def memory_pressure_profile(allocation: dict[str, Any]) -> dict[str, Any]:
+    budget=max(128,int(allocation.get('ram_budget_mb',512) or 512))
+    available=allocation.get('available_ram_mb')
+    try:available=int(available) if available is not None else None
+    except (TypeError,ValueError,OverflowError):available=None
+    if available is None:
+        return {'known':False,'level':'unknown','available_ram_mb':None,'ram_budget_mb':budget,
+                'worker_scale':1.0,'chunk_scale':1.0,'reason':'live available RAM unavailable'}
+    ratio=available/max(1,budget)
+    if available>=1536 and ratio>=1.35: level='normal';worker=1.0;chunk=1.0
+    elif available>=1024 and ratio>=.95: level='elevated';worker=.80;chunk=.75
+    elif available>=640 and ratio>=.55: level='high';worker=.55;chunk=.50
+    else: level='critical';worker=.30;chunk=.30
+    return {'known':True,'level':level,'available_ram_mb':max(0,available),'ram_budget_mb':budget,
+            'available_to_budget_ratio':round(ratio,3),'worker_scale':worker,'chunk_scale':chunk,
+            'reason':f'{level} RAM pressure: {max(0,available):,} MB available vs {budget:,} MB planning budget'}
+
+
+def _apply_memory_pressure_workers(workers: int, pressure: dict[str,Any], *, enabled: bool=True) -> int:
+    if not enabled or not pressure.get('known') or pressure.get('level')=='normal':return max(1,int(workers))
+    scale=max(.20,min(1.0,float(pressure.get('worker_scale',1.0) or 1.0)))
+    return max(1,min(int(workers),int(math.ceil(max(1,int(workers))*scale))))
+
+
 def phase_workers(base_workers: int, phase: str, *, pixels: int, preview: bool = False) -> int:
     base = max(1, int(base_workers or 1))
     pixels = max(1, int(pixels or 1))
@@ -195,6 +220,12 @@ def resolve_resource_schedule(allocation: dict[str, Any], *, mode: str = "Auto",
         width = height = 1
     width=max(1,width); height=max(1,height); pixels=width*height
     base, reason = recommended_workers(allocation, mode=mode, preview=preview, recommendation=recommendation)
+    pressure=memory_pressure_profile(allocation)
+    pressure_enabled=(mode!='Off')
+    adjusted_base=_apply_memory_pressure_workers(base,pressure,enabled=pressure_enabled)
+    if adjusted_base<base:
+        reason += f"; {pressure['reason']} reduced workers {base}→{adjusted_base}"
+    base=adjusted_base
     ram_mb = int(allocation.get("ram_budget_mb", 512) or 512)
     engine = str(allocation.get("cpu_engine", "Auto"))
     if engine == "Auto":
@@ -217,7 +248,14 @@ def resolve_resource_schedule(allocation: dict[str, Any], *, mode: str = "Auto",
         }[phase]
         phases[phase] = {"backend": backend, "workers": int(workers), "reason": phase_reason}
     chunks = _chunk_hint(height, width, phases["shape_extraction"]["workers"], ram_mb)
+    if pressure_enabled and pressure.get('known') and pressure.get('level')!='normal':
+        rows=max(8,int(chunks['rows_per_chunk']*float(pressure.get('chunk_scale',1.0) or 1.0)))
+        chunks={'rows_per_chunk':rows,'chunks':int(math.ceil(height/max(1,rows)))}
     phases["shape_extraction"].update(chunks)
+    # Pixel-accuracy correction/error scoring can use the same verified GPU path on large final workloads.
+    if not preview and gpu_available and pixels>=160_000:
+        phases['correction_scoring']['backend']='GPU/CPU fallback'
+        phases['correction_scoring']['reason']='tiled GPU scoring with VRAM recovery; CPU remains authoritative fallback'
     return {
         "version": 2,
         "mode": mode,
@@ -229,6 +267,7 @@ def resolve_resource_schedule(allocation: dict[str, Any], *, mode: str = "Auto",
         "pixels": int(pixels),
         "worker_reason": reason,
         "gpu_available": bool(gpu_available),
+        "memory_pressure": pressure,
         "phases": phases,
     }
 

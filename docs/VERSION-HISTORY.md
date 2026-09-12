@@ -1,3 +1,10 @@
+# Image Draw Bot v1.0.145-rc15 — CPU/GPU Performance Engine
+
+- CUDA Pixel Accurate simulation now retries smaller VRAM work units before CPU fallback.
+- Accuracy scoring uses bounded GPU row tiles rather than requiring full-frame score masks.
+- Transient OOM no longer permanently quarantines an otherwise healthy GPU workload route.
+- Auto CPU scheduling reacts to live RAM pressure by reducing concurrency and chunk size.
+
 # Image Draw Bot v1.0.145-rc14 — Resume & Checkpoints
 
 - Progressive and Pixel Accurate execution sequences can now resume safely.

@@ -130,9 +130,17 @@ def select_route(workload: str, *, pixels: int, gpu_mode: str = "Auto",
 
 def _mark_failed(route: RouteInfo, error: BaseException) -> RouteInfo:
     message = f"{type(error).__name__}: {error}"
-    if route.backend_id != "cpu:numpy":
+    transient_memory=False
+    try:
+        from GpuAcceleration import is_gpu_memory_error
+        transient_memory=is_gpu_memory_error(error)
+    except Exception:
+        transient_memory=isinstance(error,MemoryError) or 'out of memory' in str(error).lower()
+    if route.backend_id != "cpu:numpy" and not transient_memory:
         _FAILED[(route.backend_id, route.workload)] = message
-    return _cpu_route(route.workload, route.pixels, f"{route.backend_id} failed safely: {message}")
+    reason=(f"{route.backend_id} hit transient memory pressure and fell back for this call: {message}" if transient_memory else
+            f"{route.backend_id} failed safely: {message}")
+    return _cpu_route(route.workload, route.pixels, reason)
 
 
 def reset_runtime_backend_health() -> None:

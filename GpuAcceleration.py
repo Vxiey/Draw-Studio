@@ -288,11 +288,67 @@ def _relieve_pool_pressure(cp, budget_mb: int) -> None:
     """Release cached CuPy blocks when the pool approaches its retention limit."""
     used,cached=_pool_stats(cp)
     if cached > max(96,int(budget_mb*.72)) and cached-used > 64:
-        try: cp.cuda.Stream.null.synchronize()
-        except Exception: pass
-        cp.get_default_memory_pool().free_all_blocks()
-        try: cp.get_default_pinned_memory_pool().free_all_blocks()
-        except Exception: pass
+        release_gpu_memory_cache(cp)
+
+
+def release_gpu_memory_cache(cp) -> dict:
+    """Synchronize and release retained GPU/pinned blocks before a bounded retry."""
+    before_used,before_cached=_pool_stats(cp)
+    try: cp.cuda.Stream.null.synchronize()
+    except Exception: pass
+    try: cp.get_default_memory_pool().free_all_blocks()
+    except Exception: pass
+    try: cp.get_default_pinned_memory_pool().free_all_blocks()
+    except Exception: pass
+    after_used,after_cached=_pool_stats(cp)
+    return {
+        'before_used_mb':int(before_used),'before_cached_mb':int(before_cached),
+        'after_used_mb':int(after_used),'after_cached_mb':int(after_cached),
+    }
+
+
+def is_gpu_memory_error(error: BaseException) -> bool:
+    """Recognise CUDA/OpenCL/host allocation failures without importing optional runtimes."""
+    seen=set();current=error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        name=type(current).__name__.lower();message=str(current or '').lower()
+        if isinstance(current,MemoryError) or any(token in name for token in ('outofmemory','memoryallocation','memoryerror')):
+            return True
+        if any(token in message for token in (
+            'out of memory','outofmemory','cuda_error_out_of_memory','memory allocation',
+            'cl_mem_object_allocation_failure','cl_out_of_resources','failed to allocate',
+            'cannot allocate memory','insufficient memory')):
+            return True
+        current=getattr(current,'__cause__',None) or getattr(current,'__context__',None)
+    return False
+
+
+def gpu_memory_recovery_steps(tile_rows: int, batch_size: int, *, max_retries: int=3) -> list[dict]:
+    """Return deterministic progressively smaller CUDA work units after OOM."""
+    rows=max(1,int(tile_rows or 1));batch=max(1,int(batch_size or 1));steps=[]
+    retries=max(0,min(4,int(max_retries or 0)))
+    for attempt in range(retries+1):
+        steps.append({'attempt':attempt,'tile_rows':rows,'batch_size':batch})
+        if rows>8: rows=max(8,rows//2)
+        elif rows>1: rows=max(1,rows//2)
+        if batch>256: batch=max(256,batch//2)
+        elif batch>1: batch=max(1,batch//2)
+    # Avoid pointless identical attempts when the original work unit is already tiny.
+    out=[]
+    for step in steps:
+        if not out or (step['tile_rows'],step['batch_size']) != (out[-1]['tile_rows'],out[-1]['batch_size']):
+            out.append(step)
+    return out
+
+
+def gpu_score_tile_rows(info: AccelerationInfo, width: int, height: int, *, bytes_per_pixel: int=64, share: float=.42) -> int:
+    """Bound accuracy-score tiles to a conservative fraction of current free/budget VRAM."""
+    width=max(1,int(width));height=max(1,int(height));bpp=max(8,int(bytes_per_pixel))
+    budget=max(32,int(info.vram_budget_mb or info.free_vram_mb or 128))
+    free=max(32,int(info.free_vram_mb or budget));usable=max(16,int(min(budget,free)*max(.10,min(.70,float(share)))))
+    rows=max(8,int((usable*_MIB)//max(1,width*bpp)))
+    return max(1,min(height,1024,rows))
 
 
 def _tile_ranges(height: int, core_rows: int, overlap: int):

@@ -139,10 +139,47 @@ def _plan(info, width: int, height: int, rectangle_count: int) -> SimulationPlan
                           'VRAM-aware tiled CUDA' if tile_count>1 or batches>1 else 'VRAM-aware full CUDA')
 
 
+\
+def _simulation_attempt(cp, kernel, rects: np.ndarray, plan: SimulationPlan, width: int, height: int,
+                        background_index: int, sim_host: np.ndarray, counts_host: np.ndarray,
+                        *, cancelled=lambda: False) -> tuple[int,int]:
+    sim_host.fill(int(background_index));counts_host.fill(0)
+    launches=0;filtered_rectangles=0
+    for y0 in range(0,height,plan.tile_rows):
+        if cancelled():raise InterruptedError()
+        y1=min(height,y0+plan.tile_rows);tile_h=y1-y0
+        if len(rects):
+            mask=(rects[:,3]>=y0)&(rects[:,1]<y1);tile_rects=rects[mask]
+        else:tile_rects=rects
+        filtered_rectangles+=len(tile_rects)
+        sim_gpu=cp.asarray(sim_host[y0:y1],dtype=cp.int16)
+        counts_gpu=cp.asarray(counts_host[y0:y1],dtype=cp.uint16)
+        for start in range(0,len(tile_rects),plan.rectangle_batch_size):
+            if cancelled():raise InterruptedError()
+            batch=cp.asarray(tile_rects[start:start+plan.rectangle_batch_size],dtype=cp.int32)
+            n=int(batch.shape[0])
+            if n:
+                total=width*tile_h;threads=256;blocks=(total+threads-1)//threads
+                kernel((blocks,),(threads,),(sim_gpu,counts_gpu,np.int32(width),np.int32(y0),np.int32(tile_h),batch,np.int32(n)))
+                launches+=1
+            del batch
+        sim_host[y0:y1]=cp.asnumpy(sim_gpu);counts_host[y0:y1]=cp.asnumpy(counts_gpu)
+        del sim_gpu,counts_gpu
+    cp.cuda.Stream.null.synchronize()
+    return launches,filtered_rectangles
+
+
+def _recovery_plan(base: SimulationPlan, height: int, rectangle_count: int, tile_rows: int, batch_size: int) -> SimulationPlan:
+    rows=max(1,min(int(height),int(tile_rows)));batch=max(1,int(batch_size))
+    return SimulationPlan(int(rectangle_count),rows,max(1,math.ceil(max(1,int(height))/rows)),batch,
+                          max(1,math.ceil(max(1,int(rectangle_count))/batch)),base.vram_budget_mb,
+                          'VRAM-recovery tiled CUDA' if rows<height or batch<max(1,rectangle_count) else base.allocation_mode)
+
+
 def simulate_cuda(sequence: Sequence[dict], width: int, height: int, background_index: int, *,
                   brush_px: int = 1, gpu_mode: str = 'Auto', gpu_vram: str = 'Auto',
                   gpu_performance: str = 'High throughput', cancelled=lambda: False):
-    """Return (simulated_index, coverage_count, metadata) or ``None`` on fallback."""
+    """Return simulation arrays, shrinking CUDA work units before CPU fallback on OOM."""
     if gpu_mode=='CPU':return None
     try:
         context=_cuda_context(gpu_mode,gpu_vram,gpu_performance)
@@ -150,106 +187,136 @@ def simulate_cuda(sequence: Sequence[dict], width: int, height: int, background_
         cp,info=context
         if not info.accelerated:return None
         rects=compile_swept_rectangles(sequence,brush_px,width,height,cancelled=cancelled)
-        plan=_plan(info,width,height,len(rects))
+        base_plan=_plan(info,width,height,len(rects))
         sim_host=np.full((height,width),int(background_index),dtype=np.int16)
         counts_host=np.zeros((height,width),dtype=np.uint16)
         kernel=cp.RawKernel(_KERNEL_SOURCE,'simulate_rects')
-        launches=0;filtered_rectangles=0
-        for y0 in range(0,height,plan.tile_rows):
-            if cancelled():raise InterruptedError()
-            y1=min(height,y0+plan.tile_rows);tile_h=y1-y0
-            if len(rects):
-                mask=(rects[:,3]>=y0)&(rects[:,1]<y1)
-                tile_rects=rects[mask]
-            else:tile_rects=rects
-            filtered_rectangles+=len(tile_rects)
-            sim_gpu=cp.asarray(sim_host[y0:y1],dtype=cp.int16)
-            counts_gpu=cp.asarray(counts_host[y0:y1],dtype=cp.uint16)
-            for start in range(0,len(tile_rects),plan.rectangle_batch_size):
-                if cancelled():raise InterruptedError()
-                batch=cp.asarray(tile_rects[start:start+plan.rectangle_batch_size],dtype=cp.int32)
-                n=int(batch.shape[0])
-                if n:
-                    total=width*tile_h;threads=256;blocks=(total+threads-1)//threads
-                    kernel((blocks,),(threads,),(sim_gpu,counts_gpu,np.int32(width),np.int32(y0),np.int32(tile_h),batch,np.int32(n)))
-                    launches+=1
-                del batch
-            sim_host[y0:y1]=cp.asnumpy(sim_gpu)
-            counts_host[y0:y1]=cp.asnumpy(counts_gpu)
-            del sim_gpu,counts_gpu
-        try:cp.cuda.Stream.null.synchronize()
-        except Exception:
-            raise
-        meta={
-            'simulation_backend':'cuda-cupy-tiled-raster',
-            'cuda_device':info.device,'compute_capability':info.compute_capability,
-            'gpu_performance':gpu_performance,'kernel_launches':launches,
-            'tile_filtered_rectangles':int(filtered_rectangles),**plan.as_dict(),
-        }
-        return sim_host,counts_host,meta
+        from GpuAcceleration import gpu_memory_recovery_steps,is_gpu_memory_error,release_gpu_memory_cache
+        steps=gpu_memory_recovery_steps(base_plan.tile_rows,base_plan.rectangle_batch_size,max_retries=3)
+        oom_events=[];pool_releases=[]
+        for n,step in enumerate(steps):
+            plan=_recovery_plan(base_plan,height,len(rects),step['tile_rows'],step['batch_size'])
+            try:
+                launches,filtered_rectangles=_simulation_attempt(cp,kernel,rects,plan,width,height,background_index,
+                                                                sim_host,counts_host,cancelled=cancelled)
+                meta={
+                    'simulation_backend':'cuda-cupy-tiled-raster','cuda_device':info.device,
+                    'compute_capability':info.compute_capability,'gpu_performance':gpu_performance,
+                    'kernel_launches':launches,'tile_filtered_rectangles':int(filtered_rectangles),**plan.as_dict(),
+                    'vram_recovery_attempts':n,'vram_recovered':bool(n>0),
+                    'initial_tile_rows':int(base_plan.tile_rows),'initial_rectangle_batch_size':int(base_plan.rectangle_batch_size),
+                    'oom_events':tuple(oom_events),'pool_releases':tuple(pool_releases),
+                }
+                return sim_host,counts_host,meta
+            except InterruptedError:
+                raise
+            except Exception as exc:
+                if not is_gpu_memory_error(exc):
+                    from CrashDiagnostics import log_event
+                    log_event(f'CUDA stroke simulation failed; using CPU: {type(exc).__name__}: {exc}')
+                    return None
+                oom_events.append(f'{type(exc).__name__}: {exc}')
+                from CrashDiagnostics import log_event
+                if n+1>=len(steps):
+                    log_event(f'CUDA stroke simulation exhausted {len(steps)} VRAM recovery attempt(s); using CPU: {type(exc).__name__}: {exc}')
+                    return None
+                pool_releases.append(release_gpu_memory_cache(cp))
+                nxt=steps[n+1]
+                log_event(f'CUDA stroke simulation VRAM pressure: retry {n+1}/{len(steps)-1} with tile_rows={nxt["tile_rows"]}, batch={nxt["batch_size"]}.')
+        return None
     except InterruptedError:
         raise
     except Exception as exc:
         from CrashDiagnostics import log_event
-        log_event(f'CUDA stroke simulation failed; using CPU: {type(exc).__name__}: {exc}')
+        log_event(f'CUDA stroke simulation setup failed; using CPU: {type(exc).__name__}: {exc}')
         return None
 
+\
 def score_cuda_host(pixel_map, simulated: np.ndarray, coverage_count: np.ndarray, background_index: int, *,
-                    gpu_mode: str = 'Auto', gpu_vram: str = 'Auto', gpu_performance: str = 'High throughput'):
-    """GPU categorical error-map + metric reduction for host simulation arrays.
-
-    This is intentionally a separate pass in v1.0.89 so CPU fallback remains
-    bit-for-bit available. A future block may keep the tile buffers resident.
-    """
+                    gpu_mode: str = 'Auto', gpu_vram: str = 'Auto', gpu_performance: str = 'High throughput',
+                    cancelled=lambda: False):
+    """GPU categorical error scoring in bounded row tiles with OOM tile shrink."""
     if gpu_mode=='CPU':return None
     try:
         context=_cuda_context(gpu_mode,gpu_vram,gpu_performance)
         if context is None:return None
         cp,info=context
-        # Scoring currently allocates full-frame masks. Respect the selected
-        # budget by using the existing CPU scorer when that is too expensive.
-        available=max(1,min(int(info.vram_budget_mb or info.free_vram_mb or 128),int(info.free_vram_mb or info.vram_budget_mb or 128)))
-        if int(simulated.size)*64 > available*1024*1024*.5:
-            from CrashDiagnostics import log_event
-            log_event('CUDA accuracy scoring exceeds allocation budget; using CPU scoring.')
-            return None
+        from GpuAcceleration import gpu_score_tile_rows,is_gpu_memory_error,release_gpu_memory_cache
         drawable_h=np.asarray(pixel_map.drawable_mask,dtype=np.bool_)
         desired_h=np.where(drawable_h,pixel_map.palette_index,int(background_index)).astype(np.int16,copy=False)
         edge_h=np.asarray(pixel_map.edge_map,dtype=np.float32)
+        protected_h=np.asarray(pixel_map.protected_mask,dtype=np.bool_)&drawable_h
         vals=edge_h[drawable_h]
         edge_threshold=max(.32,float(np.percentile(vals,70.0))) if vals.size else .32
-        drawable=cp.asarray(drawable_h);desired=cp.asarray(desired_h)
-        sim=cp.asarray(simulated,dtype=cp.int16);counts=cp.asarray(coverage_count,dtype=cp.uint16)
-        coverage=counts>0
-        missing=drawable & ~coverage
-        wrong=drawable & coverage & (sim!=desired)
-        spill=(~drawable) & coverage & (sim!=int(background_index))
-        error=cp.zeros(drawable.shape,dtype=cp.uint8)
-        error[missing]=1;error[wrong]=2;error[spill]=3
-        evaluation=drawable|coverage;correct=evaluation&(sim==desired)
-        edge=cp.asarray(edge_h);edge_mask=drawable&(edge>=edge_threshold)
-        protected=cp.asarray(np.asarray(pixel_map.protected_mask,dtype=np.bool_))&drawable
-        def nz(a):return int(cp.count_nonzero(a).get())
-        eval_count=nz(evaluation);drawable_count=nz(drawable);correct_count=nz(correct)
-        covered_target=nz(drawable&coverage);target_color_correct=nz(drawable&(sim==desired))
-        edge_count=nz(edge_mask);edge_correct=nz(edge_mask&(sim==desired))
-        protected_count=nz(protected);protected_correct=nz(protected&(sim==desired))
-        overdraw=nz(counts>1);touched=nz(coverage);total_hits=int(cp.sum(counts,dtype=cp.uint64).get())
+        height,width=drawable_h.shape
+        initial_rows=gpu_score_tile_rows(info,width,height,bytes_per_pixel=64,share=.42)
+        tile_rows=initial_rows;min_rows=max(1,min(8,height));retries=0;tiles=0
+        error_host=np.zeros((height,width),dtype=np.uint8)
+        totals={k:0 for k in ('evaluation','drawable','correct','covered','target_correct','edge','edge_correct',
+                               'protected','protected_correct','overdraw','touched','hits','missing','wrong','spill','errors')}
+        y0=0
+        while y0<height:
+            if cancelled():raise InterruptedError()
+            y1=min(height,y0+tile_rows)
+            try:
+                drawable=cp.asarray(drawable_h[y0:y1]);desired=cp.asarray(desired_h[y0:y1],dtype=cp.int16)
+                sim=cp.asarray(simulated[y0:y1],dtype=cp.int16);counts=cp.asarray(coverage_count[y0:y1],dtype=cp.uint16)
+                coverage=counts>0;missing=drawable&~coverage;wrong=drawable&coverage&(sim!=desired)
+                spill=(~drawable)&coverage&(sim!=int(background_index))
+                error=cp.zeros(drawable.shape,dtype=cp.uint8);error[missing]=1;error[wrong]=2;error[spill]=3
+                evaluation=drawable|coverage;correct=evaluation&(sim==desired)
+                edge=cp.asarray(edge_h[y0:y1]);edge_mask=drawable&(edge>=edge_threshold)
+                protected=cp.asarray(protected_h[y0:y1])
+                def nz(value):return int(cp.count_nonzero(value).get())
+                totals['evaluation']+=nz(evaluation);totals['drawable']+=nz(drawable);totals['correct']+=nz(correct)
+                totals['covered']+=nz(drawable&coverage);totals['target_correct']+=nz(drawable&(sim==desired))
+                totals['edge']+=nz(edge_mask);totals['edge_correct']+=nz(edge_mask&(sim==desired))
+                totals['protected']+=nz(protected);totals['protected_correct']+=nz(protected&(sim==desired))
+                totals['overdraw']+=nz(counts>1);totals['touched']+=nz(coverage)
+                totals['hits']+=int(cp.sum(counts,dtype=cp.uint64).get())
+                totals['missing']+=nz(missing);totals['wrong']+=nz(wrong);totals['spill']+=nz(spill);totals['errors']+=nz(error)
+                error_host[y0:y1]=cp.asnumpy(error)
+                del drawable,desired,sim,counts,coverage,missing,wrong,spill,error,evaluation,correct,edge,edge_mask,protected
+                y0=y1;tiles+=1
+            except InterruptedError:
+                raise
+            except Exception as exc:
+                if not is_gpu_memory_error(exc):
+                    from CrashDiagnostics import log_event
+                    log_event(f'CUDA accuracy scoring failed; using CPU score: {type(exc).__name__}: {exc}')
+                    return None
+                release_gpu_memory_cache(cp);retries+=1
+                if tile_rows<=min_rows or retries>4:
+                    from CrashDiagnostics import log_event
+                    log_event(f'CUDA accuracy scoring exhausted VRAM tile recovery; using CPU score: {type(exc).__name__}: {exc}')
+                    return None
+                tile_rows=max(min_rows,tile_rows//2)
+                from CrashDiagnostics import log_event
+                log_event(f'CUDA accuracy scoring VRAM pressure: retrying current tile with {tile_rows} row(s).')
+        try:cp.cuda.Stream.null.synchronize()
+        except Exception:pass
+        eval_count=totals['evaluation'];drawable_count=totals['drawable'];correct_count=totals['correct']
         metrics={
             'plan_execution_accuracy_percent':round(100.0*correct_count/max(1,eval_count),4),
             'pixel_accuracy_percent':round(100.0*correct_count/max(1,eval_count),4),
-            'target_color_accuracy_percent':round(100.0*target_color_correct/max(1,drawable_count),4),
-            'coverage_percent':round(100.0*covered_target/max(1,drawable_count),4),
-            'edge_accuracy_percent':round(100.0*edge_correct/max(1,edge_count),4),
-            'protected_accuracy_percent':round(100.0*protected_correct/max(1,protected_count),4),
+            'target_color_accuracy_percent':round(100.0*totals['target_correct']/max(1,drawable_count),4),
+            'coverage_percent':round(100.0*totals['covered']/max(1,drawable_count),4),
+            'edge_accuracy_percent':round(100.0*totals['edge_correct']/max(1,totals['edge']),4),
+            'protected_accuracy_percent':round(100.0*totals['protected_correct']/max(1,totals['protected']),4),
             'evaluation_pixels':eval_count,'drawable_pixels':drawable_count,'correct_pixels':correct_count,
-            'missing_pixels':nz(missing),'wrong_color_pixels':nz(wrong),'spill_pixels':nz(spill),
-            'error_pixels':nz(error),'covered_target_pixels':covered_target,'edge_pixels':edge_count,
-            'protected_pixels':protected_count,'touched_pixels':touched,'overdraw_pixels':overdraw,
-            'total_brush_hits':total_hits,'mean_hits_per_touched_pixel':round(float(total_hits/max(1,touched)),5),
+            'missing_pixels':totals['missing'],'wrong_color_pixels':totals['wrong'],'spill_pixels':totals['spill'],
+            'error_pixels':totals['errors'],'covered_target_pixels':totals['covered'],'edge_pixels':totals['edge'],
+            'protected_pixels':totals['protected'],'touched_pixels':totals['touched'],'overdraw_pixels':totals['overdraw'],
+            'total_brush_hits':totals['hits'],'mean_hits_per_touched_pixel':round(float(totals['hits']/max(1,totals['touched'])),5),
             'edge_threshold':round(edge_threshold,5),'background_index':int(background_index),
-            'score_backend':'cuda-cupy-reduction','score_cuda_device':info.device,
+            'score_backend':'cuda-cupy-tiled-reduction' if initial_rows<height or retries else 'cuda-cupy-reduction',
+            'score_cuda_device':info.device,'score_tile_rows':int(tile_rows),'score_initial_tile_rows':int(initial_rows),
+            'score_tile_count':int(tiles),'score_vram_retries':int(retries),'score_vram_recovered':bool(retries>0),
         }
-        return cp.asnumpy(error),metrics
-    except Exception:
+        return error_host,metrics
+    except InterruptedError:
+        raise
+    except Exception as exc:
+        from CrashDiagnostics import log_event
+        log_event(f'CUDA accuracy scoring setup failed; using CPU score: {type(exc).__name__}: {exc}')
         return None
