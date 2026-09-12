@@ -573,6 +573,7 @@ def build_adaptive_execution(pixel_map:PixelMap,palette_rgb,options:dict[str,Any
         "metrics":metrics,"coverage_preview":coverage_preview,"error_preview":error_preview,
         "metadata":{
             "enabled":True,"version":ADAPTIVE_HYBRID_VERSION,"engine":"Adaptive Region Hybrid 4.0",
+            "extra_fast_regional_route":bool(options.get("extra_fast")),
             "component_meta":component_meta,"components":len(components),"methods":methods,
             "region_choices":[c.as_dict() for c in choices[:256]],
             "candidate_diagnostics":candidate_meta[:128],"schedule":schedule_meta,

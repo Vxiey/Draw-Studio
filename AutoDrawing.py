@@ -27,8 +27,8 @@ def resolve_drawing(image,options):
         out.setdefault('color_fidelity','Faithful')
         out.setdefault('custom_color_workflow','Adaptive exact (recommended)' if out.get('exact_color_available') else 'Calibrated palette')
         out.setdefault('exact_color_limit','Auto')
-        out.setdefault('adaptive_detail','Auto')
-        engine='Extra Fast 2.0 hybrid: outline + Fill, safe connected scanlines fallback' if out.get('fill_tool_available') else 'Extra Fast 2.0 connected scanlines (calibrate Fill to enable buckets)'
+        out['adaptive_detail']='Auto'
+        engine='Extra Fast regional hybrid: Fill + verified multi-brush regions + structure/detail recovery' if out.get('fill_tool_available') else 'Extra Fast regional hybrid: verified multi-brush regions + structure/detail recovery (calibrate Fill to enable buckets)'
         if out.get('paint_current_color') or out.get('outline'):
             out.update(outline=True,sketch_detail='Simple',background_fill='Off')
             engine='Simple black contours (single-colour mode)'
