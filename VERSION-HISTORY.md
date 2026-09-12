@@ -1,3 +1,11 @@
+# Image Draw Bot v1.0.145-rc12 — ETA Calibration 2.0
+
+- Learned operation timing now uses stable per-operation EMAs instead of only the latest completed draw.
+- ETA calibration measures how much of the current operation mix is covered by real timing evidence.
+- Typed runtime evidence can correct cold operation costs both downward and upward.
+- The global completed-draw ratio is blended only for residual error, avoiding double-counting operation timing.
+- ETA uncertainty narrows only when repeated operation evidence covers the current plan.
+
 # Image Draw Bot v1.0.145-rc11 — Smart Color Engine
 
 - Added local spatial dominance and perceptual uniqueness to palette importance scoring.

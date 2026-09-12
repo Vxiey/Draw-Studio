@@ -18,7 +18,7 @@ from ProfileStorage import profile_timing_file, safe_profile_key
 
 # Legacy shared database. It is read only for one-time per-profile migration.
 FILE = data_dir() / "draw-time-calibration.json"
-VERSION = 3
+VERSION = 4
 
 
 def _empty() -> dict[str, Any]:
@@ -66,7 +66,7 @@ def _load_raw(path: Path, *, accept_legacy_version: bool = False) -> dict[str, A
     try:
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
         version = int(raw.get("version", 0)) if isinstance(raw, dict) else 0
-        valid_version = version == VERSION or (accept_legacy_version and version in (1,2))
+        valid_version = version == VERSION or (accept_legacy_version and version in (1,2,3))
         if not isinstance(raw, dict) or not valid_version or not isinstance(raw.get("profiles"), dict):
             return _empty()
         return {"version": VERSION, "profiles": dict(raw["profiles"])}
@@ -133,13 +133,65 @@ def correction_for(options: dict[str, Any], *, path: Path | None = None) -> dict
         "mape": mape,
         "last_actual_seconds": item.get("last_actual_seconds"),
         "last_predicted_seconds": item.get("last_predicted_seconds"),
-        "operation_runtime": dict(item.get("last_operation_runtime") or {}),
+        "operation_runtime": dict(item.get("operation_runtime_ema") or item.get("last_operation_runtime") or {}),
+        "operation_runtime_source": "ema" if item.get("operation_runtime_ema") else ("last-sample" if item.get("last_operation_runtime") else "none"),
         "operation_counts": dict(item.get("last_operation_counts") or {}),
         "seconds_per_completed_path": item.get("last_seconds_per_completed_path"),
         "key": _key(options),
         "profile_key": _profile(options),
         "storage_path": str(_resolved_path(options, path)),
     }
+
+
+def _runtime_entry(item: Any, *, default_samples: int = 0) -> dict[str, Any] | None:
+    if not isinstance(item, dict):
+        return None
+    try:
+        count=max(0,int(item.get("count") or item.get("last_count") or 0))
+        total=max(0.0,float(item.get("total_seconds") or 0.0))
+        avg=max(0.0,float(item.get("average_seconds") or 0.0))
+        if avg<=0 and count>0 and total>0:
+            avg=total/count
+        samples=max(0,int(item.get("samples") or default_samples or 0))
+        observations=max(0,int(item.get("observations") or count or 0))
+    except (TypeError,ValueError,OverflowError):
+        return None
+    if not math.isfinite(avg) or avg<=0:
+        return None
+    return {
+        "average_seconds":avg,"samples":samples,"observations":observations,
+        "last_average_seconds":max(0.0,float(item.get("last_average_seconds") or avg)),
+        "last_count":max(0,int(item.get("last_count") or count or 0)),
+    }
+
+
+def _merge_operation_runtime(old_runtime: dict[str, Any] | None, new_runtime: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    """Merge one completed draw into stable per-operation timing EMAs."""
+    out: dict[str, dict[str, Any]] = {}
+    for key,item in (old_runtime or {}).items():
+        parsed=_runtime_entry(item,default_samples=1)
+        if parsed is not None:
+            out[str(key)]=parsed
+    for key,item in (new_runtime or {}).items():
+        parsed=_runtime_entry(item)
+        if parsed is None:
+            continue
+        name=str(key);prior=out.get(name)
+        if prior is None:
+            avg=parsed["average_seconds"];samples=1;observations=max(1,parsed["observations"])
+        else:
+            prior_samples=max(1,int(prior.get("samples") or 1))
+            alpha=.45 if prior_samples<2 else (.28 if prior_samples<5 else .16)
+            avg=float(prior["average_seconds"])*(1.0-alpha)+float(parsed["average_seconds"])*alpha
+            samples=prior_samples+1
+            observations=max(0,int(prior.get("observations") or 0))+max(1,int(parsed.get("observations") or 0))
+        out[name]={
+            "average_seconds":round(max(.000001,float(avg)),7),
+            "samples":int(samples),"observations":int(observations),
+            "last_average_seconds":round(float(parsed["average_seconds"]),7),
+            "last_count":max(0,int(parsed.get("last_count") or parsed.get("observations") or 0)),
+        }
+    return out
 
 
 def record_sample(options: dict[str, Any], predicted_seconds: float, actual_seconds: float, *,
@@ -170,6 +222,8 @@ def record_sample(options: dict[str, Any], predicted_seconds: float, actual_seco
     alpha = .42 if samples < 2 else (.28 if samples < 5 else .16)
     learned_ratio = ratio if samples == 0 else old_ratio * (1.0 - alpha) + ratio * alpha
     learned_mape = abs_pct if samples == 0 else old_mape * (1.0 - alpha) + abs_pct * alpha
+    old_operation_runtime=old.get("operation_runtime_ema") or old.get("last_operation_runtime") or {}
+    operation_runtime_ema=_merge_operation_runtime(old_operation_runtime, operation_runtime or {})
     item = {
         "key": key,
         "profile_key": _profile(options),
@@ -184,6 +238,8 @@ def record_sample(options: dict[str, Any], predicted_seconds: float, actual_seco
         "last_seconds_per_completed_path": round(actual/max(1,int(completed_paths or 0)),6) if completed_paths else None,
         "last_operation_counts": {str(k):max(0,int(v or 0)) for k,v in (operation_counts or {}).items() if isinstance(v,(int,float))},
         "last_operation_runtime": {str(k):dict(v) for k,v in (operation_runtime or {}).items() if isinstance(v,dict)},
+        "operation_runtime_ema": operation_runtime_ema,
+        "operation_runtime_types": len(operation_runtime_ema),
         "updated_at": time.time(),
     }
     db["profiles"].pop(_legacy_key(options), None)

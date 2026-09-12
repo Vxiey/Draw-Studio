@@ -9,6 +9,7 @@ is used.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any
 
 
@@ -148,10 +149,15 @@ def _sequence_operation_estimate(plan: dict[str,Any]) -> tuple[float,dict[str,An
     except Exception as exc:
         return 0.0,{"used":False,"reason":f"cost model unavailable: {type(exc).__name__}"}
 
-    paths=[];colors=[];brushes=[]
+    paths=[];colors=[];brushes=[];operation_counts={}
+    path_operation_kinds=set()
     for row in sequence:
         path=tuple(row.get("path") or ())
-        if path:paths.append(path)
+        if path:
+            paths.append(path)
+            kind=str(row.get("operation_type") or ("dot" if len(path)<=1 else "stroke"))
+            operation_counts[kind]=operation_counts.get(kind,0)+1
+            path_operation_kinds.add(kind)
         try:colors.append(int(row.get("color_index")))
         except Exception:colors.append(None)
         try:brushes.append(max(1,int(row.get("brush_px",options.get("brush_px",1)) or 1)))
@@ -171,6 +177,9 @@ def _sequence_operation_estimate(plan: dict[str,Any]) -> tuple[float,dict[str,An
         except Exception:pass
     # Outline+Fill executes the contour in addition to the ordinary sequence.
     paths.extend(fill_contours)
+    if fill_contours:
+        operation_counts["stroke"]=operation_counts.get("stroke",0)+len(fill_contours)
+        path_operation_kinds.add("stroke")
     fill_actions=len(fill_regions)
     verification_actions=len(fill_regions)
     tool_action_count=len(options.get("fill_tool_actions") or ())+len(options.get("fill_restore_actions") or ())
@@ -188,6 +197,20 @@ def _sequence_operation_estimate(plan: dict[str,Any]) -> tuple[float,dict[str,An
         brush_changes=brush_changes,fill_actions=fill_actions,
         verification_actions=verification_actions)
     total=max(0.0,float(breakdown.get("total_seconds") or 0.0))
+    if color_changes:operation_counts["palette_change"]=color_changes
+    combined_tool_changes=tool_changes+brush_changes
+    if combined_tool_changes:operation_counts["tool_change"]=combined_tool_changes
+    if fill_actions:operation_counts["fill_action"]=fill_actions
+    if verification_actions:operation_counts["verification"]=verification_actions
+    model_average_seconds={}
+    if paths:
+        path_average=max(0.0,float(breakdown.get("path_seconds") or 0.0))/max(1,len(paths))
+        for kind in path_operation_kinds:model_average_seconds[str(kind)]=path_average
+    if color_changes:model_average_seconds["palette_change"]=max(0.0,float(breakdown.get("color_seconds") or 0.0))/color_changes
+    if combined_tool_changes:model_average_seconds["tool_change"]=(max(0.0,float(breakdown.get("tool_seconds") or 0.0))+max(0.0,float(breakdown.get("brush_seconds") or 0.0)))/combined_tool_changes
+    if fill_actions:model_average_seconds["fill_action"]=max(0.0,float(breakdown.get("fill_seconds") or 0.0))/fill_actions
+    if verification_actions:model_average_seconds["verification"]=max(0.0,float(breakdown.get("verification_seconds") or 0.0))/verification_actions
+    modeled_operation_seconds=sum(max(0,int(operation_counts.get(kind,0) or 0))*max(0.0,float(avg or 0.0)) for kind,avg in model_average_seconds.items())
 
     # Countdown and destructive clear are outside execution_sequence and are not
     # represented by the operation terms above. Do not re-add palette/Fill/tool
@@ -206,6 +229,9 @@ def _sequence_operation_estimate(plan: dict[str,Any]) -> tuple[float,dict[str,An
         "brush_changes":brush_changes,"fill_actions":fill_actions,
         "fill_color_batches":len(fill_colors),"tool_changes":tool_changes,
         "verification_actions":verification_actions,"outside_sequence_seconds":round(outside_sequence,4),
+        "operation_counts":{str(k):int(v) for k,v in operation_counts.items() if int(v)>0},
+        "operation_model_average_seconds":{str(k):round(float(v),7) for k,v in model_average_seconds.items() if float(v)>0},
+        "modeled_operation_seconds":round(modeled_operation_seconds,5),
         "scale_x":round(sx,5),"scale_y":round(sy,5),"breakdown":breakdown,
     }
 
@@ -230,68 +256,127 @@ def _measured_throughput_floor(plan: dict[str, Any], seconds: float) -> tuple[fl
         return seconds, 0
 
 
-def _measured_operation_floor(plan: dict[str, Any], calibration: dict[str, Any], seconds: float) -> tuple[float, int]:
-    options=plan.get("options") if isinstance(plan.get("options"),dict) else {}
-    meta=options.get("adaptive_deadline_meta") or {}
+_OPERATION_ALIASES={
+    "dot":("dot","point","stroke","path"),
+    "point":("point","dot","stroke","path"),
+    "stroke":("stroke","path","drag","mouse_drag"),
+    "short_stroke":("short_stroke","stroke","path","drag"),
+    "long_stroke":("long_stroke","stroke","path","drag"),
+    "outline":("outline","stroke","path","drag"),
+    "palette_change":("palette_change","color_change"),
+    "color_change":("color_change","palette_change"),
+    "tool_change":("tool_change","brush_change"),
+    "fill_action":("fill_action","fill","bucket_fill"),
+    "verification":("verification","visual_verify"),
+}
+
+
+def _runtime_operation_item(runtime: dict[str,Any], kind: str):
+    if not isinstance(runtime,dict):return None
+    for key in _OPERATION_ALIASES.get(str(kind),(str(kind),)):
+        item=runtime.get(key)
+        if isinstance(item,dict):
+            try:
+                avg=max(0.0,float(item.get("average_seconds") or 0.0))
+                if avg<=0:
+                    count=max(0,int(item.get("count") or item.get("observations") or 0))
+                    total=max(0.0,float(item.get("total_seconds") or 0.0))
+                    avg=total/count if count else 0.0
+                if avg>0 and math.isfinite(avg):return item,avg
+            except Exception:pass
+    return None
+
+
+def _operation_calibration_adjustment(calibration: dict[str,Any], sequence_meta: dict[str,Any] | None) -> dict[str,Any]:
+    meta=sequence_meta if isinstance(sequence_meta,dict) else {}
     counts=meta.get("operation_counts") or {}
+    model_avg=meta.get("operation_model_average_seconds") or {}
     runtime=calibration.get("operation_runtime") or {}
-    measured=0.0; matched=0
-    for kind,count in counts.items():
-        item=runtime.get(str(kind)) if isinstance(runtime,dict) else None
-        if not isinstance(item,dict):continue
+    total_model=0.0;matched_model=0.0;matched_measured=0.0;matched_ops=0;sample_weight=0.0
+    for kind,count_value in counts.items():
         try:
-            avg=max(0.0,float(item.get("average_seconds") or 0.0)); n=max(0,int(count or 0))
+            count=max(0,int(count_value or 0));modeled=max(0.0,float(model_avg.get(str(kind),0.0) or 0.0))
         except Exception:continue
-        if avg>0 and n>0:
-            measured += avg*n; matched += n
-    if matched:
-        fixed=meta.get("fixed_overhead") or {}
-        measured += max(0.0,float(fixed.get("countdown_seconds",3.0) or 0.0))
-        measured += max(0.0,float(fixed.get("clear_seconds",0.0) or 0.0))
-        measured += max(0.0,float(fixed.get("fill_seconds",0.0) or 0.0))
-        return max(float(seconds or 0.0),measured),matched
-    return float(seconds or 0.0),0
+        if count<=0 or modeled<=0:continue
+        modeled_seconds=modeled*count;total_model+=modeled_seconds
+        found=_runtime_operation_item(runtime,str(kind))
+        if found is None:continue
+        item,measured_avg=found
+        matched_model+=modeled_seconds;matched_measured+=measured_avg*count;matched_ops+=count
+        try:op_samples=max(1,int(item.get("samples") or calibration.get("samples") or 1))
+        except Exception:op_samples=1
+        sample_weight+=modeled_seconds*op_samples
+    if matched_model<=0 or total_model<=0:
+        return {"used":False,"coverage_percent":0.0,"matched_operations":0,"raw_ratio":1.0,"applied_ratio":1.0,"confidence":0.0,"runtime_source":calibration.get("operation_runtime_source","none")}
+    coverage=max(0.0,min(1.0,matched_model/total_model))
+    avg_samples=sample_weight/matched_model
+    sample_evidence=1.0-math.exp(-avg_samples/4.0)
+    try:mape=max(0.0,min(2.0,float(calibration.get("mape") if calibration.get("mape") is not None else .12)))
+    except Exception:mape=.12
+    error_quality=max(.20,1.0-min(1.5,mape)/1.5)
+    confidence=max(0.0,min(.94,coverage*sample_evidence*error_quality))
+    raw_ratio=max(.45,min(2.50,matched_measured/matched_model))
+    applied=1.0+confidence*(raw_ratio-1.0)
+    return {
+        "used":True,"coverage_percent":round(coverage*100.0,2),"matched_operations":int(matched_ops),
+        "modeled_matched_seconds":round(matched_model,5),"measured_matched_seconds":round(matched_measured,5),
+        "average_operation_samples":round(avg_samples,2),"raw_ratio":round(raw_ratio,5),
+        "applied_ratio":round(max(.55,min(2.20,applied)),5),"confidence":round(confidence,5),
+        "runtime_source":calibration.get("operation_runtime_source","unknown"),
+    }
 
 
-def _apply_measured_correction(plan: dict[str, Any], seconds: float) -> tuple[float, str, int, float, float | None]:
+def _apply_measured_correction(plan: dict[str, Any], seconds: float, sequence_meta: dict[str,Any] | None=None) -> tuple[float, str, int, float, float | None, dict[str,Any]]:
     options = plan.get("options") if isinstance(plan.get("options"), dict) else {}
     base, speed_samples = _measured_throughput_floor(plan, seconds)
     cal = _local_calibration(options)
-    base, operation_samples = _measured_operation_floor(plan,cal,base)
+    operation_meta=_operation_calibration_adjustment(cal,sequence_meta)
+    operation_ratio=max(.55,min(2.20,float(operation_meta.get("applied_ratio") or 1.0)))
+    operation_confidence=max(0.0,min(.94,float(operation_meta.get("confidence") or 0.0)))
+    base*=operation_ratio
     samples = int(cal.get("samples") or 0)
-    ratio = float(cal.get("ratio") or 1.0)
+    ratio = max(.55,min(4.0,float(cal.get("ratio") or 1.0)))
     if samples <= 0:
-        guard = 1.12 if speed_samples else 1.28
-        corrected = base * guard
-        source = (f"measured path throughput + cold-start guard ({speed_samples} sample{'s' if speed_samples != 1 else ''})"
-                  if speed_samples else "final operation sequence + conservative cold-start guard; waiting for 3 completed draws")
-        effective_ratio=guard
+        global_target=1.12 if speed_samples else 1.28
+        source=(f"measured path throughput + cold-start guard ({speed_samples} sample{'s' if speed_samples != 1 else ''})"
+                if speed_samples else "final operation sequence + conservative cold-start guard; waiting for 3 completed draws")
     elif samples == 1:
-        effective_ratio=max(1.18,ratio);corrected=base*effective_ratio
-        source="final operation sequence + learning calibration (1/3 completed draws)"
+        global_target=max(1.18,ratio);source="final operation sequence + learning calibration (1/3 completed draws)"
     elif samples == 2:
-        effective_ratio=max(1.08,ratio);corrected=base*effective_ratio
-        source="final operation sequence + learning calibration (2/3 completed draws)"
+        global_target=max(1.08,ratio);source="final operation sequence + learning calibration (2/3 completed draws)"
     else:
-        effective_ratio=ratio;corrected=base*effective_ratio
-        source=f"final operation sequence + measured local calibration ({samples} completed draws)"
-    if operation_samples:source += f" + typed operation floor ({operation_samples} ops)"
+        global_target=ratio;source=f"final operation sequence + measured local calibration ({samples} completed draws)"
+    # The completed-draw ratio contains the same operation timing error. Once
+    # typed operations explain that error, only blend the residual ratio so the
+    # evidence is not counted twice.
+    residual_target=max(.60,min(2.20,global_target/max(.55,operation_ratio)))
+    residual_weight=max(.06,1.0-operation_confidence)
+    residual_factor=1.0+residual_weight*(residual_target-1.0)
+    residual_factor=max(.70,min(1.80,residual_factor))
+    corrected=base*residual_factor
+    effective_ratio=operation_ratio*residual_factor
+    if operation_meta.get("used"):
+        source += f" + operation EMA ({operation_meta.get('coverage_percent',0):.0f}% model coverage)"
     mape = cal.get("mape")
     try:mape = float(mape) if mape is not None else None
     except Exception:mape = None
-    return max(0.0, corrected), source, samples, effective_ratio, mape
+    return max(0.0, corrected), source, samples, effective_ratio, mape, operation_meta
 
 
-def _range_for(seconds: float, *, projection: bool, samples: int, mape: float | None) -> tuple[float, float, str]:
-    seconds=max(0.0,float(seconds or 0.0))
+def _range_for(seconds: float, *, projection: bool, samples: int, mape: float | None, operation_confidence: float=0.0) -> tuple[float, float, str]:
+    seconds=max(0.0,float(seconds or 0.0));op_conf=max(0.0,min(.94,float(operation_confidence or 0.0)))
     if samples >= 5:
-        spread = max(.04, min(.22, float(mape if mape is not None else .10)))
+        spread=max(.035,min(.22,float(mape if mape is not None else .10)))*(1.0-.28*op_conf)
+        spread=max(.035,spread)
         return max(0.0,seconds*(1-spread)), seconds*(1+spread), "high"
     if samples >= 3:
-        spread=max(.06,min(.25,float(mape if mape is not None else .12)))
+        spread=max(.055,min(.25,float(mape if mape is not None else .12)))*(1.0-.22*op_conf)
+        spread=max(.05,spread)
         return max(0.0,seconds*(1-spread)),seconds*(1+spread),"measured"
-    if samples == 2:return seconds*.92, seconds*1.18, "learning"
-    if samples == 1:return seconds*.90, seconds*1.24, "learning"
+    if samples == 2:
+        spread=.13*(1.0-.12*op_conf);return seconds*(1-spread*.62),seconds*(1+spread),"learning"
+    if samples == 1:
+        spread=.18*(1.0-.08*op_conf);return seconds*(1-spread*.55),seconds*(1+spread),"learning"
     return seconds*(.88 if not projection else .82), seconds*(1.28 if not projection else 1.38), "cold-start"
 
 
@@ -315,8 +400,9 @@ def estimate_from_plan(plan: dict[str, Any]) -> dict[str, Any]:
         projected_raw += 6.0 + min(60.0, float(len(plan.get("groups") or ())) * .22)
         reason=f"{projection_reason}; source={'final sequence' if sequence_meta.get('used') else 'legacy estimate'}"
 
-    corrected, source, samples, ratio, mape = _apply_measured_correction(plan, projected_raw)
-    low, high, confidence = _range_for(corrected, projection=is_projection, samples=samples, mape=mape)
+    corrected, source, samples, ratio, mape, operation_calibration = _apply_measured_correction(plan, projected_raw, sequence_meta)
+    low, high, confidence = _range_for(corrected, projection=is_projection, samples=samples, mape=mape,
+                                       operation_confidence=float(operation_calibration.get("confidence") or 0.0))
     out=DrawTimeEstimate(
         preview_seconds=raw_preview_seconds,projected_seconds=corrected,low_seconds=low,high_seconds=high,
         confidence=confidence,multiplier=multiplier,is_projection=is_projection,reason=reason,
@@ -324,6 +410,10 @@ def estimate_from_plan(plan: dict[str, Any]) -> dict[str, Any]:
     ).as_dict()
     out["sequence_model_used"]=bool(sequence_meta.get("used"))
     out["sequence_operation_model"]=sequence_meta
+    out["operation_calibration"]=operation_calibration
+    out["operation_calibration_coverage_percent"]=float(operation_calibration.get("coverage_percent") or 0.0)
+    out["operation_calibration_ratio"]=float(operation_calibration.get("applied_ratio") or 1.0)
+    out["operation_calibration_confidence"]=float(operation_calibration.get("confidence") or 0.0)
     out["legacy_planner_seconds"]=round(legacy_seconds,3)
     if sequence_meta.get("used"):
         out["legacy_vs_sequence_delta_seconds"]=round(raw_preview_seconds-legacy_seconds,3)
