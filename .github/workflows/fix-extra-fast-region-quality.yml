@@ -30,13 +30,13 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Apply root-cause patch
-        run: python .github/scripts/fix_extra_fast_region_quality_v2.py
+        run: python .github/scripts/fix_extra_fast_region_quality_v3.py
 
       - name: Compile touched planners
         run: python -m py_compile DrawBot.py AutoDrawing.py AdaptiveRegionHybrid.py test_extra_fast_region_quality_rc24.py
 
       - name: Run focused Extra Fast regressions
-        run: python -m unittest -v test_extra_fast_region_quality_rc24 test_rc23_region_brush_roi test_rc6_region_brush_packing test_axis_region_hybrid_v10145 test_step7_extra_fast2_v10131
+        run: python -m unittest -v test_extra_fast_region_quality_rc24 test_rc23_region_brush_roi test_rc6_region_brush_packing test_axis_region_hybrid_v10145 test_step7_extra_fast2_v10131 test_extra_fast_v105
 
       - name: Run complete Windows regressions
         run: python -m unittest discover -v
