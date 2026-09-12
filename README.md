@@ -4,7 +4,7 @@
 
 [![Image Draw Bot drawing automatically in Microsoft Paint, Gartic Phone and Skribbl.io](assets/0912.gif)](assets/0912.mp4)
 
-**▶ [Watch the full-quality MP4 drawing demo](assets/0912.mp4)**
+
 
 [![Image Draw Bot CI](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml)
 ![Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-informational)
