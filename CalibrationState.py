@@ -78,21 +78,33 @@ def timing_state(options: dict) -> dict:
         info = {"learned": False, "samples": 0, "ratio": 1.0}
     learned = bool(info.get("learned"))
     return {"state": "calibrated" if learned else "estimated", "available": learned,
-            "samples": int(info.get("samples") or 0), "ratio": float(info.get("ratio") or 1.0)}
+            "samples": int(info.get("samples") or 0), "ratio": float(info.get("ratio") or 1.0),
+            "mape": info.get("mape"), "operation_runtime_source": info.get("operation_runtime_source", "none")}
 
 
 def profile_calibration_summary(profile_key: str, *, palette_path: Path | None = None,
                                 preset_available: bool = False, workflow: str = "",
-                                context_fingerprint: str | None = None) -> dict:
+                                context_fingerprint: str | None = None,
+                                timing_options: dict | None = None) -> dict:
     key = safe_profile_key(profile_key)
     palette = palette_state(key, palette_path=palette_path, preset_available=preset_available)
     tools = tool_state(key)
     exact = exact_color_state(key, workflow=workflow, context_fingerprint=context_fingerprint)
-    return {
+    timing_input = dict(timing_options or {})
+    timing_input["profile_key"] = key
+    timing = timing_state(timing_input)
+    result = {
         "profile_key": key,
         "palette": palette,
         "tools": tools,
         "exact_color": exact,
+        "timing": timing,
         "fingerprint": str(context_fingerprint or calibration_context_fingerprint(key, workflow=workflow, palette_path=palette_path)),
         "timing_file": str(profile_timing_file(key)),
     }
+    try:
+        from CalibrationHealth import summarize_calibration_health
+        result["health"] = summarize_calibration_health(result).as_dict()
+    except Exception as error:
+        result["health"] = {"level":"unknown","score":0.0,"blocking":False,"reason":str(error)}
+    return result

@@ -9,7 +9,7 @@ from Version import APP_VERSION, FILE_VERSION
 
 class ModernUIV109Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.145-rc12')
+        self.assertEqual(APP_VERSION,'1.0.145-rc13')
         self.assertEqual(FILE_VERSION,'1.0.145')
 
     def test_not_ready_state(self):

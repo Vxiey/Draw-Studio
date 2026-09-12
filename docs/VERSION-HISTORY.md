@@ -1,3 +1,10 @@
+# Image Draw Bot v1.0.145-rc13 — Calibration & Recovery
+
+- Calibration state now exposes component confidence and an overall safety-weighted health score.
+- Cached browser palettes can survive a small canvas-only drift, avoiding unnecessary full palette recalibration.
+- Large layout/DPI changes still force full recalibration before mouse input.
+- Transient read-only calibration failures receive bounded adaptive retries.
+
 # Image Draw Bot v1.0.145-rc5 — Smart Fill Engine
 
 - Added conservative Fill escape prediction and planner-proven contour sealing.

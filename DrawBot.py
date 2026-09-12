@@ -7881,17 +7881,33 @@ class DrawBotApp:
         from PIL import ImageGrab
         screenshot=ImageGrab.grab(bbox=client,all_screens=True).convert('RGB')
         cached=try_restore(profile_key,meta,Path(self.calibration_path),screenshot=screenshot)
-        cache_hit=bool(cached.hit)
+        cache_hit=bool(cached.hit);cache_refresh_meta=None
+        retry_meta={'attempts':0,'retries':0,'errors':(), 'delays':()}
         if cache_hit:
-            class _CachedResult:
-                canvas_box=cached.canvas_box
-                canvas_confidence=max(.90,cached.confidence)
-                palette_count=cached.palette_count
-                confidence=cached.confidence
-                method='Layout Fingerprint v2 cache'
-            result=_CachedResult()
-        else:
-            result=auto_calibrate_browser(profile_key,meta,Path(self.calibration_path),screenshot=screenshot)
+            from BrowserAutoCalibration import detect_browser_canvas
+            from BrowserAutoRecalibration import evaluate_cached_canvas
+            live_canvas=detect_browser_canvas(profile_key,screenshot,screen_origin=(client[0],client[1]))
+            cache_refresh_meta=evaluate_cached_canvas(cached.canvas_box,live_canvas.get('canvas_box'),live_canvas.get('canvas_confidence',0.0))
+            if cache_refresh_meta.action=='full':
+                cache_hit=False
+            else:
+                refreshed_canvas=(live_canvas.get('canvas_box') if cache_refresh_meta.action=='canvas-only' else cached.canvas_box)
+                class _CachedResult:
+                    canvas_box=refreshed_canvas
+                    canvas_confidence=float(live_canvas.get('canvas_confidence') or max(.90,cached.confidence))
+                    palette_count=cached.palette_count
+                    confidence=cached.confidence
+                    method=('Layout Fingerprint v2 cache + canvas-only refresh' if cache_refresh_meta.action=='canvas-only' else 'Layout Fingerprint v2 cache')
+                result=_CachedResult()
+                if cache_refresh_meta.action=='canvas-only' and refreshed_canvas:
+                    try:record_from_calibration_file(profile_key,meta,refreshed_canvas,Path(self.calibration_path),method=result.method)
+                    except Exception as fingerprint_error:log_event(f'rc13 canvas-only fingerprint refresh skipped: {fingerprint_error!r}')
+        if not cache_hit:
+            from BrowserAutoRecalibration import calibrate_browser_with_retry
+            result,retry_meta=calibrate_browser_with_retry(
+                profile_key,meta,Path(self.calibration_path),screenshot=screenshot,
+                recapture=lambda:ImageGrab.grab(bbox=client,all_screens=True).convert('RGB'),
+                cancelled=self.stop.is_set)
             try:
                 if result.canvas_box:
                     record_from_calibration_file(profile_key,meta,result.canvas_box,Path(self.calibration_path),method=result.method)
@@ -7919,11 +7935,18 @@ class DrawBotApp:
             raise ValueError('Browser Auto-Recalibration saved the palette but it could not be reloaded safely. No mouse input was sent.')
         after=DrawBotApp._browser_layout_state(self,client_rect=client,dpi=meta.get('dpi'))
         delta=compare_layout_states(before,after,tolerance_px=4)
+        from BrowserAutoRecalibration import plan_recalibration
+        recalibration_plan=plan_recalibration(delta,palette_confidence=float(result.confidence),
+                                              canvas_confidence=float(result.canvas_confidence))
         self.canvas_anchor_transform_meta={
             'method':'browser-visual-recalibration','changed':bool(delta.changed),
             'reason':delta.reason,'max_palette_shift':int(delta.max_palette_shift),
             'max_canvas_shift':int(delta.max_canvas_shift),
             'confidence':float(result.confidence),
+            'canvas_confidence':float(result.canvas_confidence),
+            'recalibration_plan':recalibration_plan.as_dict(),
+            'cache_refresh':cache_refresh_meta.as_dict() if cache_refresh_meta is not None else None,
+            'retry_meta':dict(retry_meta),
         }
         if delta.changed:
             # A new final plan will use the new geometry. Old safety simulations

@@ -173,6 +173,7 @@ def main():
         '--hidden-import', 'MobilePreview',
         '--hidden-import', 'BrowserAutoCalibration',
         '--hidden-import', 'BrowserAutoRecalibration',
+        '--hidden-import', 'CalibrationHealth',
         '--hidden-import', 'BrowserVisualPreflight',
         '--hidden-import', 'OneClickSetupVerification',
         '--hidden-import', 'TargetCapabilities',

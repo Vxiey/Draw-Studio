@@ -194,8 +194,11 @@ def one_click_setup(profile_name: str, profile_key: str, palette_path: Path, *, 
     if cached.hit:
         payload=cached.as_dict();payload.update({'palette_confidence':cached.confidence,'canvas_confidence':max(.90,cached.confidence),'method':'Layout Fingerprint v2 cache','note':'One-Click restored a verified local layout fingerprint.','target_meta':meta,'profile_name':profile_name,'layout_fingerprint_meta':cached.as_dict(),'one_click':True})
         return payload
-    result=auto_calibrate_browser(key,meta,Path(palette_path),screenshot=screenshot)
+    from BrowserAutoRecalibration import calibrate_browser_with_retry
+    result,retry_meta=calibrate_browser_with_retry(
+        key,meta,Path(palette_path),screenshot=screenshot,
+        recapture=lambda:ImageGrab.grab(bbox=tuple(meta['client_rect']),all_screens=True).convert('RGB'))
     try:fingerprint=record_from_calibration_file(key,meta,result.canvas_box,Path(palette_path),method='Browser One-Click / '+result.method) if result.canvas_box else None
     except Exception as error:fingerprint={'saved':False,'reason':str(error)}
-    payload=result.as_dict();payload.update({'target_meta':meta,'profile_name':profile_name,'layout_fingerprint_meta':fingerprint,'one_click':True})
+    payload=result.as_dict();payload.update({'target_meta':meta,'profile_name':profile_name,'layout_fingerprint_meta':fingerprint,'one_click':True,'recalibration_retry_meta':retry_meta})
     return payload
