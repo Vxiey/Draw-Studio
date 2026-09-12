@@ -81,6 +81,40 @@ def _importance(path: Sequence[Point], phase: str, serial: int) -> float:
     return length + (3.0 if len(path) == 1 else 0.0) - serial * 1e-6
 
 
+def _center(path: Sequence[Point]) -> tuple[float,float]:
+    xs=[float(p[0]) for p in path];ys=[float(p[1]) for p in path]
+    return (sum(xs)/max(1,len(xs)),sum(ys)/max(1,len(ys)))
+
+
+def _normalized_importance(raw: float, phase: str) -> float:
+    # Monotonic bounded score for runtime deadline/replanning logic.
+    scale=80.0 if phase=='foundation' else (45.0 if phase=='contour' else 18.0)
+    value=max(0.0,float(raw))
+    return max(0.0,min(1.0,value/(value+scale)))
+
+
+def _spatial_seed(entries: Sequence[dict], grid: int = 4) -> tuple[list[dict],int]:
+    """Put one high-value path from each occupied coarse cell before refinements."""
+    rows=list(entries or ())
+    if len(rows)<=1:return rows,len(rows)
+    centers=[row.get('_center') or _center(row['path']) for row in rows]
+    xs=[c[0] for c in centers];ys=[c[1] for c in centers]
+    xmin,xmax=min(xs),max(xs);ymin,ymax=min(ys),max(ys)
+    dx=max(1.0,xmax-xmin);dy=max(1.0,ymax-ymin);g=max(2,int(grid))
+    best={}
+    for index,(row,(x,y)) in enumerate(zip(rows,centers)):
+        cx=min(g-1,max(0,int((x-xmin)/dx*g)));cy=min(g-1,max(0,int((y-ymin)/dy*g)))
+        key=(cx,cy);old=best.get(key)
+        score=float(row.get('_progressive_score',0.0))
+        if old is None or score>float(rows[old].get('_progressive_score',0.0)):
+            best[key]=index
+    seed_indexes=set(best.values())
+    seeded=sorted((rows[i] for i in seed_indexes),key=lambda row:-float(row.get('_progressive_score',0.0)))
+    rest=sorted((row for i,row in enumerate(rows) if i not in seed_indexes),
+                key=lambda row:(-float(row.get('_progressive_score',0.0)),int(row.get('serial',0))))
+    return seeded+rest,len(seeded)
+
+
 def build_progressive_sequence(execution_groups: Sequence[Sequence[Path]], *,
                                phase_hints: Sequence[Sequence[str]] | None = None,
                                enabled: bool = True) -> tuple[list[dict], dict]:
@@ -114,25 +148,41 @@ def build_progressive_sequence(execution_groups: Sequence[Sequence[Path]], *,
             hint = color_hints[local_index] if local_index < len(color_hints) else None
             phase = _normalize_phase(hint, path)
             counts[phase] += 1
+            raw_score=_importance(path, phase, serial)
+            structural=.92 if phase=='foundation' else (.72 if phase=='contour' else .18)
             entries.append({
                 "color_index": int(color_index),
                 "path": path,
                 "phase": phase,
                 "phase_label": _PHASE_LABELS[phase],
                 "serial": serial,
-                "importance": _importance(path, phase, serial),
+                "importance": round(_normalized_importance(raw_score,phase),6),
+                "structural_score": structural,
+                "optional": phase=='details',
+                "_progressive_score": raw_score,
+                "_center": _center(path),
             })
             serial += 1
 
-    entries.sort(key=lambda item: (_PHASE_ORDER[item["phase"]], -float(item["importance"]), int(item["color_index"]), int(item["serial"])))
-    # Remove score-only field before it gets stored in the plan. Tests and logs
-    # should not depend on floating point tie-breaker values.
-    sequence = [{k: v for k, v in item.items() if k != "importance"} for item in entries]
+    ordered=[];seed_count=0;seed_cells=0
+    for phase in ('foundation','contour','details'):
+        block=[item for item in entries if item['phase']==phase]
+        if phase in ('foundation','contour'):
+            block,seeds=_spatial_seed(block,4);seed_count+=seeds;seed_cells+=seeds
+        else:
+            block.sort(key=lambda item:(-float(item['_progressive_score']),int(item['color_index']),int(item['serial'])))
+        ordered.extend(block)
+    # Keep normalized importance/structure metadata for the runtime scheduler,
+    # but remove planner-only score/center fields.
+    sequence=[{k:v for k,v in item.items() if k not in ('_progressive_score','_center')} for item in ordered]
     return sequence, {
         "progressive_enabled": True,
         "progressive_sequence_paths": len(sequence),
         "progressive_foundation_paths": counts["foundation"],
         "progressive_contour_paths": counts["contour"],
         "progressive_detail_paths": counts["details"],
+        "progressive_spatial_seed_paths": int(seed_count),
+        "progressive_early_coverage_cells": int(seed_cells),
+        "progressive_priority_model": "phase barriers + 4x4 spatial seeding + normalized importance",
         "progressive_phase_order": "large forms → important contours → details",
     }

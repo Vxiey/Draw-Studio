@@ -1,3 +1,9 @@
+# Image Draw Bot v1.0.145-rc9 — Progressive Drawing 2.0
+
+- Progressive passes now seed broad forms and contours across a bounded 4x4 spatial grid before local refinement.
+- The renderer keeps phase barriers and source geometry unchanged while making the whole subject recognizable earlier.
+- Progressive entries now carry bounded importance, structural score and optional-detail metadata for runtime deadline decisions.
+
 # Image Draw Bot v1.0.145-rc8 — Dynamic Replanner
 
 - Added live runtime replanning on top of the existing DeadlineScheduler.
