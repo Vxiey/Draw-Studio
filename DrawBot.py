@@ -734,6 +734,23 @@ def make_plan(original, area, options, cancelled=lambda: False):
     if options.get('outline'):
         options = dict(options, subject_focus='Off')
     options = _ensure_time_budget_options(options)
+    # Extra Fast quality fix: the old route built connected scanlines and then
+    # applied a generic path-count cap, which could discard most of a portrait
+    # (for example 653 candidate paths -> 182 kept). Adaptive Region Hybrid
+    # instead chooses exact connected components, verified H/V geometry, Fill
+    # and physically verified browser brush sizes under the real time model.
+    # Its component scheduler owns the deadline, so important structure is not
+    # destroyed later by an unrelated per-path cap.
+    if (options.get('extra_fast') and options.get('extra_fast_v2')
+            and not options.get('_adaptive_hybrid_inner')
+            and not (options.get('paint_current_color') or options.get('outline') or options.get('erase_mode'))
+            # A legacy/manual profile can claim Fill capability without carrying
+            # executable tool actions. Preserve the proven ExtraFast2 Fill route
+            # for that incomplete metadata case; regional hybrid owns all no-Fill
+            # runs (the user's failing Gartic case) and fully calibrated Fill runs.
+            and (not options.get('fill_tool_available') or bool(options.get('fill_tool_actions')))):
+        from AdaptiveRegionHybrid import build_adaptive_hybrid_plan
+        return build_adaptive_hybrid_plan(original,area,options,make_plan,finish_plan,cancelled)
     if options.get('outline') and options.get('sketch_detail')=='Auto':
         from AutoSketchBudget import choose_sketch
         return choose_sketch(original,area,options,make_plan,finish_plan,cancelled)
@@ -1563,6 +1580,7 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
     _prof_shape = profiler_start(options, 'shape_extraction')
     pixel_prebuilt = options.get('_pixel_execution_groups')
     sketch_fill_prebuilt = options.get('_sketch_fill_execution_groups')
+    adaptive_hybrid_prebuilt = options.get('_adaptive_hybrid_execution_groups')
     if pixel_prebuilt is not None:
         # v1.0.87 Block B: the component-aware Pixel Stroke Engine already
         # produced geometry-safe local paths. Do not feed them back through the
@@ -1598,6 +1616,22 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
         path_meta['sketch_fill']=True
         path_meta['stroke_optimizer_requested']='Off'
         path_meta['stroke_optimizer_effective']='Sketch Fill phase scheduler'
+    elif adaptive_hybrid_prebuilt is not None:
+        execution_groups=[list(paths) for paths in adaptive_hybrid_prebuilt]
+        path_meta=dict(continuous_path_stats(groups,execution_groups))
+        _ah=dict(options.get('adaptive_hybrid_meta') or {})
+        _schedule=dict(_ah.get('schedule') or {})
+        path_meta.update({
+            'mode':'Extra Fast adaptive regions',
+            'extra_fast_v2':True,
+            'adaptive_hybrid':True,
+            'adaptive_hybrid_components':int(_ah.get('components',0) or 0),
+            'adaptive_hybrid_selected_components':int(_schedule.get('selected_components',0) or 0),
+            'adaptive_hybrid_dropped_components':int(_schedule.get('dropped_components',0) or 0),
+            'adaptive_hybrid_pixel_accuracy_score':float((_ah.get('quality') or {}).get('pixel_accuracy_score',0) or 0),
+            'stroke_optimizer_requested':options.get('stroke_optimizer','Off'),
+            'stroke_optimizer_effective':'Adaptive Region scheduler',
+        })
     elif options.get('sketch_execution_groups') is not None:
         execution_groups=[list(paths) for paths in options['sketch_execution_groups']]
         path_meta=dict(continuous_path_stats(groups,execution_groups))
@@ -1672,9 +1706,10 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
 
     _prof_paths = profiler_start(options, 'path_optimization')
     if execution_groups is not None:
-        if pixel_prebuilt is not None or sketch_fill_prebuilt is not None:
-            # Pixel Accurate and Sketch+Fill already own geometry/phase order.
-            # Keep every path; no generic cap/optimizer may reorder them.
+        if pixel_prebuilt is not None or sketch_fill_prebuilt is not None or adaptive_hybrid_prebuilt is not None:
+            # Pixel Accurate, Sketch+Fill and Adaptive Region Hybrid already own
+            # geometry/phase/deadline order. Keep every selected path; no generic
+            # cap/optimizer may discard or reorder their safe regional plan.
             # PixelStrokeEngine. Keep every path; only attach target metadata so
             # logs stay compatible with the legacy planner.
             path_meta.update({
@@ -1725,7 +1760,7 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
     # same deadline-specific plan. Pixel Accurate already has its own exact
     # progressive budget and is deliberately left untouched here.
     deadline_sequence=None
-    if execution_groups is not None and pixel_prebuilt is None and sketch_fill_prebuilt is None:
+    if execution_groups is not None and pixel_prebuilt is None and sketch_fill_prebuilt is None and adaptive_hybrid_prebuilt is None:
         try:
             from AdaptiveDeadlineRenderer import adapt_execution_plan
             execution_groups,deadline_sequence,deadline_meta,importance_map = adapt_execution_plan(
@@ -1750,11 +1785,14 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
             options['adaptive_deadline_meta']={'enabled':False,'reason':str(error)}
     elif pixel_prebuilt is not None and options.get('time_budget_active'):
         options['adaptive_deadline_meta']={'enabled':False,'reason':'Pixel Accurate uses the exact progressive PixelMap budget.'}
+    elif adaptive_hybrid_prebuilt is not None and options.get('time_budget_active'):
+        options['adaptive_deadline_meta']={'enabled':False,'reason':'Adaptive Region Hybrid already scheduled whole components against the real execution budget.'}
 
     execution_sequence=[]
     if execution_groups is not None:
         sketch_fill_sequence=options.get('_sketch_fill_execution_sequence') if sketch_fill_prebuilt is not None else None
         pixel_sequence=options.get('_pixel_execution_sequence') if pixel_prebuilt is not None else None
+        adaptive_hybrid_sequence=options.get('_adaptive_hybrid_execution_sequence') if adaptive_hybrid_prebuilt is not None else None
         if sketch_fill_sequence is not None:
             execution_sequence=[dict(entry) for entry in sketch_fill_sequence]
             _sf=options.get('sketch_fill_meta') or {}
@@ -1780,6 +1818,31 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
                     ''.join(f" -> correction {i}" for i in range(1,int((options.get('pixel_accuracy_meta') or {}).get('correction_passes_accepted',0) or 0)+1))),
                 'progressive_mode':'On',
                 'color_workflow':'Progressive passes',
+            })
+        elif adaptive_hybrid_sequence is not None:
+            execution_sequence=[dict(entry) for entry in adaptive_hybrid_sequence]
+            _ah=options.get('adaptive_hybrid_meta') or {}
+            _schedule=(_ah.get('schedule') or {}) if isinstance(_ah,dict) else {}
+            _phase_counts={}
+            for _entry in execution_sequence:
+                _phase=str(_entry.get('phase') or 'structure')
+                _phase_counts[_phase]=_phase_counts.get(_phase,0)+1
+            path_meta.update({
+                'progressive_enabled':True,
+                'progressive_sequence_paths':len(execution_sequence),
+                'progressive_foundation_paths':int(_phase_counts.get('foundation',0)),
+                'progressive_contour_paths':int(_phase_counts.get('structure',0)),
+                'progressive_detail_paths':int(_phase_counts.get('detail',0)),
+                'progressive_correction_paths':int(_phase_counts.get('correction',0)),
+                'progressive_phase_order':'foundation -> structure -> detail -> correction',
+                'progressive_mode':'Adaptive Region Hybrid',
+                'color_workflow':'Regional deadline passes',
+                'target_before_paths':len(execution_sequence),
+                'target_after_paths':len(execution_sequence),
+                'target_skipped_paths':0,
+                'target_cap_applied':False,
+                'regional_deadline_selected_components':int(_schedule.get('selected_components',0) or 0),
+                'regional_deadline_dropped_components':int(_schedule.get('dropped_components',0) or 0),
             })
         elif deadline_sequence is not None:
             execution_sequence=[dict(entry) for entry in deadline_sequence]
@@ -1930,6 +1993,12 @@ def finish_plan(image,fitted,groups,options,cancelled=lambda: False):
             preview=render_sequence_preview(image.size,size,execution_sequence,palette_rgb,brush)
         except Exception as _sf_preview_error:
             log_event(f'Sketch Fill sequence preview fallback: {_sf_preview_error!r}')
+    if options.get('adaptive_hybrid_active') and execution_sequence:
+        try:
+            from AdaptiveRegionHybrid import render_adaptive_preview
+            preview=render_adaptive_preview(image.size,size,execution_sequence,palette_rgb,options.get('fill_regions') or ())
+        except Exception as _ah_preview_error:
+            log_event(f'Adaptive Region simulated-final preview fallback: {_ah_preview_error!r}')
     profiler_stop(options, 'preview_rendering', _prof_preview)
     _prof_estimate = profiler_start(options, 'execution_estimate')
     count=path_meta['execution_paths'];colors=sum(bool(g) for g in groups)
