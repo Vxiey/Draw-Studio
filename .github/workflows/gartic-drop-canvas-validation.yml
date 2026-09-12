@@ -28,7 +28,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Apply Gartic drop and canvas patch
-        run: python .github/scripts/implement_gartic_drop_canvas_f1.py
+        run: |
+          python .github/scripts/implement_gartic_drop_canvas_f1.py
+          python .github/scripts/implement_gartic_drop_canvas_f1_v2.py
       - name: Compile touched code
         run: python -m py_compile CanvasDropPayload.py GarticEngineV2.py DrawBot.py StudioUI.py test_gartic_drop_canvas_rc25.py
       - name: Run focused Gartic drop/canvas regressions
