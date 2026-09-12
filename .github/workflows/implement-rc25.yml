@@ -1,0 +1,58 @@
+name: Implement Image Draw Bot rc25
+
+on:
+  push:
+    branches:
+      - release/v1.0.145-rc25
+    paths:
+      - '.github/implement-rc25-trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: implement-image-draw-bot-rc25
+  cancel-in-progress: false
+
+jobs:
+  implement:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/v1.0.145-rc25
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Synchronize rc25 release metadata
+        run: python .github/scripts/implement_rc25.py
+
+      - name: Validate rc25 source release gate
+        run: python ReleaseCandidateHardening.py --source-gate --soak-cycles 5000
+
+      - name: Run Extra Fast rc25 regressions
+        run: python -m unittest -v test_extra_fast_region_quality_rc24.py test_rc23_region_brush_roi.py test_rc6_region_brush_packing.py test_axis_region_hybrid_v10145.py test_step7_extra_fast2_v10131.py test_extra_fast_v105.py
+
+      - name: Run complete regression suite
+        run: python -m unittest discover -v
+
+      - name: Run Image Draw Bot self-test
+        run: python DrawBot.py --self-test
+
+      - name: Commit verified rc25 release metadata
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Version.py installer/ImageDrawBot.iss README.md README-INDEX.md docs VERSION-HISTORY.md RELEASE-NOTES-v1.0.145-rc25.md test_*.py
+          git diff --cached --check
+          git commit -m 'Release Image Draw Bot v1.0.145-rc25'
+          git push origin HEAD:release/v1.0.145-rc25
