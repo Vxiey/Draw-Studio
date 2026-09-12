@@ -49,7 +49,7 @@ class V108RegressionTests(unittest.TestCase):
 
     def test_version(self):
         from Version import APP_VERSION, FILE_VERSION
-        self.assertEqual(APP_VERSION,'1.0.145-rc10')
+        self.assertEqual(APP_VERSION,'1.0.145-rc11')
         self.assertEqual(FILE_VERSION,'1.0.145')
 
 

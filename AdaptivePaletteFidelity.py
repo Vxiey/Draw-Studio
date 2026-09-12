@@ -16,6 +16,7 @@ from typing import Iterable, Sequence
 from ColorFidelity import color_metrics, delta_e2000, palette_match_cost, validate_color_fidelity
 from DominantHuePreservation import dominant_hue_anchors, dominant_hue_family
 from RegionAwareQuantization import region_detail_anchor_candidates
+from SmartColorEngine import smart_color_weights, should_keep_color_candidate
 
 Segment = tuple[int, int, int, int]
 
@@ -127,7 +128,7 @@ def _spatial_anchor_candidates(groups: Sequence[Sequence[Segment]], active: Sequ
 
 def _base_anchors(groups: Sequence[Sequence[Segment]], palette: Sequence[tuple[int,int,int]],
                   active: Sequence[int], weights: Sequence[float], cap: int,
-                  fidelity: str) -> list[int]:
+                  fidelity: str, priority_anchors: Sequence[int]=()) -> list[int]:
     ranked=sorted(active,key=lambda i:(-weights[i],i))
     keep: list[int] = []
     def add(i):
@@ -150,6 +151,10 @@ def _base_anchors(groups: Sequence[Sequence[Segment]], palette: Sequence[tuple[i
     for i in dominant_anchors:
         add(i)
     add(darkest); add(brightest)
+    # Smart Color anchors come after broad hue/extreme protection so a local
+    # accent cannot evict the image's essential hue structure.
+    for i in priority_anchors:
+        add(int(i))
 
     # Preserve a luminance ladder after dominant hue families. This remains the
     # anti-muddy-shadow guard, but it may no longer consume a dominant hue slot.
@@ -266,18 +271,24 @@ def select_adaptive_palette(groups: Sequence[Sequence[Segment]], palette_rgb: Se
     """
     validate_color_fidelity(fidelity)
     palette=[tuple(map(int,r[:3])) for r in palette_rgb]
-    weights=group_weights(groups)
+    base_weights=group_weights(groups)
+    weights,smart_meta=smart_color_weights(groups,palette,base_weights,fidelity=fidelity)
     active=[i for i,w in enumerate(weights) if w>0 and i<len(palette)]
     cap=max(2,min(int(max_colors),len(active) if active else 2))
     if not active:
-        return [],{}, {'active_colors_before':0,'active_colors_after':0,'max_colors':int(max_colors),'posterization_risk':'LOW','palette_coverage_percent':100.0}
+        meta={'active_colors_before':0,'active_colors_after':0,'max_colors':int(max_colors),'posterization_risk':'LOW','palette_coverage_percent':100.0}
+        meta.update(smart_meta);meta['smart_color_switch_cost_seconds']=round(max(.005,float(color_switch_seconds)),6)
+        return [],{},meta
     if len(active)<=cap:
         mapping={i:i for i in active}
         errors=[(i,0.0,weights[i]) for i in active]
         meta=palette_quality_metrics(active,active,palette,weights,mapping,errors,fidelity=fidelity,max_colors=cap)
         _dominant_indexes,_dominant_selection_meta=dominant_hue_anchors(palette,weights,cap,fidelity=fidelity)
         _region_detail_indexes=region_detail_anchor_candidates(groups,palette,active,weights,cap)
+        meta.update(smart_meta)
         meta.update({'active_colors_before':len(active),'active_colors_after':len(active),'max_colors':int(max_colors),'selected_colors':len(active),'visual_gain_per_color_switch':0.0,
+                     'smart_color_switch_cost_seconds':round(max(.005,float(color_switch_seconds)),6),
+                     'smart_color_cost_stop':False,
                      'kept_color_indexes':tuple(map(int,active)),
                      'region_aware_quantization':True,
                      'region_detail_anchor_indexes':tuple(map(int,_region_detail_indexes)),
@@ -287,33 +298,43 @@ def select_adaptive_palette(groups: Sequence[Sequence[Segment]], palette_rgb: Se
                      'dominant_hue_preservation':bool(_dominant_selection_meta.get('dominant_hue_preservation',False))})
         return list(active),mapping,meta
 
-    keep=_base_anchors(groups,palette,active,weights,cap,fidelity)
+    keep=_base_anchors(groups,palette,active,weights,cap,fidelity,smart_meta.get('smart_color_anchor_indexes',()))
     mapping,errors=_map_indices(active,keep,palette,weights,fidelity)
     metrics=palette_quality_metrics(active,keep,palette,weights,mapping,errors,fidelity=fidelity,max_colors=cap)
-    last_gain=0.0
+    last_gain=0.0;last_relative_gain=0.0;cost_stop=False
     # Faithful/Exact demand a better reduced palette before stopping.
     target_risk={"Fast":.52,"Balanced":.40,"Faithful":.28,"Exact":.20}[fidelity]
     while len(keep)<cap and metrics['posterization_score']>target_risk:
         best=None
         current_error={i:de*weights[i] for i,de,_w in errors}
+        old_total=sum(current_error.values())
         for candidate in active:
             if candidate in keep: continue
             trial_keep=keep+[candidate]
             _m,_e=_map_indices(active,trial_keep,palette,weights,fidelity)
             new_total=sum(de*w for _i,de,w in _e)
-            old_total=sum(current_error.values())
-            gain=max(0.0,old_total-new_total)/max(.005,float(color_switch_seconds))
+            delta=max(0.0,old_total-new_total)
+            relative=delta/max(1e-9,old_total)
+            gain=delta/max(.005,float(color_switch_seconds))
             if best is None or gain>best[0]:
-                best=(gain,candidate,_m,_e)
+                best=(gain,relative,candidate,_m,_e)
         if not best:break
-        last_gain,candidate,mapping,errors=best
+        candidate_gain,candidate_relative,candidate,candidate_mapping,candidate_errors=best
+        if not should_keep_color_candidate(candidate_relative,float(metrics['posterization_score']),fidelity,color_switch_seconds):
+            cost_stop=True;break
+        last_gain,last_relative_gain=candidate_gain,candidate_relative
+        mapping,errors=candidate_mapping,candidate_errors
         keep.append(candidate)
         metrics=palette_quality_metrics(active,keep,palette,weights,mapping,errors,fidelity=fidelity,max_colors=cap)
 
     _dominant_indexes,_dominant_selection_meta=dominant_hue_anchors(palette,weights,cap,fidelity=fidelity)
     _region_detail_indexes=region_detail_anchor_candidates(groups,palette,active,weights,cap)
+    metrics.update(smart_meta)
     metrics.update({
         'active_colors_before':len(active),'active_colors_after':len(keep),
+        'smart_color_switch_cost_seconds':round(max(.005,float(color_switch_seconds)),6),
+        'smart_color_last_relative_gain_percent':round(float(last_relative_gain)*100.0,4),
+        'smart_color_cost_stop':bool(cost_stop),
         'region_aware_quantization':True,
         'region_detail_anchor_indexes':tuple(map(int,_region_detail_indexes)),
         'region_detail_anchors_kept':tuple(map(int,[i for i in _region_detail_indexes if i in keep])),

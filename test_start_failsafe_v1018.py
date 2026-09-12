@@ -20,7 +20,7 @@ class Button:
 
 class StartFailsafeV1018Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION,'1.0.145-rc10')
+        self.assertEqual(APP_VERSION,'1.0.145-rc11')
         self.assertEqual(FILE_VERSION,'1.0.145')
 
     def make_app(self, *, image=True, area=True, palette=True, unlocked=False):

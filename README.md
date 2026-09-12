@@ -24,17 +24,17 @@ Image Draw Bot is a source-available Windows desktop app for automatic image dra
 
 ## Download for Windows
 
-Download **Image Draw Bot v1.0.145-rc10** for Windows 10/11 x64.
+Download **Image Draw Bot v1.0.145-rc11** for Windows 10/11 x64.
 The installer and portable ZIP include Python and use the Image Draw Bot name.
 
 | Download | How to use it |
 | --- | --- |
-| [Windows installer — recommended](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.145-rc10/ImageDrawBot-1.0.145-rc10-Windows-x64-Setup.exe) | Run Setup, then open Image Draw Bot. Python is included. |
-| [Portable Windows ZIP](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.145-rc10/ImageDrawBot-1.0.145-rc10-Windows-x64.zip) | Extract the entire ZIP and run ImageDrawBot/ImageDrawBot.exe. Keep its supporting files together. |
-| [SHA-256 checksums](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.145-rc10/ImageDrawBot-1.0.145-rc10-SHA256.txt) | Verify the downloaded files. |
+| [Windows installer — recommended](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.145-rc11/ImageDrawBot-1.0.145-rc11-Windows-x64-Setup.exe) | Run Setup, then open Image Draw Bot. Python is included. |
+| [Portable Windows ZIP](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.145-rc11/ImageDrawBot-1.0.145-rc11-Windows-x64.zip) | Extract the entire ZIP and run ImageDrawBot/ImageDrawBot.exe. Keep its supporting files together. |
+| [SHA-256 checksums](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.145-rc11/ImageDrawBot-1.0.145-rc11-SHA256.txt) | Verify the downloaded files. |
 
 [All releases](https://github.com/Vxiey/Image-Draw-Bot/releases) ·
-[Release notes](RELEASE-NOTES-v1.0.145-rc10.md) ·
+[Release notes](RELEASE-NOTES-v1.0.145-rc11.md) ·
 [Setup and troubleshooting](README-INDEX.md) · [Frequently asked questions](docs/FAQ.md)
 
 ## Guides and help

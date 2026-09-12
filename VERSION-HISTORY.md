@@ -1,3 +1,10 @@
+# Image Draw Bot v1.0.145-rc11 — Smart Color Engine
+
+- Added local spatial dominance and perceptual uniqueness to palette importance scoring.
+- Small locally authoritative accents can keep a palette slot without overpowering broad coverage.
+- Colour-switch cost now participates in the stop decision for low-value extra palette colours.
+- Existing dominant-hue, tone-ladder and region-detail protections remain authoritative.
+
 # Image Draw Bot v1.0.145-rc10 — Pixel Accuracy 2.0
 
 - Added per-connected-region accuracy scoring across color, coverage, edges and protected detail.
