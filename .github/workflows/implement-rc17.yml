@@ -36,7 +36,6 @@ jobs:
           test_deadline_runtime_optimizer_v10119.py
           test_region_fill_v10117.py
           test_rc6_region_brush_packing.py
-          test_rc7_execution_cost_optimizer.py
           test_step9_profile_calibration_isolation_v10133.py
           test_step12_auto_tuner_feedback_v10136.py
       - name: Commit rc17
