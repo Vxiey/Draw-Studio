@@ -30,7 +30,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Apply root-cause patch
-        run: python .github/scripts/fix_extra_fast_region_quality.py
+        run: python .github/scripts/fix_extra_fast_region_quality_v2.py
 
       - name: Compile touched planners
         run: python -m py_compile DrawBot.py AutoDrawing.py AdaptiveRegionHybrid.py test_extra_fast_region_quality_rc24.py
