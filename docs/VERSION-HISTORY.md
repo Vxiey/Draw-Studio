@@ -1,3 +1,9 @@
+# Image Draw Bot v1.0.145-rc18 — Unified Region Fill Cost
+
+- Fill-vs-stroke decisions now use the same stateful ExecutionCostModel as Adaptive Hybrid and Estimated Draw Time.
+- Fill safety logic is unchanged; only execution-time comparison is unified.
+- Legacy Fill costing remains fallback-only.
+
 # Image Draw Bot v1.0.145-rc17 — Unified Execution Cost ETA
 
 - Estimated Draw Time now shares the planner's stateful execution-cost model.

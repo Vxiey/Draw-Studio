@@ -7,7 +7,7 @@ import VersionHistory
 
 class VersionHistoryIndexTests(unittest.TestCase):
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION,'1.0.145-rc17')
+        self.assertEqual(APP_VERSION,'1.0.145-rc18')
         self.assertEqual(FILE_VERSION,'1.0.145')
 
     def test_version_history_files_exist(self):

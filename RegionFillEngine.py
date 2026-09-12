@@ -251,7 +251,7 @@ def _risk(region: dict[str, Any], *, aggressiveness: str, quality: str, brush_px
     return risk, confidence, "safe"
 
 
-def _region_cost(region: dict[str, Any], options: dict[str, Any], image_size: tuple[int, int], fitted: tuple[int, int]) -> tuple[float, float]:
+def _legacy_region_cost(region: dict[str, Any], options: dict[str, Any], image_size: tuple[int, int], fitted: tuple[int, int]) -> tuple[float, float]:
     # Preserve the established safe-fill decision boundary on cold start.  The
     # calibrated model is allowed to change fill-vs-stroke selection only after
     # this exact profile/tool/brush/color workflow has real completed samples.
@@ -296,18 +296,63 @@ def _region_cost(region: dict[str, Any], options: dict[str, Any], image_size: tu
     return max(.001,stroke_cost),max(.001,fill_cost)
 
 
-def _batchable_tool_cost(options: dict[str, Any]) -> float:
-    """Return only the per-region tool switch already embedded in Fill cost."""
+
+def _region_cost(region: dict[str, Any], options: dict[str, Any], image_size: tuple[int, int], fitted: tuple[int, int]) -> tuple[float, float]:
+    """Compare connected scanlines with Outline + Fill using shared execution cost.
+
+    Safety is decided elsewhere.  This function only answers the performance
+    question with the same stateful cursor/drag/switch model used by Adaptive
+    Region Hybrid and the visible ETA.  The pre-rc18 formula remains a bounded
+    fallback if the shared model cannot cost an unusual region.
+    """
     try:
-        from HybridCostModel import build_cost_model
-        model = build_cost_model(options)
-        if model.calibrated:
-            return max(0.0, float(model.tool_change_seconds))
+        from ExecutionCostModel import build_cost_model
+        model=build_cost_model(options,image_size,fitted)
+        color=max(0,int(region.get("color_index",0) or 0))
+        brush=max(1,int(options.get("brush_px",1) or 1))
+        stroke_sequence=[]
+        for serial,raw in enumerate(region.get("row_spans") or ()):
+            try:y,left,right=map(int,raw)
+            except Exception:continue
+            path=((left,y),) if left==right else ((left,y),(right,y))
+            stroke_sequence.append({"color_index":color,"brush_px":brush,"path":path,
+                                    "operation_type":"dot" if len(path)==1 else "stroke",
+                                    "local_serial":serial})
+        stroke_cost=model.sequence_cost(stroke_sequence,initial_color=color,initial_brush=brush).total_seconds
+
+        contour=[]
+        for raw in region.get("contour") or ():
+            try:contour.append((int(raw[0]),int(raw[1])))
+            except Exception:continue
+        if contour and len(contour)>1 and contour[0]!=contour[-1]:contour.append(contour[0])
+        contour_sequence=[]
+        if contour:
+            contour_sequence=[{"color_index":color,"brush_px":brush,"path":tuple(contour),
+                               "operation_type":"outline"}]
+        contour_cost=model.sequence_cost(contour_sequence,initial_color=color,initial_brush=brush).total_seconds
+        # One tool switch is deliberately kept batchable, matching the previous
+        # RegionFillEngine contract. estimate_fill_execution_seconds removes that
+        # per-region share and adds the real calibrated Fill/restore controls once
+        # per colour batch.
+        fill_cost=(contour_cost+model.switch_cost("tool_change")+
+                   model.switch_cost("fill")+model.switch_cost("verification"))
+        if stroke_cost>0 and fill_cost>0:
+            return max(.001,float(stroke_cost)),max(.001,float(fill_cost))
     except Exception:
         pass
-    delivery = resolve_stroke_delivery(options, dry_run=False)
-    return max(.08, float(delivery.ui_control_delay) * .45)
+    return _legacy_region_cost(region,options,image_size,fitted)
 
+
+def _batchable_tool_cost(options: dict[str, Any]) -> float:
+    """Per-region tool-switch share already embedded in the Fill candidate cost."""
+    try:
+        from ExecutionCostModel import build_cost_model
+        # Switch cost is independent of geometry; 1x1 keeps this helper cheap.
+        model=build_cost_model(options,(1,1),(1,1))
+        return max(0.0,float(model.switch_cost("tool_change")))
+    except Exception:
+        delivery=resolve_stroke_delivery(options,dry_run=False)
+        return max(.08,float(delivery.ui_control_delay)*.45)
 
 def _region_cost_components(region: dict[str, Any], options: dict[str, Any], image_size: tuple[int, int], fitted: tuple[int, int]) -> tuple[float, float, float, float]:
     stroke_cost, fill_cost = _region_cost(region, options, image_size, fitted)
@@ -564,6 +609,7 @@ def evaluate_region_candidates(regions, image_size: tuple[int, int], fitted: tup
         'fill_seal_paths':sum(int(r.get('fill_seal_count',0) or 0) for r in accepted),'fill_escape_prediction':'diagonal-corner preseal v1',
         'outline_simplification':'exact-collinear only','pixel_accurate_protected':False,
         'fallback_render_method':'CONNECTED_SCANLINES','extra_fast_batch_aware_costing':bool(options.get('extra_fast')),
+        'execution_cost_model':'ExecutionCostModel stateful v2','execution_cost_fallback':'legacy RegionFill formula on model error',
         'decisions':[d.as_dict() for d in decisions[:80]],'decision_count':len(decisions)})
     return accepted,meta
 
