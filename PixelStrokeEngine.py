@@ -614,9 +614,15 @@ def schedule_components(components: Sequence[Component], palette_count: int, *, 
                     cost = travel + color_penalty - priority_credit + i * 1e-6
                 else:
                     seconds=intrinsic[comp.component_id]
-                    if cursor is not None:
-                        seconds+=cost_model.travel_seconds(cursor,start)
-                    if current_color not in (None,comp.color_index):seconds+=float(cost_model.color_change_seconds)
+                    if cursor is not None and comp.paths and comp.paths[0]:
+                        first=comp.paths[0]
+                        # paths_seconds() already includes the first path's base
+                        # travel/settle term. Add only the real stateful entry delta.
+                        moved=float(cost_model.path_seconds(first,cursor=cursor))
+                        base=float(cost_model.path_seconds(first,cursor=None))
+                        seconds+=max(0.0,moved-base)
+                    if current_color not in (None,comp.color_index):
+                        seconds+=float(cost_model.color_change_seconds)
                     # Keep the multi-pass contract, but within each phase choose
                     # the component with highest visual value per millisecond.
                     value=max(.001,float(_priority(comp)))
@@ -625,11 +631,7 @@ def schedule_components(components: Sequence[Component], palette_count: int, *, 
                     best_i, best_cost = i, cost
             comp = remaining.pop(best_i)
             component_counts[phase] += 1
-            if cost_model is not None and current_color != comp.color_index:
-                estimated_total += cost_model.color_change_seconds
             for path in comp.paths:
-                if cost_model is not None:
-                    estimated_total += cost_model.path_seconds(path,cursor=cursor)
                 execution_groups[comp.color_index].append(path)
                 sequence.append({
                     "color_index": int(comp.color_index),
@@ -657,6 +659,15 @@ def schedule_components(components: Sequence[Component], palette_count: int, *, 
                     cursor = path[-1]
             current_color = comp.color_index
 
+    if cost_model is not None:
+        try:
+            _initial_brush=max(1,int(getattr(cost_model,'options',{}).get('brush_px',1) or 1))
+            estimated_total=float(cost_model.sequence_cost(
+                sequence,initial_brush=_initial_brush).total_seconds)
+        except Exception:
+            # The geometry/order remains valid even if diagnostics cannot be costed.
+            estimated_total=sum(float(cost_model.paths_seconds(c.paths)) for c in components if c.paths)
+
     return execution_groups, sequence, {
         "scheduler_backend": "cpu-component-bounded-nearest",
         "scheduler_window": 72,
@@ -666,6 +677,7 @@ def schedule_components(components: Sequence[Component], palette_count: int, *, 
         "phase_component_counts": component_counts,
         "scheduled_paths": len(sequence),
         "cost_aware": bool(cost_model is not None),
+        "cost_policy": "ExecutionCostModel stateful v3" if cost_model is not None else "legacy geometry scheduler",
         "cost_model": cost_model.as_dict() if cost_model is not None else None,
         "estimated_execution_seconds": round(estimated_total,4) if cost_model is not None else None,
         "scheduled_color_switches": sum(1 for a,b in zip(sequence,sequence[1:]) if a["color_index"]!=b["color_index"]),
@@ -681,8 +693,11 @@ def build_pixel_stroke_plan(pixel_map: PixelMap, palette_count: int, *, lines: b
     cost_model=None
     if isinstance(options,dict) and str(options.get("adaptive_hybrid_cost","Auto")) != "Off":
         try:
-            from HybridCostModel import build_cost_model
-            cost_model=build_cost_model(options)
+            from ExecutionCostModel import build_cost_model
+            # DrawBot already provides exact _hybrid_scale_x/y for Pixel Accurate.
+            # Direct tests that do not have a target canvas remain source-space 1:1.
+            cost_model=build_cost_model(options,(pixel_map.width,pixel_map.height),
+                                        (pixel_map.width,pixel_map.height))
         except Exception:
             cost_model=None
     if not lines:

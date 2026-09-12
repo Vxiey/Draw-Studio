@@ -1,3 +1,9 @@
+# Image Draw Bot v1.0.145-rc20 — Pixel Accurate Unified Execution Cost
+
+- Pixel Accurate local orientation and component order now use the same stateful execution-cost model as Extra Fast, Region Fill and visible ETA.
+- Exact coverage and correction behavior are unchanged.
+- Legacy cost-aware planning can still be disabled explicitly.
+
 # Image Draw Bot v1.0.145-rc19 — Extra Fast Unified Execution Cost
 
 - Extra Fast 2.0 now uses the same stateful execution-time model as Adaptive Hybrid, Region Fill and visible ETA.
