@@ -165,6 +165,8 @@ python ReleaseCandidateHardening.py --source-gate --soak-cycles 5000
 python build_release.py --installer
 ```
 
+For a local Windows release build, you can also run `Build-Release.bat`.
+
 Windows releases must pass tests, packaging and a silent install/self-test/uninstall round trip before publication. Real drawing speed, GPU behavior and compatibility with every target layout still require live testing.
 
 [Publishing](docs/PUBLISHING.md) · [Package layout](docs/RELEASE-STRUCTURE.md) · [Version history](VERSION-HISTORY.md) · [GitHub SEO checklist](docs/GITHUB-SEO-CHECKLIST.md)
