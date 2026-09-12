@@ -10,7 +10,7 @@ verification remain authoritative during execution.
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from math import ceil
+from math import ceil, hypot
 from typing import Any, Iterable
 
 from FillOptimizer import detect_fill_regions
@@ -101,6 +101,110 @@ def _thin_neck_score(region: dict[str, Any], brush_px: int) -> float:
         return 1.0
     return max(0.0, min(1.0, 1.0 - (sample - critical) / (critical * 1.25)))
 
+
+
+def _span_contains(region: dict[str, Any], x: int, y: int) -> bool:
+    """True only when a source pixel is part of the connected fill component."""
+    x = int(x); y = int(y)
+    for raw in region.get("row_spans") or ():
+        try:
+            sy, left, right = map(int, raw)
+        except Exception:
+            continue
+        if sy == y and left <= x <= right:
+            return True
+    return False
+
+
+def _diagonal_seal_paths(region: dict[str, Any], *, max_paths: int = 96) -> tuple[list[tuple[tuple[int, int], tuple[int, int]]], int, int]:
+    """Return inside-only bridges for one-pixel diagonal contour corners."""
+    raw_points = region.get("contour") or ()
+    points = []
+    for raw in raw_points:
+        try:
+            points.append((int(raw[0]), int(raw[1])))
+        except Exception:
+            continue
+    if len(points) < 2:
+        return [], 0, 0
+    pairs = list(zip(points, points[1:]))
+    if points[-1] != points[0]:
+        pairs.append((points[-1], points[0]))
+    paths = []
+    seen = set()
+    total = 0
+    unresolved = 0
+    for a, b in pairs:
+        dx = b[0] - a[0]
+        dy = b[1] - a[1]
+        if abs(dx) != 1 or abs(dy) != 1:
+            continue
+        total += 1
+        candidates = ((b[0], a[1]), (a[0], b[1]))
+        bridge = next((c for c in candidates if _span_contains(region, c[0], c[1])), None)
+        start = a if _span_contains(region, a[0], a[1]) else (b if _span_contains(region, b[0], b[1]) else None)
+        if bridge is None or start is None or len(paths) >= max(1, int(max_paths)):
+            unresolved += 1
+            continue
+        key = (start, bridge)
+        if key in seen or start == bridge:
+            continue
+        seen.add(key)
+        paths.append(key)
+    return paths, total, unresolved
+
+
+def _fill_escape_prediction(region: dict[str, Any], *, brush_px: int, aggressiveness: str, quality: str) -> tuple[float, list, str]:
+    """Predict contour leakage without weakening existing hard safety gates."""
+    safety = max(0.0, min(1.0, float(region.get("safety_score", 0.0) or 0.0)))
+    density = max(0.0, min(1.0, float(region.get("bbox_density", 0.0) or 0.0)))
+    thin = _thin_neck_score(region, brush_px)
+    seals, total_diag, unresolved = _diagonal_seal_paths(region)
+    unresolved_ratio = (unresolved / max(1, total_diag)) if total_diag else 0.0
+    diagonal_pressure = min(1.0, total_diag / max(8.0, float(len(region.get("contour") or ())) * .35)) if total_diag else 0.0
+    risk = (1.0 - safety) * .46 + thin * .26 + (1.0 - density) * .08 + diagonal_pressure * .08 + unresolved_ratio * .32
+    risk = max(0.0, min(1.0, risk))
+    limit = {"Safe": .20, "Balanced": .32, "Aggressive": .42}.get(aggressiveness, .32)
+    if quality == "High Quality":
+        limit = min(limit, .26)
+    elif quality == "Pixel Accurate":
+        limit = min(limit, .12)
+    if unresolved:
+        return risk, [], f"unsealed diagonal contour corner ({unresolved})"
+    if risk > limit:
+        return risk, [], f"fill escape risk {risk:.2f} > {limit:.2f}"
+    if seals:
+        return risk, seals, "sealed"
+    return risk, [], "safe"
+
+
+def _seal_cost_seconds(paths, options: dict[str, Any], image_size: tuple[int, int], fitted: tuple[int, int]) -> float:
+    if not paths:
+        return 0.0
+    delivery = resolve_stroke_delivery(options, dry_run=False)
+    speed_name = normalize_speed(options.get("speed", "Balanced"))
+    delay = float(options.get("delay", 0.0) or 0.0)
+    path_delay = max(float(delivery.min_path_delay), float(phase_delay(delay, speed_name, "path")))
+    travel_delay = max(.002, float(phase_delay(delay, speed_name, "travel")))
+    boundary_delay = max(.004, float(phase_delay(delay, speed_name, "boundary")))
+    step = max(1.0, float(delivery.step_px))
+    iw, ih = max(1, int(image_size[0])), max(1, int(image_size[1]))
+    fw, fh = max(1, int(fitted[0])), max(1, int(fitted[1]))
+    sx, sy = fw / iw, fh / ih
+    total = 0.0
+    for raw_path in paths:
+        pts = []
+        for raw in raw_path or ():
+            try:
+                pts.append((int(raw[0]), int(raw[1])))
+            except Exception:
+                continue
+        if len(pts) < 2:
+            continue
+        length = sum(hypot((b[0] - a[0]) * sx, (b[1] - a[1]) * sy) for a, b in zip(pts, pts[1:]))
+        moves = max(1, int(ceil(length / step)))
+        total += travel_delay + moves * path_delay + delivery.press_settle + delivery.release_settle + boundary_delay
+    return max(0.0, total)
 
 def _risk(region: dict[str, Any], *, aggressiveness: str, quality: str, brush_px: int) -> tuple[float, float, str]:
     safety = max(0.0, min(1.0, float(region.get("safety_score", 0.0) or 0.0)))
@@ -207,6 +311,8 @@ def _batchable_tool_cost(options: dict[str, Any]) -> float:
 
 def _region_cost_components(region: dict[str, Any], options: dict[str, Any], image_size: tuple[int, int], fitted: tuple[int, int]) -> tuple[float, float, float, float]:
     stroke_cost, fill_cost = _region_cost(region, options, image_size, fitted)
+    seal_cost = _seal_cost_seconds(region.get("fill_seal_paths") or (), options, image_size, fitted)
+    fill_cost += seal_cost
     batchable = max(0.0, min(_batchable_tool_cost(options), fill_cost * .50))
     fill_core = max(.001, fill_cost - batchable)
     return stroke_cost, fill_cost, fill_core, batchable
@@ -278,7 +384,12 @@ def build_region_fill_plan(image, fitted: tuple[int, int], options: dict[str, An
         risk, confidence, safety_reason = _risk(
             region, aggressiveness=aggressiveness, quality=quality, brush_px=brush_px
         )
+        escape_risk, seal_paths, escape_reason = _fill_escape_prediction(
+            region, brush_px=brush_px, aggressiveness=aggressiveness, quality=quality)
+        if seal_paths:
+            region["fill_seal_paths"] = [tuple(path) for path in seal_paths]
         stroke_cost, fill_cost, fill_core, batchable = _region_cost_components(region, options, image.size, fitted)
+        seal_cost = _seal_cost_seconds(seal_paths, options, image.size, fitted)
         decision_fill_cost = _decision_fill_cost(fill_cost, fill_core, options)
         saving = max(0.0, stroke_cost - decision_fill_cost)
         thin_score=_thin_neck_score(region, brush_px)
@@ -286,12 +397,12 @@ def build_region_fill_plan(image, fitted: tuple[int, int], options: dict[str, An
         seconds_per_error=saving/max(.01,visual_error)
         cost_ok = decision_fill_cost <= stroke_cost * (1.0 - min_saving_ratio)
         value_ok = saving >= absolute_saving_floor and seconds_per_error >= value_threshold
-        safety_ok = safety_reason == "safe"
+        safety_ok = safety_reason == "safe" and escape_reason in ("safe", "sealed")
         accepted_here = bool(safety_ok and cost_ok and value_ok)
         reason = "safe and high time-saved/visual-error value"
         if not safety_ok:
             rejected_safety += 1
-            reason = safety_reason
+            reason = safety_reason if safety_reason != "safe" else escape_reason
         elif not cost_ok:
             rejected_cost += 1
             reason = "stroke/run renderer is cheaper"
@@ -328,6 +439,10 @@ def build_region_fill_plan(image, fitted: tuple[int, int], options: dict[str, An
                 "estimated_time_saved_seconds": round(saving, 5),
                 "visual_error_cost": round(visual_error, 6),
                 "seconds_saved_per_visual_error": round(seconds_per_error, 4),
+                "fill_escape_risk": round(escape_risk, 5),
+                "fill_seal_count": len(seal_paths),
+                "fill_seal_cost_seconds": round(seal_cost, 5),
+                "fill_strategy": "OUTLINE_SEAL_FILL" if seal_paths else "OUTLINE_FILL",
                 "outline_simplification": "exact-collinear",
             })
             accepted.append(region)
@@ -364,6 +479,9 @@ def build_region_fill_plan(image, fitted: tuple[int, int], options: dict[str, An
         "average_seconds_saved_per_visual_error": round(sum(float(r.get("seconds_saved_per_visual_error",0) or 0) for r in accepted)/max(1,len(accepted)),3),
         "hybrid_cost_model": __import__('HybridCostModel').build_cost_model(options).as_dict(),
         "fill_color_batches": fill_colors,
+        "fill_sealed_regions": sum(1 for r in accepted if r.get("fill_seal_count")),
+        "fill_seal_paths": sum(int(r.get("fill_seal_count", 0) or 0) for r in accepted),
+        "fill_escape_prediction": "diagonal-corner preseal v1",
         "outline_simplification": "exact-collinear only",
         "region_merging": "disabled here; existing palette/grouping policy remains authoritative",
         "pixel_accurate_protected": False,
@@ -403,16 +521,19 @@ def evaluate_region_candidates(regions, image_size: tuple[int, int], fitted: tup
         if cancelled():raise InterruptedError()
         region=item.as_dict() if hasattr(item,'as_dict') else dict(item)
         risk,confidence,safety_reason=_risk(region,aggressiveness=aggressiveness,quality=quality,brush_px=brush_px)
+        escape_risk,seal_paths,escape_reason=_fill_escape_prediction(region,brush_px=brush_px,aggressiveness=aggressiveness,quality=quality)
+        if seal_paths:region['fill_seal_paths']=[tuple(path) for path in seal_paths]
         stroke_cost,fill_cost,fill_core,batchable=_region_cost_components(region,options,image_size,fitted)
+        seal_cost=_seal_cost_seconds(seal_paths,options,image_size,fitted)
         decision_fill_cost=_decision_fill_cost(fill_cost,fill_core,options)
         saving=max(0.0,stroke_cost-decision_fill_cost);thin_score=_thin_neck_score(region,brush_px)
         visual_error=max(.005,min(1.0,risk*.62+thin_score*.20+(1.0-confidence)*.18))
         seconds_per_error=saving/max(.01,visual_error)
         cost_ok=decision_fill_cost<=stroke_cost*(1.0-min_saving_ratio)
         value_ok=saving>=absolute_saving_floor and seconds_per_error>=value_threshold
-        safety_ok=safety_reason=='safe';accepted_here=bool(safety_ok and cost_ok and value_ok)
+        safety_ok=safety_reason=='safe' and escape_reason in ('safe','sealed');accepted_here=bool(safety_ok and cost_ok and value_ok)
         reason='safe and high time-saved/visual-error value'
-        if not safety_ok:rejected_safety+=1;reason=safety_reason
+        if not safety_ok:rejected_safety+=1;reason=safety_reason if safety_reason!='safe' else escape_reason
         elif not cost_ok:rejected_cost+=1;reason='stroke/run renderer is cheaper'
         elif not value_ok:rejected_cost+=1;reason=f'fill saves too little for visual risk ({seconds_per_error:.2f}s/error)'
         decision=RegionDecision(idx,accepted_here,'OUTLINE_FILL' if accepted_here else 'CONNECTED_SCANLINES',confidence,risk,thin_score,
@@ -424,7 +545,9 @@ def evaluate_region_candidates(regions, image_size: tuple[int, int], fitted: tup
                            'stroke_cost_seconds':round(stroke_cost,5),'fill_cost_seconds':round(fill_cost,5),
                            'fill_core_cost_seconds':round(fill_core,5),'fill_batchable_overhead_seconds':round(batchable,5),
                            'estimated_time_saved_seconds':round(saving,5),'visual_error_cost':round(visual_error,6),
-                           'seconds_saved_per_visual_error':round(seconds_per_error,4),'outline_simplification':'exact-collinear'})
+                           'seconds_saved_per_visual_error':round(seconds_per_error,4),'fill_escape_risk':round(escape_risk,5),
+                           'fill_seal_count':len(seal_paths),'fill_seal_cost_seconds':round(seal_cost,5),
+                           'fill_strategy':'OUTLINE_SEAL_FILL' if seal_paths else 'OUTLINE_FILL','outline_simplification':'exact-collinear'})
             accepted.append(region)
     area=max(1,int(image_size[0])*int(image_size[1]));accepted_pixels=sum(max(0,int(r.get('area_pixels',0) or 0)) for r in accepted)
     saved_strokes=sum(max(0,int(r.get('estimated_saved_strokes',0) or 0)) for r in accepted)
@@ -437,6 +560,8 @@ def evaluate_region_candidates(regions, image_size: tuple[int, int], fitted: tup
         'estimated_time_saved_seconds':round(total_time_saved,3),'fill_value_policy':'seconds_saved_per_visual_error',
         'fill_value_threshold':value_threshold,'fill_absolute_saving_floor_seconds':absolute_saving_floor,
         'fill_color_batches':len({int(r.get('color_index',-1)) for r in accepted if int(r.get('color_index',-1))>=0}),
+        'fill_sealed_regions':sum(1 for r in accepted if r.get('fill_seal_count')),
+        'fill_seal_paths':sum(int(r.get('fill_seal_count',0) or 0) for r in accepted),'fill_escape_prediction':'diagonal-corner preseal v1',
         'outline_simplification':'exact-collinear only','pixel_accurate_protected':False,
         'fallback_render_method':'CONNECTED_SCANLINES','extra_fast_batch_aware_costing':bool(options.get('extra_fast')),
         'decisions':[d.as_dict() for d in decisions[:80]],'decision_count':len(decisions)})

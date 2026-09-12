@@ -1,3 +1,9 @@
+# Image Draw Bot v1.0.145-rc5 — Smart Fill Engine
+
+- Added conservative Fill escape prediction and planner-proven contour sealing.
+- Seal strokes are restricted to pixels inside the connected region and are included in real execution cost.
+- Existing Fill hard blockers and runtime guard verification remain authoritative.
+
 # Image Draw Bot v1.0.145-rc4 — Gartic Five-Brush CanvasGuard
 
 - Verified Gartic controls can use 2 / 4 / 8 / 16 / 28 px with a brush-specific CanvasGuard.

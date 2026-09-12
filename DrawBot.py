@@ -2845,6 +2845,11 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                         for sx,sy in ((x0-2,cy),(x1+2,cy),(cx,y0-2),(cx,y1+2)):
                             if 0<=sx<width and 0<=sy<height:probes.append(point(sx,sy))
                     before=mouse.snapshot_colors(probes) if probes and hasattr(mouse,'snapshot_colors') else None
+                    for _seal_path in region.get('fill_seal_paths',()) or ():
+                        try:_seal_points=[point(int(raw[0]),int(raw[1])) for raw in _seal_path]
+                        except (TypeError,ValueError,IndexError):continue
+                        for _seal_a,_seal_b in zip(_seal_points,_seal_points[1:]):
+                            draw_segment(_seal_a,_seal_b)
                     contour=region.get('contour') or ()
                     if contour:
                         draw_closed_contour(contour)
