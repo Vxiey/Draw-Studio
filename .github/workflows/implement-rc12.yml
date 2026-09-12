@@ -1,0 +1,38 @@
+name: Implement Image Draw Bot rc12
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/implement-rc12-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Apply rc12 ETA Calibration 2.0 patch
+        run: python .github/rc12_patch.py
+      - name: Run rc12 focused regressions
+        run: |
+          python -m unittest -v test_rc12_eta_calibration.py
+          python -m unittest -v test_draw_time_calibration_v10117.py test_draw_time_estimate_v10110.py test_deadline_runtime_optimizer_v10119.py test_auto_brush_total_time_v10144.py
+          python -m py_compile DrawTimeCalibration.py DrawTimeEstimate.py Version.py
+      - name: Commit rc12
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/rc12_patch.py .github/implement-rc12-trigger .github/workflows/implement-rc12.yml
+          git add DrawTimeCalibration.py DrawTimeEstimate.py Version.py installer/ImageDrawBot.iss README.md VERSION-HISTORY.md RELEASE-NOTES-v1.0.145-rc12.md test_*.py
+          git commit -m "Implement rc12 ETA Calibration 2.0"
+          git push origin main
