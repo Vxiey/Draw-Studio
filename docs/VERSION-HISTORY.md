@@ -1,3 +1,10 @@
+# Image Draw Bot v1.0.145-rc24 — Regional Axis + Sketch Dense Hybrid
+
+- Extra Fast can choose exact horizontal or vertical runs per connected region using the existing execution-cost guard.
+- Dense Gartic Sketch regions can use cheaper exact H/V runs while thin structural contours remain on the contour tracer.
+- Raster coverage remains exact with no gap bridging or dropped pixels.
+- Release metadata, installer and regression version assertions are synchronized atomically.
+
 # Image Draw Bot v1.0.145-rc23 — Region Brush ROI Packing
 
 - Multi-brush connected-region packing now allocates temporary masks only for each component bbox.
