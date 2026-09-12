@@ -50,7 +50,6 @@ def _trace_component(runs, cancelled, max_points):
             q = (x + dx, y + dy)
             if q not in nodes:
                 continue
-            # Avoid triangles across an already connected right-angle corner.
             if dx and dy and ((x + dx, y) in nodes or (x, y + dy) in nodes):
                 continue
             neighbors.append(q)
@@ -164,8 +163,6 @@ def trace_contours(image, cancelled=lambda:False, max_points=160, options=None):
                     'gap_bridges':0,'dropped_components':0,'axis_candidates_evaluated':0,
                     'axis_components':0}
 
-    # Diagonal adjacency is classification-only; axis execution still uses the
-    # overlap-only connector rule in ContinuousPaths.
     components = horizontal_components(runs, adjacency=1, cancelled=cancelled)
     contour_output = []
     axis_output = []
@@ -176,19 +173,18 @@ def trace_contours(image, cancelled=lambda:False, max_points=160, options=None):
     horizontal_components_used = 0
     vertical_components_used = 0
     modeled_saved = 0.0
+    dense_shortcuts = 0
     model = None
 
     for component in components:
         if cancelled():
             raise InterruptedError()
         comp_runs = list(component['runs'])
-        contour_paths, raw_count, node_count = _trace_component(comp_runs, cancelled, max_points)
-        contour_count += raw_count
+        node_count = int(component['pixels'])
         ink_pixels += node_count
 
-        # Skip axis analysis for tiny/thin detail. It cannot provide enough
-        # execution savings to justify changing the contour representation.
         vertical_runs = None
+        avg_h = avg_v = 0.0
         dense_candidate = node_count >= 24 and component['width'] >= 2 and component['height'] >= 2
         if dense_candidate:
             vertical_runs = verticalize_horizontal_runs(comp_runs, cancelled=cancelled)
@@ -199,16 +195,38 @@ def trace_contours(image, cancelled=lambda:False, max_points=160, options=None):
             else:
                 dense_candidate = False
 
+        h_paths = v_paths = []
+        if dense_candidate:
+            if model is None:
+                from ExecutionCostModel import build_cost_model
+                model = build_cost_model(dict(options or {}), image.size, image.size)
+            h_paths = _axis_paths(comp_runs, 'horizontal', cancelled, max_points)
+            v_paths = _axis_paths(comp_runs, 'vertical', cancelled, max_points)
+            axis_candidates += int(bool(h_paths)) + int(bool(v_paths))
+
+        very_dense = dense_candidate and node_count >= 64 and min(avg_h, avg_v) >= 3.0
+        if very_dense and (h_paths or v_paths):
+            choices = []
+            if h_paths:
+                choices.append(('horizontal', h_paths, _candidate_cost(h_paths, model)))
+            if v_paths:
+                choices.append(('vertical', v_paths, _candidate_cost(v_paths, model)))
+            kind, best_paths, _best_cost = min(choices, key=lambda item: (item[2], len(item[1])))
+            axis_components += 1
+            dense_shortcuts += 1
+            if kind == 'horizontal':
+                horizontal_components_used += 1
+            else:
+                vertical_components_used += 1
+            axis_output.extend(best_paths)
+            continue
+
+        contour_paths, raw_count, _traced_nodes = _trace_component(comp_runs, cancelled, max_points)
+        contour_count += raw_count
         if not dense_candidate:
             contour_output.extend(contour_paths)
             continue
 
-        if model is None:
-            from ExecutionCostModel import build_cost_model
-            model = build_cost_model(dict(options or {}), image.size, image.size)
-        h_paths = _axis_paths(comp_runs, 'horizontal', cancelled, max_points)
-        v_paths = _axis_paths(comp_runs, 'vertical', cancelled, max_points)
-        axis_candidates += int(bool(h_paths)) + int(bool(v_paths))
         contour_cost = _candidate_cost(contour_paths, model)
         choices = [('contour', contour_paths, contour_cost)]
         if h_paths:
@@ -224,8 +242,6 @@ def trace_contours(image, cancelled=lambda:False, max_points=160, options=None):
                 horizontal_components_used += 1
             else:
                 vertical_components_used += 1
-            # Structural contours remain first; dense raster fallback executes
-            # afterwards so it cannot demote small recognisable details.
             axis_output.extend(best_paths)
         else:
             contour_output.extend(contour_paths)
@@ -246,5 +262,6 @@ def trace_contours(image, cancelled=lambda:False, max_points=160, options=None):
         'horizontal_axis_components': horizontal_components_used,
         'vertical_axis_components': vertical_components_used,
         'modeled_axis_seconds_saved': round(modeled_saved, 6),
+        'dense_axis_shortcuts': dense_shortcuts,
         'axis_rule': 'lossless source-mask runs; 1.5% minimum modeled runtime gain',
     }
