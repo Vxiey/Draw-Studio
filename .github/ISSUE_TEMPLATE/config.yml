@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Image Draw Bot Discussions
+    url: https://github.com/Vxiey/Image-Draw-Bot/discussions
+    about: Ask questions, share drawing results and discuss ideas that are not yet actionable bug reports.
+  - name: Getting started and troubleshooting
+    url: https://github.com/Vxiey/Image-Draw-Bot/blob/main/README-INDEX.md
+    about: Check setup, target calibration and troubleshooting guidance before opening an issue.
