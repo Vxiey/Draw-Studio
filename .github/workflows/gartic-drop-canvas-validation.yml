@@ -1,0 +1,49 @@
+name: Gartic Drop Canvas validation
+
+on:
+  push:
+    branches:
+      - fix/gartic-drop-canvas-detection-f1
+    paths:
+      - .github/gartic-drop-canvas.trigger
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/gartic-drop-canvas-detection-f1
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Apply Gartic drop and canvas patch
+        run: python .github/scripts/implement_gartic_drop_canvas_f1.py
+      - name: Compile touched code
+        run: python -m py_compile CanvasDropPayload.py GarticEngineV2.py DrawBot.py StudioUI.py test_gartic_drop_canvas_rc25.py
+      - name: Run focused Gartic drop/canvas regressions
+        run: python -m unittest -v test_gartic_drop_canvas_rc25.py test_canvas_web_drop_v10121.py test_canvas_drop_to_draw_v1083.py test_gartic_canvas_edge_calibration.py test_browser_auto_calibration_v1070.py test_browser_high_dpi_v10115.py test_smart_canvas_drop_v10111.py test_drop_in_synchronization_v1073.py
+      - name: Run complete Windows regressions
+        run: python -m unittest discover -s . -p "test_*.py"
+      - name: Run Image Draw Bot self-test
+        run: python DrawBot.py --self-test
+      - name: Commit verified implementation
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CanvasDropPayload.py GarticEngineV2.py DrawBot.py StudioUI.py test_gartic_drop_canvas_rc25.py
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "Improve Gartic canvas drop and auto detection"
+            git push origin HEAD:fix/gartic-drop-canvas-detection-f1
+          }
