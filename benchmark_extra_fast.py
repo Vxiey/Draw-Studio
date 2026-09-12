@@ -17,7 +17,7 @@ from PIL import Image, ImageDraw
 from ContinuousPaths import build_execution_paths
 from ExecutionTelemetry import execution_metrics
 from ExtraFast2 import build_fast_paths, path_limits
-from HybridCostModel import build_cost_model
+from ExecutionCostModel import build_cost_model
 from StrokeOptimizer import optimize_execution_groups
 from Version import APP_VERSION
 
@@ -69,7 +69,7 @@ def run():
 
     options = {'speed': 'Balanced'}
     rows, points, _ = path_limits(options)
-    model = build_cost_model(options)
+    model = build_cost_model(options,(320,320),(320,320))
     results = []
 
     for name, groups in cases.items():

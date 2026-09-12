@@ -10,7 +10,7 @@ across gaps.
 The adaptive path policy evaluates a tiny bounded set of continuous-path limits.
 Candidate selection is travel-aware: it simulates the same existing
 ``StrokeOptimizer`` stage used later by ``DrawBot.finish_plan`` and compares
-HybridCostModel execution cost after that ordering. The selected proposal is
+ExecutionCostModel execution cost after that ordering. The selected proposal is
 then checked once more as a complete plan after the normal target-path cap and
 StrokeOptimizer. The unoptimized plan is returned so ``finish_plan`` remains the
 single owner of real downstream ordering.
@@ -240,7 +240,7 @@ def _downstream_plan_cost(groups, options, model, cancelled) -> tuple[float, dic
 def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lambda: False):
     """Choose a bounded lossless path plan using downstream-aware cost."""
     from ContinuousPaths import build_execution_paths, execution_groups_with_portrait_semantics
-    from HybridCostModel import build_cost_model
+    from ExecutionCostModel import build_cost_model
 
     rows, points, policy = path_limits(options)
     limits = _candidate_limits(rows, points, policy)
@@ -252,7 +252,9 @@ def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lam
         max_points_per_path=points,
         cancelled=cancelled,
     )
-    model = build_cost_model(options)
+    # The DrawBot call supplies exact source->target scale overrides. Direct
+    # tests/benchmarks intentionally default to source-space 1:1.
+    model = build_cost_model(options,(1,1),(1,1))
     travel_aware = _travel_selection_enabled(options)
 
     proposed = []
@@ -452,8 +454,10 @@ def build_fast_paths(groups, options, *, portrait_edge_count=None, cancelled=lam
         selected_path_limit_histogram={
             f'{r}x{p}': count for (r, p), count in sorted(selected_limits.items())
         },
+        execution_cost_model='ExecutionCostModel stateful v3',
+        execution_scale=[round(float(getattr(model,'scale_x',1.0)),6),round(float(getattr(model,'scale_y',1.0)),6)],
         cost_scope=(
-            'post-target-cap + current StrokeOptimizer; intra-color travel + color selection; '
+            'post-target-cap + current StrokeOptimizer through ExecutionCostModel; intra-color travel + color selection; '
             'constant fill/tool/verification terms cancel between path candidates'
             if travel_aware else
             'legacy intrinsic path cost; travel-aware selection disabled'

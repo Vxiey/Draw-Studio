@@ -81,7 +81,7 @@ class ExtraFastReviewTests(unittest.TestCase):
             def path_seconds(self,path,**kwargs):return len(path)**2
             def paths_seconds(self,paths,**kwargs):return sum(self.path_seconds(path) for path in paths)
         groups=[[(x,0,x,20) for x in range(20)]]
-        with patch('HybridCostModel.build_cost_model',return_value=Model()):
+        with patch('ExecutionCostModel.build_cost_model',return_value=Model()):
             paths,meta=build_fast_paths(groups,{})
         self.assertEqual(len(paths[0]),20)
         self.assertEqual(meta['vertical_colors_improved'],0)

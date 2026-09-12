@@ -1,3 +1,9 @@
+# Image Draw Bot v1.0.145-rc19 — Extra Fast Unified Execution Cost
+
+- Extra Fast 2.0 now uses the same stateful execution-time model as Adaptive Hybrid, Region Fill and visible ETA.
+- Source-to-canvas scale participates in path-limit and reorientation decisions.
+- Complete downstream baseline fallback remains authoritative.
+
 # Image Draw Bot v1.0.145-rc18 — Unified Region Fill Cost
 
 - Fill-vs-stroke decisions now use the same stateful ExecutionCostModel as Adaptive Hybrid and Estimated Draw Time.

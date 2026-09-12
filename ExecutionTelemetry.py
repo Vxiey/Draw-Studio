@@ -1,6 +1,6 @@
 """Pure execution-plan telemetry for Image Draw Bot.
 
-This module measures geometry and HybridCostModel estimates without changing
+This module measures geometry and shared execution-cost estimates without changing
 path order, planner choices, target input, or saved user settings.
 """
 from __future__ import annotations
