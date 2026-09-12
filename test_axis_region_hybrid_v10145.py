@@ -1,6 +1,7 @@
 import unittest
+import random
 from PIL import Image,ImageDraw
-from AxisRegionPlanner import horizontal_components,regional_axis_variants
+from AxisRegionPlanner import horizontal_components,regional_axis_variants,mask_horizontal_runs,verticalize_horizontal_runs
 from GarticSketchPaths import trace_contours
 
 
@@ -23,9 +24,7 @@ def raster_paths(paths,size=(128,128)):
 class AxisRegionHybridTests(unittest.TestCase):
     def test_connected_regions_get_lossless_mixed_axis_candidate(self):
         runs=[]
-        # Wide region: horizontal is already cheap.
         runs.extend((5,y,50,y) for y in range(5,10))
-        # Tall region: vertical is much cheaper.
         runs.extend((80,y,84,y) for y in range(20,90))
         self.assertEqual(len(horizontal_components(runs)),2)
         variants=regional_axis_variants(runs)
@@ -35,6 +34,22 @@ class AxisRegionHybridTests(unittest.TestCase):
         self.assertEqual(raster_runs(best[0]),raster_runs(runs))
         self.assertTrue(any(x0==x1 for x0,y0,x1,y1 in best[0]))
         self.assertTrue(any(y0==y1 for x0,y0,x1,y1 in best[0]))
+
+    def test_random_axis_raster_identity(self):
+        rng=random.Random(14524)
+        for _ in range(40):
+            image=Image.new('1',(48,48))
+            draw=ImageDraw.Draw(image)
+            for _shape in range(12):
+                x0=rng.randrange(0,44);y0=rng.randrange(0,44)
+                x1=min(47,x0+rng.randrange(1,8));y1=min(47,y0+rng.randrange(1,8))
+                draw.rectangle((x0,y0,x1,y1),fill=1)
+            runs=mask_horizontal_runs(image)
+            vertical=verticalize_horizontal_runs(runs)
+            self.assertIsNotNone(vertical)
+            self.assertEqual(raster_runs(vertical,(48,48)),image.tobytes())
+            for candidate,_meta in regional_axis_variants(runs):
+                self.assertEqual(raster_runs(candidate,(48,48)),image.tobytes())
 
     def test_diagonal_component_classification_never_bridges_pixels(self):
         runs=[(i,i,i,i) for i in range(20)]
