@@ -189,6 +189,15 @@ def regional_axis_variants(strokes: Sequence[Sequence[int]], *, cancelled=lambda
             continue
         gain = original_n - vertical_n
         aspect = comp["height"] / max(1.0, float(comp["width"]))
+        # Preserve the established horizontal baseline for near-square/wide
+        # regions unless vertical rasterization removes a meaningful number of
+        # source-run boundaries. This avoids axis churn for a 60x59 rectangle
+        # merely because vertical happens to contain one fewer raw run, while
+        # still allowing tall regions and genuinely cheaper irregular regions.
+        clearly_vertical = aspect >= 1.25
+        meaningful_reduction = vertical_n * 5 <= original_n * 4
+        if not clearly_vertical and not meaningful_reduction:
+            continue
         eligible.append((gain, aspect, comp, vertical))
     if not eligible:
         return []
