@@ -1,0 +1,74 @@
+name: Bug report
+description: Report a reproducible Image Draw Bot problem
+title: "[Bug] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Image Draw Bot. Please include enough information to reproduce the problem.
+  - type: input
+    id: version
+    attributes:
+      label: Image Draw Bot version
+      placeholder: 1.0.145-rc23
+    validations:
+      required: true
+  - type: dropdown
+    id: profile
+    attributes:
+      label: Target profile
+      options:
+        - Microsoft Paint
+        - Gartic Phone
+        - Skribbl.io
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and display scaling
+      placeholder: Windows 11 25H2, 125%
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Drawing mode
+      options:
+        - Extra Fast
+        - Balanced
+        - Pixel Accurate
+        - Auto Hybrid
+        - Other / not applicable
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the actual result and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Select profile...
+        2. Load image...
+        3. Calibrate...
+        4. Start preview/draw...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Attach session, crash, target-probe or other relevant logs. Remove secrets and personal paths if present.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Add screenshots, target-app version, browser zoom, GPU/CUDA information or anything else that may help.
