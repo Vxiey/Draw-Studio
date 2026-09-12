@@ -315,7 +315,8 @@ def _candidate_paths_for_brush(target:np.ndarray,residual:np.ndarray,brush_px:in
             paths=_offset_paths(local_paths,origin)
             seq=_entry_sequence(comp.color_index,paths,phase=phase,comp=comp,brush_px=brush,
                                 method=f"region-brush-pack-{brush}px")
-            cost=max(.000001,float(model.sequence_cost(seq).total_seconds))
+            cost=max(.000001,float(model.sequence_cost(
+                seq, initial_color=int(comp.color_index), initial_brush=brush).total_seconds))
             candidate=(gained,-cost,-len(paths),orientation,offset,paths,trial,cost)
             if best is None or candidate[:3]>best[:3]:best=candidate
     if best is None:return [],np.zeros_like(target,dtype=np.bool_),0.0
@@ -376,7 +377,8 @@ def _brush_pack_candidate(comp,component_map,options,model,cancelled=lambda:Fals
         return None,f"smallest verified brush cannot exactly repair {missing} residual pixel(s)"
     if len(set(used))<2:
         return None,"multi-brush packing produced no useful brush transition"
-    cost=model.sequence_cost(sequence).total_seconds
+    cost=model.sequence_cost(
+        sequence, initial_color=int(comp.color_index), initial_brush=default).total_seconds
     roi_pixels=int(target.size);canvas_pixels=int(component_map.size)
     reduction=max(0.0,1.0-(roi_pixels/max(1,canvas_pixels)))
     return {"sequence":sequence,"paths":flat_paths,"cost":cost,"brush_px":max(used),
@@ -399,7 +401,8 @@ def _choose_component(comp,component_map,total_drawable,model,options,cancelled=
         if not exact:continue
         seq=_entry_sequence(comp.color_index,paths,phase=phase,comp=comp,
                             brush_px=base_brush,method=f"connected-{orientation}-runs")
-        cost=model.sequence_cost(seq).total_seconds
+        cost=model.sequence_cost(
+            seq, initial_color=int(comp.color_index), initial_brush=default).total_seconds
         candidates.append((cost,len(paths),orientation,seq,paths,base_brush))
     packed,pack_reason=_brush_pack_candidate(comp,component_map,options,model,cancelled)
     if packed:
@@ -407,12 +410,16 @@ def _choose_component(comp,component_map,total_drawable,model,options,cancelled=
     if comp.area==1:
         x0,y0,_,_=comp.bbox;paths=[((x0,y0),)]
         seq=_entry_sequence(comp.color_index,paths,phase="detail",comp=comp,brush_px=base_brush,method="isolated-point")
-        candidates.append((model.sequence_cost(seq).total_seconds,1,"isolated-point",seq,paths,base_brush))
+        candidates.append((model.sequence_cost(
+            seq, initial_color=int(comp.color_index), initial_brush=default).total_seconds,
+            1,"isolated-point",seq,paths,base_brush))
     if not candidates:
         paths=_individual_paths(comp.horizontal_runs)
         seq=_entry_sequence(comp.color_index,paths,phase=phase,comp=comp,
                             brush_px=base_brush,method="safe-individual-runs")
-        candidates=[(model.sequence_cost(seq).total_seconds,len(paths),"safe-individual-runs",seq,paths,base_brush)]
+        candidates=[(model.sequence_cost(
+            seq, initial_color=int(comp.color_index), initial_brush=default).total_seconds,
+            len(paths),"safe-individual-runs",seq,paths,base_brush)]
     best=min(candidates,key=lambda row:(row[0],row[1],row[2]))
     cost=max(.000001,float(best[0]))
     choice=RegionChoice(comp.component_id,comp.color_index,best[2],phase,comp.area,
@@ -431,20 +438,68 @@ def _choose_component(comp,component_map,total_drawable,model,options,cancelled=
     return choice,list(best[3]),diagnostics
 
 
-def _budget_seconds(options,model,choices,fill_regions):
+def _budget_seconds(options,model,choices,fill_regions,image_size,fitted):
     active=bool(options.get("time_budget_active"))
     mode=str(options.get("time_budget_mode") or "")
     if mode in ("Unlimited","Off"):active=False
     try:limit=float(options.get("max_seconds") or options.get("manual_max_seconds") or 180)
     except Exception:limit=180.0
     colors=len({c.color_index for c in choices})
-    fixed=model.fixed_overhead(active_colors=colors,fill_actions=len(fill_regions))
+    fixed=model.fixed_overhead(active_colors=0,fill_actions=0)
+    fill_meta={"fill_regions":0,"fill_color_batches":0,"total_seconds":0.0}
+    if fill_regions:
+        try:
+            from RegionFillEngine import estimate_fill_execution_seconds
+            fill_meta=dict(estimate_fill_execution_seconds(fill_regions,image_size,fitted,options) or fill_meta)
+        except Exception:
+            fill_meta={"fill_regions":len(fill_regions),"fill_color_batches":0,
+                       "total_seconds":len(fill_regions)*model.switch_cost("fill"),"fallback":True}
+    fill_seconds=max(0.0,float(fill_meta.get("total_seconds",0.0) or 0.0))
+    fill_colors={int(r.get("color_index",-1)) for r in (fill_regions or ())
+                 if isinstance(r,dict) and int(r.get("color_index",-1))>=0}
+    fill_palette_seconds=(0.0 if options.get("paint_current_color") else
+                          len(fill_colors)*model.switch_cost("palette_change"))
+    verification_seconds=(colors*model.switch_cost("verification")
+                          if options.get("adaptive_color_verification") else 0.0)
+    clear_seconds=max(0.0,float(options.get("canvas_clear_estimate_seconds",0.0) or 0.0))
+    outside_seconds=(fixed.total_seconds+fill_seconds+fill_palette_seconds+
+                     verification_seconds+clear_seconds)
     reserve=max(1.5,limit*.045) if active else 0.0
-    return active,max(0.0,limit-fixed.total_seconds-reserve),fixed,reserve,limit
+    usable=max(0.0,limit-outside_seconds-reserve) if active else float('inf')
+    return active,usable,{
+        "base_fixed":fixed.as_dict(),"fill":fill_meta,
+        "fill_palette_seconds":round(fill_palette_seconds,6),
+        "adaptive_verification_seconds":round(verification_seconds,6),
+        "canvas_clear_seconds":round(clear_seconds,6),
+        "outside_sequence_seconds":round(outside_seconds,6),
+    },reserve,limit
 
 
-def _schedule(choices, sequences_by_component, size, model,options,fill_regions):
-    active,usable,fixed,reserve,limit=_budget_seconds(options,model,choices,fill_regions)
+def _schedule(choices, sequences_by_component, size, model,options,fill_regions,*,fitted=None):
+    budget_fitted=tuple(fitted) if fitted is not None else tuple(size)
+    active,usable,fixed_meta,reserve,limit=_budget_seconds(
+        options,model,choices,fill_regions,size,budget_fitted)
+    weights={"foundation":1.25,"structure":1.18,"detail":1.04,"correction":.78}
+    phase_order={p:i for i,p in enumerate(PHASES)}
+    by_id={c.component_id:c for c in choices}
+
+    def order_rows(ids):
+        rows=[by_id[i] for i in ids if i in by_id]
+        rows.sort(key=lambda c:(phase_order[c.phase],int(c.color_index),
+                                -c.gain_per_ms,-c.visual_gain,c.component_id))
+        return rows
+
+    def build_sequence(ids):
+        sequence=[];serial=0
+        for c in order_rows(ids):
+            for raw in sequences_by_component[c.component_id]:
+                e=dict(raw);e["serial"]=serial;serial+=1;sequence.append(e)
+        return sequence
+
+    try:initial_brush=max(1,int(options.get("brush_px") or 1))
+    except Exception:initial_brush=1
+
+    seed_ids=set()
     if not active:
         selected={c.component_id for c in choices}
     else:
@@ -460,34 +515,56 @@ def _schedule(choices, sequences_by_component, size, model,options,fill_regions)
                 cell_best[(cx,cy)]=c
         for c in sorted(cell_best.values(),key=lambda c:(-c.visual_gain,c.component_id)):
             if used+c.estimated_seconds<=usable:
-                selected.add(c.component_id);used+=c.estimated_seconds
-        weights={"foundation":1.25,"structure":1.18,"detail":1.04,"correction":.78}
+                selected.add(c.component_id);seed_ids.add(c.component_id);used+=c.estimated_seconds
         rest=[c for c in choices if c.component_id not in selected]
         rest.sort(key=lambda c:(-(c.gain_per_ms*weights[c.phase]),-c.visual_gain,c.component_id))
         for c in rest:
             if used+c.estimated_seconds<=usable:
                 selected.add(c.component_id);used+=c.estimated_seconds
-    phase_order={p:i for i,p in enumerate(PHASES)}
-    selected_choices=[c for c in choices if c.component_id in selected]
-    selected_choices.sort(key=lambda c:(phase_order[c.phase],-c.gain_per_ms,-c.visual_gain,c.component_id))
-    sequence=[];serial=0
-    for c in selected_choices:
-        for raw in sequences_by_component[c.component_id]:
-            e=dict(raw);e["serial"]=serial;serial+=1;sequence.append(e)
+
+    sequence=build_sequence(selected)
+    seq_cost=model.sequence_cost(sequence,initial_brush=initial_brush)
+    trimmed=[];refilled=[]
+
+    if active:
+        protected_ids={c.component_id for c in choices
+                       if c.component_id in selected and c.protected_pixels and c.importance>=.50}
+        while selected and seq_cost.total_seconds>usable+1e-9:
+            rows=order_rows(selected)
+            removable=[c for c in rows if c.component_id not in seed_ids and c.component_id not in protected_ids]
+            if not removable: removable=[c for c in rows if c.component_id not in seed_ids]
+            if not removable: removable=rows
+            victim=min(removable,key=lambda c:(c.gain_per_ms*weights[c.phase],c.visual_gain,-c.estimated_seconds,c.component_id))
+            selected.remove(victim.component_id);trimmed.append(victim.component_id)
+            sequence=build_sequence(selected)
+            seq_cost=model.sequence_cost(sequence,initial_brush=initial_brush)
+
+        omitted=[c for c in choices if c.component_id not in selected]
+        omitted.sort(key=lambda c:(-(c.gain_per_ms*weights[c.phase]),-c.visual_gain,c.component_id))
+        for c in omitted[:64]:
+            trial=set(selected);trial.add(c.component_id)
+            trial_sequence=build_sequence(trial)
+            trial_cost=model.sequence_cost(trial_sequence,initial_brush=initial_brush)
+            if trial_cost.total_seconds<=usable+1e-9:
+                selected=trial;sequence=trial_sequence;seq_cost=trial_cost;refilled.append(c.component_id)
+
     groups=[[] for _ in range(max([c.color_index for c in choices],default=-1)+1)]
     for e in sequence:
         while len(groups)<=int(e["color_index"]):groups.append([])
         groups[int(e["color_index"])].append(tuple(e["path"]))
-    seq_cost=model.sequence_cost(sequence)
+    utilization=(seq_cost.total_seconds/usable*100.0) if active and usable>0 else 0.0
     return groups,sequence,{
         "deadline_active":active,"deadline_seconds":round(limit,4),"usable_path_seconds":round(usable,4),
-        "fixed_overhead":fixed.as_dict(),"safety_reserve_seconds":round(reserve,4),
+        "fixed_overhead":fixed_meta,"safety_reserve_seconds":round(reserve,4),
         "selected_components":len(selected),"total_components":len(choices),
         "dropped_components":len(choices)-len(selected),
         "selected_path_cost_seconds":round(seq_cost.total_seconds,6),
         "selected_operation_cost":seq_cost.as_dict(),
+        "exact_budget_guard":True,"budget_trimmed_components":len(trimmed),
+        "budget_refilled_components":len(refilled),"budget_utilization_percent":round(utilization,3),
+        "palette_switches":int(seq_cost.palette_switches),"brush_switches":int(seq_cost.brush_switches),
+        "phase_color_batching":True,
     }
-
 
 def simulate_quantized_plan(pixel_map:PixelMap,sequence,fill_regions=()):
     h,w=pixel_map.height,pixel_map.width
@@ -561,7 +638,8 @@ def build_adaptive_execution(pixel_map:PixelMap,palette_rgb,options:dict[str,Any
         choices.append(choice);seqs[comp.component_id]=seq;candidate_meta.append(meta)
     candidate_seconds=time.perf_counter()-t1
     t2=time.perf_counter()
-    groups,sequence,schedule_meta=_schedule(choices,seqs,(pixel_map.width,pixel_map.height),model,options,fill_regions)
+    groups,sequence,schedule_meta=_schedule(
+        choices,seqs,(pixel_map.width,pixel_map.height),model,options,fill_regions,fitted=fitted)
     reference=reference_pixel_map if reference_pixel_map is not None else pixel_map
     metrics,canvas=simulate_quantized_plan(reference,sequence,fill_regions)
     coverage_preview,error_preview=diagnostic_previews(reference,canvas)
