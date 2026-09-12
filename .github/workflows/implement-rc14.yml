@@ -31,7 +31,7 @@ jobs:
           test_smart_recovery_resume_v1079.py
           test_rc8_dynamic_replanner.py
           test_rc9_progressive_drawing.py
-          test_deadline_scheduler_v10143.py
+          test_step8_deadline_scheduler_panic_v10132.py
           test_step9_profile_calibration_isolation_v10133.py
       - name: Commit rc14
         shell: bash
