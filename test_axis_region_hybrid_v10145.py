@@ -49,7 +49,7 @@ class AxisRegionHybridTests(unittest.TestCase):
         expected=Image.new('1',image.size)
         src=ImageDraw.Draw(expected);src.rectangle((10,15,100,95),fill=1)
         self.assertEqual(raster_paths(paths,image.size),expected.tobytes())
-        self.assertGreater(meta['modeled_axis_seconds_saved'],0)
+        self.assertGreater(meta['dense_axis_shortcuts'],0)
 
     def test_thin_sketch_keeps_contour_tracer(self):
         image=Image.new('L',(128,128),255)
