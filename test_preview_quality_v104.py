@@ -11,7 +11,8 @@ class PreviewQualityTests(unittest.TestCase):
         self.assertNotIn('_full_detail_preview',original)
         self.assertEqual(result['_preview_area'],(1200,800))
         self.assertFalse(result['_preview_plan'])
-        self.assertEqual(result['cpu_workers_resolved'],1)
+        self.assertGreaterEqual(result['cpu_workers_resolved'],1)
+        self.assertLessEqual(result['cpu_workers_resolved'],4)
 
     def test_memory_and_invalid_area_guard(self):
         for area in ((2000,2000),(0,100),(-1,20)):

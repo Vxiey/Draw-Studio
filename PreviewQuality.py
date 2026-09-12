@@ -2,6 +2,8 @@
 from PIL import Image
 import math
 
+from ResourceAllocation import resolve_cpu_workers
+
 
 def full_preview_options(options,area):
     w,h=map(int,area)
@@ -13,9 +15,19 @@ def full_preview_options(options,area):
     pixel_limit=min(8_000_000,max(250_000,ram*1024*1024//512))
     if w<1 or h<1 or w*h>pixel_limit:
         raise ValueError(f'Full preview exceeds its memory budget ({pixel_limit:,} target pixels). Use the normal preview or a smaller drawing area.')
+    requested_workers=str(options.get('cpu_workers') or 'Auto')
+    try:
+        supplied=options.get('cpu_workers_resolved')
+        resolved=int(supplied) if supplied not in (None,'') else resolve_cpu_workers(requested_workers)
+    except (TypeError,ValueError):
+        resolved=resolve_cpu_workers('Auto')
+    preview_workers=max(1,min(4,int(resolved)))
+    preview_mode=str(options.get('preview_mode') or options.get('_preview_mode') or 'Manual')
     out=dict(options,_full_detail_preview=True,_preview_plan=False,
-             _preview_mode='Manual',_target_area=(w,h),_preview_area=(w,h),
-             cpu_workers='1',cpu_workers_resolved=1,cpu_engine='Threads',gpu_mode='CPU')
+             _preview_mode=preview_mode,_target_area=(w,h),_preview_area=(w,h),
+             cpu_workers=str(preview_workers),cpu_workers_resolved=preview_workers,cpu_engine='Threads',gpu_mode='CPU',
+             _preview_resource_policy='full-detail-planner-parity',
+             _preview_resource_worker_cap=preview_workers)
     screen_area=options.get("_target_screen_area") or options.get("target_area") or options.get("_target_area")
     if isinstance(screen_area, (list,tuple)) and len(screen_area)==4:
         out["_target_screen_area"]=tuple(screen_area)

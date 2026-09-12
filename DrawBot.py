@@ -153,10 +153,10 @@ def validate_preview_mode(value):
 def preview_safe_options(options, mode='Manual', *, fallback=False):
     """Return a cancellable, bounded planner configuration for UI previews.
 
-    Preview is intentionally an approximation of the final plan.  Heavy final
-    settings (Extreme resolution, worker batches, CUDA initialization and color
-    layering) are kept for Start Drawing, where the planning watchdog can manage
-    them.  The preview path stays small enough that cancellation is checked often.
+    Automatic/lightweight preview is intentionally a bounded approximation of the
+    final plan. Explicit Manual / Auto full Build preview requests are routed to
+    ``full_preview_options`` instead, preserving final planner geometry while the
+    resource policy stays UI-safe and cancellable.
     """
     out=dict(options)
     requested_resolution=str(out.get('planning_resolution','Auto'))
@@ -7325,7 +7325,11 @@ class DrawBotApp:
         if self.original is None:
             self.status.set('Load an image before building a preview.')
             return None
-        return self.update_plan(user_initiated=True, reason='build-preview-button')
+        try:mode=validate_preview_mode(str(self.preview_mode.get()))
+        except Exception:mode='Manual'
+        # Manual / Auto full button presses are explicit and may spend more time
+        # to mirror final Draw geometry. Auto light remains the opt-in fast approximation.
+        return self.update_plan(user_initiated=True, reason='build-preview-button',full_detail=(mode!='Auto light'))
 
     def request_full_preview(self):
         return self.update_plan(user_initiated=True,reason='full-detail-preview',full_detail=True)

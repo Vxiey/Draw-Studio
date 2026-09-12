@@ -631,7 +631,7 @@ def build_ui(a, quality, speed):
     setting_row(step5, 'Preview mode', a.preview_mode, ['Manual', 'Auto light', 'Auto full'], 'Manual prevents lag while configuring and after profile switches.', width=126)
     setting_row(step5, 'Preview detail', a.preview_detail_level, ['Fast', 'Balanced', 'Detailed', 'Micro detail'], 'Detailed is recommended. Micro detail can take longer on large images.', width=126)
     build_preview_btn=btn(step5, '👁️  Build preview', a.request_preview, height=36); build_preview_btn.pack(fill='x', pady=(2, 6))
-    tooltip(build_preview_btn,'Builds the preview manually. Preview uses the same CanvasGuard/Edge Behavior safety policy as execution.')
+    tooltip(build_preview_btn,'Manual / Auto full uses the final planner for preview parity. Auto light keeps the bounded fast preview. CanvasGuard/Edge Behavior matches execution.')
     a.target_lock_secondary = btn(step5, '🔒  Lock setup', a.lock_setup, False, height=38, state='disabled')
     a.target_lock_secondary.pack(fill='x', pady=(0, 6))
     a.safety_preflight_secondary = btn(step5, '🛡️  Safety preflight', a.run_safety_preflight, False, height=38, state='disabled')

@@ -1,3 +1,9 @@
+# Image Draw Bot v1.0.145-rc16 — Preview Planner Parity
+
+- Manual / Auto full Build preview now uses the same full-detail planner path as final Draw.
+- Auto light remains the explicit fast approximation.
+- Full-detail preview can use up to four bounded CPU workers instead of always one.
+
 # Image Draw Bot v1.0.145-rc15 — CPU/GPU Performance Engine
 
 - CUDA Pixel Accurate simulation now retries smaller VRAM work units before CPU fallback.
