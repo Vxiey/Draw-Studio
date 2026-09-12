@@ -127,9 +127,13 @@ class BrowserBrushPlan:
     method: str
 
     def as_dict(self):
+        controls_verified=(bool(self.target_position) and float(self.confidence)>=.58 and
+                           len(self.control_positions)==len(self.nominal_sizes) and len(self.nominal_sizes)>1)
+        verified_sizes=list(map(int,self.nominal_sizes)) if controls_verified else []
         return {
             'profile_key':self.profile_key,'control_positions':[list(p) for p in self.control_positions],
-            'nominal_sizes':list(self.nominal_sizes),'target_index':int(self.target_index),
+            'nominal_sizes':list(self.nominal_sizes),'verified_sizes':verified_sizes,
+            'dynamic_guard':bool(verified_sizes),'target_index':int(self.target_index),
             'selected_index':self.selected_index,'confidence':float(self.confidence),
             'target_position':list(self.target_position) if self.target_position else None,
             'requested_px':int(self.requested_px),'effective_px':int(self.effective_px),

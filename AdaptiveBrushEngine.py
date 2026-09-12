@@ -39,6 +39,12 @@ def verified_brush_sizes(profile_key: str, browser_brush_plan: dict | None,
     verified=bool(plan.get('target_position')) and confidence>=.58 and len(positions)==len(sizes) and len(sizes)>1
     if not verified:
         return (default,),False
+    explicit_verified=_unique_sizes(plan.get('verified_sizes'),default) if plan.get('verified_sizes') else ()
+    if explicit_verified:
+        verified_set=set(explicit_verified)
+        usable=tuple(v for v in sizes if v in verified_set)
+        if not usable:usable=(default,)
+        return usable,len(usable)>1
     try:safe_guard=max(default,int(round(float(plan.get('safe_guard_px',default) or default))))
     except (TypeError,ValueError):safe_guard=default
     usable=tuple(v for v in sizes if v<=safe_guard)
@@ -215,7 +221,7 @@ def assign_adaptive_brushes(execution_sequence: Sequence[dict], *, profile_key: 
         if previous is not None and brush!=previous:switches+=1
         previous=brush
     return {'execution_sequence':result,'metadata':{
-        'engine':'Adaptive Brush Draw Motor v2','policy_version':4,
+        'engine':'Adaptive Brush Draw Motor v2','policy_version':5,
         'automatic_image_brush_selection':bool(dynamic),'dynamic_brush_enabled':bool(dynamic),
         'profile_key':str(profile_key or ''),'available_brush_sizes':tuple(map(int,sizes)),
         'used_brush_sizes':tuple(sorted(counts)),'requested_brush_px':default,'default_brush_px':base,
@@ -223,7 +229,7 @@ def assign_adaptive_brushes(execution_sequence: Sequence[dict], *, profile_key: 
         'image_brush_demand':demand,'brush_path_counts':{str(k):int(v) for k,v in sorted(counts.items())},
         'brush_reason_counts':dict(reasons),'planned_brush_switches':int(switches),
         'transient_upshifts_collapsed':int(collapsed),'geometry_changed':False,
-        'quality_priority':'all verified sizes for safe broad regions; protected/detail paths use the smallest verified brush'}}
+        'quality_priority':'all independently verified sizes for safe broad regions; protected/detail paths use the smallest verified brush','brush_aware_canvasguard':bool((browser_brush_plan or {}).get('verified_sizes'))}}
 
 
 def brush_for_entry(entry: dict, default_brush_px: int) -> int:

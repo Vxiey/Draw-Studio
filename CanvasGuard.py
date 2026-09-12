@@ -849,6 +849,11 @@ class FinalMouseGuard:
         self.mouse = mouse
         self.canvas_guard = canvas_guard
 
+    def set_canvas_guard(self, canvas_guard: CanvasGuard) -> None:
+        if not isinstance(canvas_guard, CanvasGuard):
+            raise TypeError('FinalMouseGuard requires a CanvasGuard instance.')
+        self.canvas_guard = canvas_guard
+
     def move(self, x: int | float, y: int | float, context: str = 'drawing move') -> Point:
         safe = self.canvas_guard.protect_point((x, y), context)
         self.mouse.move(*safe)

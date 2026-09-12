@@ -2448,8 +2448,12 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
     canvas_polygon_space=plan['options'].get('canvas_polygon_space') or plan['options'].get('canvas_coordinate_space')
     canvas_anchor_space=plan['options'].get('canvas_anchor_space') or canvas_polygon_space
     canvas_anchors=normalize_canvas_anchors(plan['options'].get('canvas_anchors') or (), area=area, coordinate_space=canvas_anchor_space)
+    _browser_guard_plan=plan['options'].get('browser_brush_plan') or {}
+    _dynamic_brush_guard=bool(_browser_guard_plan.get('verified_sizes'))
+    _initial_guard_brush=(plan['options'].get('brush_px',3) if _dynamic_brush_guard else
+                          plan['options'].get('canvas_guard_brush_px',plan['options'].get('brush_px',3)))
     canvas_guard=CanvasGuard.from_area_or_polygon(area, polygon=canvas_polygon, coordinate_space=canvas_polygon_space,
-                                                  brush_px=plan['options'].get('canvas_guard_brush_px',plan['options'].get('brush_px',3)), edge_margin_px=2, anchors=canvas_anchors,
+                                                  brush_px=_initial_guard_brush, edge_margin_px=2, anchors=canvas_anchors,
                                                   confidence=float((plan['options'].get('canvas_anchor_meta') or {}).get('confidence',1.0)) if isinstance(plan['options'].get('canvas_anchor_meta'),dict) else 1.0)
     draw_mouse=FinalMouseGuard(mouse, canvas_guard)
     plan['options']['canvas_guard_meta']=canvas_guard.model.as_dict()
@@ -3343,8 +3347,8 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
 
         current_execution_brush=max(1,int(plan['options'].get('brush_px',1) or 1))
         def switch_execution_brush(wanted_px):
-            """Switch only between read-only verified browser brush controls."""
-            nonlocal current_execution_brush
+            """Switch only between verified controls and atomically install its brush-specific CanvasGuard."""
+            nonlocal current_execution_brush, canvas_guard
             wanted=max(1,int(wanted_px or current_execution_brush))
             if wanted==current_execution_brush:return False
             brush_plan=plan['options'].get('browser_brush_plan') or {}
@@ -3358,15 +3362,28 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                 return False
             index=min(range(len(sizes)),key=lambda i:abs(sizes[i]-wanted))
             effective=int(sizes[index]);position=positions[index]
-            # AdaptiveBrushEngine never assigns larger-than-preflight widths, but
-            # keep the runtime guard explicit in case a stale/custom plan reaches execution.
-            if effective>max(1,int(plan['options'].get('canvas_guard_brush_px',current_execution_brush) or current_execution_brush)):
+            verified_sizes=[]
+            try:verified_sizes=[max(1,int(v)) for v in (brush_plan.get('verified_sizes') or ())]
+            except (TypeError,ValueError):verified_sizes=[]
+            # New rc4 plans prove every usable control independently, so safety is
+            # enforced by a fresh CanvasGuard for the *actual* brush. Legacy plans
+            # keep the old global-guard ceiling.
+            if verified_sizes:
+                if effective not in verified_sizes:return False
+            elif effective>max(1,int(plan['options'].get('canvas_guard_brush_px',current_execution_brush) or current_execution_brush)):
                 return False
             mouse.move(*position);wait(max(.025,stroke_delivery.ui_control_delay*.45))
             if not dry_run:
                 mouse.click();wait(max(.10,stroke_delivery.ui_control_delay))
             current_execution_brush=effective
-            plan['options'].setdefault('adaptive_brush_runtime_meta',{'switches':0,'sizes':[]})
+            if verified_sizes:
+                canvas_guard=CanvasGuard.from_area_or_polygon(
+                    area, polygon=canvas_polygon, coordinate_space=canvas_polygon_space,
+                    brush_px=effective, edge_margin_px=2, anchors=canvas_anchors,
+                    confidence=float((plan['options'].get('canvas_anchor_meta') or {}).get('confidence',1.0)) if isinstance(plan['options'].get('canvas_anchor_meta'),dict) else 1.0)
+                draw_mouse.set_canvas_guard(canvas_guard)
+                plan['options']['canvas_guard_meta']=canvas_guard.model.as_dict()
+            plan['options'].setdefault('adaptive_brush_runtime_meta',{'switches':0,'sizes':[],'brush_aware_canvasguard':bool(verified_sizes)})
             runtime_meta=plan['options']['adaptive_brush_runtime_meta']
             runtime_meta['switches']=int(runtime_meta.get('switches',0))+1
             if effective not in runtime_meta.setdefault('sizes',[]):runtime_meta['sizes'].append(effective)

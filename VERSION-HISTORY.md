@@ -1,3 +1,9 @@
+# Image Draw Bot v1.0.145-rc4 — Gartic Five-Brush CanvasGuard
+
+- Verified Gartic controls can use 2 / 4 / 8 / 16 / 28 px with a brush-specific CanvasGuard.
+- A broad brush no longer forces its safety inset onto every path in the render.
+- Legacy/unverified controls retain the conservative global guard fallback.
+
 # Image Draw Bot v1.0.145-rc3 — Fill, Brush and ETA Reliability
 
 - Bound stateful Fill safety simulation to local ROIs while preserving global coverage state, reducing repeated full-canvas allocations.
