@@ -20,7 +20,7 @@ from SpeedOptimizer import normalize_speed, phase_delay
 from StrokeDelivery import resolve_stroke_delivery
 
 Point = tuple[int, int]
-EXECUTION_MODEL_VERSION = 3
+EXECUTION_MODEL_VERSION = 4
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -110,11 +110,29 @@ class ExecutionCostModel:
                        "deterministic profile model")
 
     def _learned_average(self, kind: str, fallback: float) -> float:
-        item = self.runtime.get(str(kind))
-        if not isinstance(item, dict):
-            return fallback
-        avg = _safe_float(item.get("average_seconds"), 0.0)
-        return avg if avg > 0.0 else fallback
+        aliases = {
+            "dot": ("dot", "point"),
+            "short_stroke": ("short_stroke", "stroke", "path", "drag"),
+            "long_stroke": ("long_stroke", "stroke", "path", "drag"),
+            "outline": ("outline", "stroke", "path", "drag"),
+            "palette_change": ("palette_change", "color_change"),
+            "tool_change": ("tool_change",),
+            "brush_change": ("brush_change", "tool_change"),
+            "fill": ("fill", "fill_action", "bucket_fill"),
+            "verification": ("verification", "visual_verify"),
+        }
+        for name in aliases.get(str(kind),(str(kind),)):
+            item = self.runtime.get(name)
+            if not isinstance(item, dict):
+                continue
+            avg = _safe_float(item.get("average_seconds"), 0.0)
+            if avg <= 0.0:
+                count=max(0,int(item.get("count") or item.get("observations") or 0))
+                total=max(0.0,_safe_float(item.get("total_seconds"),0.0))
+                avg=total/count if count else 0.0
+            if avg > 0.0:
+                return avg
+        return fallback
 
 
 
@@ -193,21 +211,35 @@ class ExecutionCostModel:
         path = tuple((int(p[0]), int(p[1])) for p in (path or ()))
         if not path:
             return CostBreakdown(0.0, source=self.source)
-        brush = max(1, int(brush_px or self.options.get("brush_px") or 1))
+        _brush = max(1, int(brush_px or self.options.get("brush_px") or 1))
         length = _path_length(path, self.sx, self.sy)
         start = path[0]
         travel_px = 0.0
         if cursor is not None:
             travel_px = math.hypot((start[0]-cursor[0])*self.sx,
                                    (start[1]-cursor[1])*self.sy)
-        travel = self.travel_wait + min(.10, travel_px * .000045)
+        # Keep the historic bounded distance curve, but never hide it inside a
+        # learned operation average. A learned average is the zero-distance /
+        # nominal-travel baseline; actual cursor distance is added afterwards.
+        travel_base = self.travel_wait
+        travel_distance = min(.10, travel_px * .000045)
         press_release = float(self.delivery.press_settle + self.delivery.release_settle)
+
         if len(path) <= 1:
-            base = travel + press_release + max(.012, self.boundary_wait)
-            total = self._learned_average("dot", base) * self.multiplier
-            return CostBreakdown(total, travel_seconds=travel*self.multiplier,
-                                 press_release_seconds=press_release*self.multiplier,
-                                 target_processing_seconds=max(.001, self.boundary_wait)*self.multiplier,
+            body = press_release + max(.012, self.boundary_wait)
+            learned = self._learned_average("dot", 0.0)
+            if learned > 0.0:
+                learned_body=max(.001,learned-travel_base)
+                total=travel_base+travel_distance+learned_body
+                body_scale=learned_body/max(.000001,body)
+                travel_seconds=travel_base+travel_distance
+            else:
+                total=(travel_base+travel_distance+body)*self.multiplier
+                body_scale=self.multiplier
+                travel_seconds=(travel_base+travel_distance)*self.multiplier
+            return CostBreakdown(total, travel_seconds=travel_seconds,
+                                 press_release_seconds=press_release*body_scale,
+                                 target_processing_seconds=max(.012,self.boundary_wait)*body_scale,
                                  operations=1, moves=1, source=self.source)
 
         moves = 0
@@ -217,15 +249,22 @@ class ExecutionCostModel:
                 moves += max(1, int(math.ceil(seg / max(.5, float(self.delivery.step_px)))))
         drag = moves * self.path_wait
         target = self.boundary_wait + .0015
-        base = travel + press_release + drag + target
+        body = press_release + drag + target
         kind = _operation_type(path, length)
-        learned = self._learned_average(kind, base)
-        total = learned if learned != base else base * self.multiplier
-        scale = total / max(.000001, base)
+        learned = self._learned_average(kind, 0.0)
+        if learned > 0.0:
+            learned_body=max(.001,learned-travel_base)
+            total=travel_base+travel_distance+learned_body
+            body_scale=learned_body/max(.000001,body)
+            travel_seconds=travel_base+travel_distance
+        else:
+            total=(travel_base+travel_distance+body)*self.multiplier
+            body_scale=self.multiplier
+            travel_seconds=(travel_base+travel_distance)*self.multiplier
         return CostBreakdown(
-            total, drag_seconds=drag*scale, travel_seconds=travel*scale,
-            press_release_seconds=press_release*scale,
-            target_processing_seconds=target*scale, operations=1, moves=moves,
+            total, drag_seconds=drag*body_scale, travel_seconds=travel_seconds,
+            press_release_seconds=press_release*body_scale,
+            target_processing_seconds=target*body_scale, operations=1, moves=moves,
             source=self.source)
 
     def switch_cost(self, kind: str) -> float:

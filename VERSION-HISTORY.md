@@ -1,3 +1,9 @@
+# Image Draw Bot v1.0.145-rc22 — Learned Cursor Travel Integrity
+
+- Learned stroke timing no longer erases real cursor distance.
+- Generic stroke runtime measurements feed short/long stroke planning through safe aliases.
+- ExecutionCostModel v4 preserves stateful routing after calibration.
+
 # Image Draw Bot v1.0.145-rc21 — Complete Cost Model Unification
 
 - Live planner cost decisions now converge on one stateful ExecutionCostModel.

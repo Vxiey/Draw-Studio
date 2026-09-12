@@ -28,7 +28,7 @@ class BrowserVisualPreflightTests(unittest.TestCase):
         return detected,entries,meta
 
     def test_release_version(self):
-        self.assertEqual(APP_VERSION,'1.0.145-rc21')
+        self.assertEqual(APP_VERSION,'1.0.145-rc22')
         self.assertEqual(FILE_VERSION,'1.0.145')
 
     def test_verified_canvas_and_palette_pass(self):
