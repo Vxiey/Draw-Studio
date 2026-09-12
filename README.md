@@ -1,6 +1,6 @@
 # Image Draw Bot — automatic image drawing for Windows
 
-![Image Draw Bot: automatic image drawing for Microsoft Paint, Gartic Phone and Skribbl.io](assets/image-draw-bot-social-preview.png)
+![Image Draw Bot application screenshot](assets/image-draw-bot-app-screenshot.webp)
 
 [![Image Draw Bot CI](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml)
 ![Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-informational)
@@ -56,6 +56,10 @@ Inside the app, open **Get started** for the six-section guide or click **?** be
 - Optional CUDA/OpenCL acceleration with CPU fallback.
 - Per-target profiles for Paint, Gartic Phone, Skribbl.io and other calibrated canvases.
 - Manual preview, estimated draw time, stop/pause hotkeys and safety guards.
+
+### Image Draw Bot banner
+
+![Image Draw Bot promotional banner](assets/image-draw-bot-social-preview.png)
 
 ### Picture custom palette for Microsoft Paint
 
