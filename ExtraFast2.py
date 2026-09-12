@@ -91,7 +91,7 @@ def build_meta(groups: Sequence[Sequence], execution_groups: Sequence[Sequence] 
         'path_policy': policy,
         'connector_rule': 'adjacent same-colour overlap only',
         'detail_protection': 'color/importance pipeline unchanged; no cross-gap shortcuts',
-        'adaptive_path_policy': 'travel-aware bounded path lengths; final downstream guard; baseline retained on regression',
+        'adaptive_path_policy': 'travel-aware bounded path lengths + per-region H/V alternatives; final downstream guard; baseline retained on regression',
     }
 
 
@@ -125,41 +125,34 @@ def _axis_candidate(group, edge_n, rows, points, cancelled):
 
 
 def _vertical_alternative(group, edge_n, cancelled):
-    """Re-rasterize tall horizontal bodies losslessly, under a fixed work cap.
+    """Build one exact mixed H/V source candidate from connected regions.
 
-    Keep outlines untouched. Sparse rows and holes remain holes. This is small
-    CPU mask work; GPU transfers would compete with the palette analysis here.
+    The old implementation only re-rasterized an entire colour group when its
+    global bounding box was at least twice as tall as wide. That misses common
+    images where one colour contains both a wide region and a separate tall
+    region. Split the horizontal body into connected regions instead, keep wide
+    regions horizontal, and re-rasterize only promising regions vertically.
+
+    This helper still does not choose the execution winner: ``build_fast_paths``
+    runs the candidate through the same ExecutionCostModel and full downstream
+    regression guard as every other Extra Fast proposal.
     """
-    import numpy as np
-    body = group[edge_n:]
-    if len(body) < 32 or any(y0 != y1 for x0,y0,x1,y1 in body):
+    from AxisRegionPlanner import regional_axis_variants
+
+    body = list(group[edge_n:])
+    variants = regional_axis_variants(body, cancelled=cancelled)
+    if not variants:
         return None
-    xmin = min(min(s[0],s[2]) for s in body)
-    xmax = max(max(s[0],s[2]) for s in body)
-    ymin = min(s[1] for s in body)
-    ymax = max(s[1] for s in body)
-    width, height = xmax-xmin+1, ymax-ymin+1
-    if height < 2*width or height > 4096 or width*height > 1_048_576:
-        return None
-    mask = np.zeros((height+2, width), dtype=np.int8)
-    for x0,y,x1,_ in body:
-        if cancelled():
-            raise InterruptedError()
-        left,right = sorted((x0,x1))
-        mask[y-ymin+1,left-xmin:right-xmin+1] = 1
-    transitions = np.diff(mask, axis=0)
-    # Bound output size before constructing Python tuples.
-    if np.count_nonzero(transitions == 1) > len(body):
-        return None
-    result = list(group[:edge_n])
-    for x in range(width):
-        if cancelled():
-            raise InterruptedError()
-        starts = np.flatnonzero(transitions[:,x] == 1)
-        ends = np.flatnonzero(transitions[:,x] == -1)-1
-        result.extend((int(x+xmin),int(a+ymin),int(x+xmin),int(b+ymin))
-                      for a,b in zip(starts,ends))
-    return result
+    # Prefer the exact mixed representation with the largest raw boundary
+    # reduction. The real execution-cost comparison below remains authoritative.
+    candidate, _meta = min(
+        variants,
+        key=lambda item: (
+            int(item[1].get('raw_run_delta', 0) or 0),
+            -int(item[1].get('reoriented_regions', 0) or 0),
+        ),
+    )
+    return list(group[:edge_n]) + list(candidate)
 
 
 def _intrinsic_cost(paths, model) -> float:
