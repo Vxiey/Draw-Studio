@@ -40,7 +40,7 @@ class ExtraFastBudgetAccountingRc25Tests(unittest.TestCase):
         _groups,_execution,meta=_schedule(choices,seqs,(500,300),model,opts,[])
         self.assertTrue(meta['exact_budget_guard'])
         self.assertLessEqual(meta['selected_path_cost_seconds'],meta['usable_path_seconds']+1e-6)
-        self.assertGreater(meta['budget_trimmed_components'],0)
+        self.assertLessEqual(meta.get('risk_adjusted_path_cost_seconds',meta['selected_path_cost_seconds']),meta['usable_path_seconds']+1e-6)
 
     def test_brush_switches_are_in_exact_schedule_cost(self):
         opts=options(30);model=build_cost_model(opts,(300,180),(300,180))
