@@ -2,9 +2,13 @@
 
 ## See Image Draw Bot draw in real time
 
+<video src="https://raw.githubusercontent.com/Vxiey/Image-Draw-Bot/main/assets/0912.mp4" controls muted loop playsinline width="100%"></video>
+
+If the inline player is not available in your GitHub client, click the animated preview below to open the MP4 demo:
+
 [![Image Draw Bot drawing automatically in Microsoft Paint, Gartic Phone and Skribbl.io](assets/0912.gif)](assets/0912.mp4)
 
-
+[Open the full MP4 demo](assets/0912.mp4)
 
 [![Image Draw Bot CI](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml)
 ![Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-informational)
