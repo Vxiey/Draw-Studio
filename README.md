@@ -1,131 +1,113 @@
-# Image Draw Bot — automatic image drawing for Windows
+# Image Draw Bot — AutoDraw & Drawing Bot for Windows
 
-![Image Draw Bot application screenshot](assets/image-draw-bot-app-screenshot.png)
+![Image Draw Bot AutoDraw application for Microsoft Paint, Gartic Phone and Skribbl.io](assets/image-draw-bot-app-screenshot.png)
 
 [![Image Draw Bot CI](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml)
 ![Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-informational)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-informational)
 ![Local processing](https://img.shields.io/badge/processing-local-informational)
+[![GitHub stars](https://img.shields.io/github/stars/Vxiey/Image-Draw-Bot?style=social)](https://github.com/Vxiey/Image-Draw-Bot/stargazers)
 
-**Image Draw Bot converts pictures into mouse strokes, contours, fills and exact RGB color selections for Microsoft Paint, Gartic Phone, Skribbl.io and other drawing canvases.**
+**Image Draw Bot is a Windows AutoDraw and drawing-bot app that converts images into real mouse strokes, fills, contours and pixel-accurate drawing plans for Microsoft Paint, Gartic Phone, Skribbl.io and similar canvases.**
 
-Image Draw Bot is a source-available Windows desktop app for automatic image drawing. It uses local image processing, deterministic render planning and safe mouse automation to recreate images in target drawing apps. It does not generate AI images, upload artwork or require cloud processing.
+It uses local image processing, deterministic render planning and safe mouse automation instead of generating a replacement image. Load a picture, calibrate the target canvas, preview the plan and draw it using the target application's real tools.
 
-## Why use Image Draw Bot?
+> If Image Draw Bot is useful to you, **star the repository** so you can find it again and help other people discover the project. Bug reports, real drawing results and target-compatibility feedback are also valuable.
 
-| Use case | What Image Draw Bot does |
-| --- | --- |
-| **Microsoft Paint automation** | Detects the Paint canvas, prepares Pencil/Fill, calibrates RGB fields and draws with exact colors where possible. |
-| **Image-to-strokes conversion** | Converts source images into optimized mouse paths, connected runs, outlines, fill regions and correction passes. |
-| **Fast drawing rounds** | Uses Extra Fast, Quick Sketch and Auto Hybrid planning to keep recognizable shapes under tight time budgets. |
-| **Pixel-focused rendering** | Uses Pixel Accurate planning, coverage maps, error checks and protected-detail logic for higher fidelity. |
-| **Drawing game canvases** | Supports calibrated browser-canvas workflows for Gartic Phone, Skribbl.io and similar drawing apps. |
-| **Local privacy** | Processes images locally with no telemetry; network use is limited to explicit features such as updates or URL loading. |
+## Download Image Draw Bot for Windows
 
-## Download for Windows
-
-Download **Image Draw Bot v1.0.145-rc23** for Windows 10/11 x64.
-The installer and portable ZIP include Python and use the Image Draw Bot name.
+Download **Image Draw Bot v1.0.145-rc23** for Windows 10/11 x64. The installer and portable ZIP include Python.
 
 | Download | How to use it |
 | --- | --- |
-| [Windows installer — recommended](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.145-rc23/ImageDrawBot-1.0.145-rc23-Windows-x64-Setup.exe) | Run Setup, then open Image Draw Bot. Python is included. |
-| [Portable Windows ZIP](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.145-rc23/ImageDrawBot-1.0.145-rc23-Windows-x64.zip) | Extract the entire ZIP and run ImageDrawBot/ImageDrawBot.exe. Keep its supporting files together. |
-| [SHA-256 checksums](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.145-rc23/ImageDrawBot-1.0.145-rc23-SHA256.txt) | Verify the downloaded files. |
+| [Windows installer — recommended](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.145-rc23/ImageDrawBot-1.0.145-rc23-Windows-x64-Setup.exe) | Run Setup, then open Image Draw Bot. |
+| [Portable Windows ZIP](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.145-rc23/ImageDrawBot-1.0.145-rc23-Windows-x64.zip) | Extract the complete ZIP and run `ImageDrawBot/ImageDrawBot.exe`. |
+| [SHA-256 checksums](https://github.com/Vxiey/Image-Draw-Bot/releases/download/v1.0.145-rc23/ImageDrawBot-1.0.145-rc23-SHA256.txt) | Verify the published files. |
 
-[All releases](https://github.com/Vxiey/Image-Draw-Bot/releases) ·
-[Release notes](RELEASE-NOTES-v1.0.145-rc23.md) ·
-[Setup and troubleshooting](README-INDEX.md) · [Frequently asked questions](docs/FAQ.md)
+[All releases](https://github.com/Vxiey/Image-Draw-Bot/releases) · [Release notes](RELEASE-NOTES-v1.0.145-rc23.md) · [Getting started](docs/GETTING-STARTED.md) · [FAQ](docs/FAQ.md) · [Wiki](https://github.com/Vxiey/Image-Draw-Bot/wiki)
+
+## AutoDraw for Microsoft Paint, Gartic Phone and Skribbl.io
+
+| Use case | What Image Draw Bot does |
+| --- | --- |
+| **Microsoft Paint AutoDraw** | Detects the Paint canvas, prepares Pencil/Fill, calibrates RGB controls and draws with exact colors where possible. |
+| **Gartic Phone drawing bot** | Uses calibrated browser-canvas controls, dynamic brush sizes and optimized drawing paths. |
+| **Skribbl.io drawing bot** | Supports isolated profile settings and calibrated browser-canvas workflows. |
+| **Image-to-mouse drawing** | Converts pictures into connected runs, contours, fill regions, correction strokes and ordered mouse paths. |
+| **Fast AutoDraw** | Extra Fast prioritizes Fill, large safe regions, region strokes, contours and detail correction. |
+| **Pixel Accurate drawing** | Uses full-resolution pixel planning, coverage tracking, error analysis and correction passes for higher fidelity. |
+| **Local Windows automation** | Processes images locally and controls real target-app tools instead of uploading artwork to a cloud renderer. |
+
+## AutoDraw and drawing-bot features
+
+- **Extra Fast** rendering for time-limited drawing rounds.
+- **Pixel Accurate** rendering for high-fidelity image recreation.
+- Connected color regions, safe Fill decisions, contours and horizontal/vertical runs.
+- Dynamic brush sizes instead of forcing the smallest brush for every region.
+- Adaptive detail protection for eyes, faces, text-like shapes, thin outlines and small objects.
+- Exact/custom RGB color workflows for Microsoft Paint.
+- Preview planning based on the same or nearly the same planner used for real drawing.
+- Estimated drawing time based on modeled execution cost, including mouse travel and tool/color/brush changes.
+- Automatic Paint preparation and calibration with manual fallback.
+- Separate profiles for Paint, Gartic Phone, Skribbl.io and other targets.
+- Optional CUDA/OpenCL acceleration with CPU fallback.
+- Cancel-safe preview, planning, calibration and drawing jobs.
+
+### Picture custom palette for Microsoft Paint
+
+After loading an image and calibrating Paint, use **Custom color palette for picture** to analyze the current picture and prepare important exact RGB colors through **Edit colors**. Exact RGB control calibration is stored independently from canvas detection.
+
+Requires **Windows 10/11, 64-bit**. Run Image Draw Bot and the target application at the same privilege level, normally without administrator rights.
+
+**Published Windows builds are unsigned.** Windows may display “Unknown publisher” or SmartScreen warnings, and Smart App Control can block execution. Code signing has not been activated.
+
+## Microsoft Paint AutoDraw quick start
+
+1. Open Image Draw Bot and choose **Microsoft Paint**.
+2. Load, paste or drop an image.
+3. Keep one Paint window with a blank, fully visible canvas.
+4. Press **Prepare Paint & draw**.
+
+Before drawing, Image Draw Bot prepares the drawing tool, detects the canvas and palette, and calibrates Paint's RGB controls. Use **Prepare Paint automatically** if you want to prepare the target without starting a draw.
+
+Automatic preparation currently targets supported Swedish/English modern Paint layouts and stops instead of guessing when the canvas or controls cannot be verified. [Paint setup details](docs/PAINT-AUTOMATIC-PREPARATION.md)
+
+## Gartic Phone and Skribbl.io drawing-bot quick start
+
+1. Open the target and choose its matching Image Draw Bot profile.
+2. Load an image and run automatic setup or manual calibration.
+3. Select only the drawable canvas and keep toolbars outside the area.
+4. Choose a drawing mode and time budget.
+5. Start the draw and keep browser zoom/window geometry unchanged.
+
+**Gartic Phone:** the supported workflow requires Google Chrome with **Artist Tools for Gartic Phone** installed and enabled.
+
+## Drawing modes: Extra Fast, Balanced and Pixel Accurate
+
+| Mode or feature | Purpose |
+| --- | --- |
+| **Extra Fast** | Prioritizes safe Fill, large regions, region strokes, contours and detail correction for lower real execution time. |
+| **Balanced** | General-purpose balance between speed and detail. |
+| **Pixel Accurate** | Prioritizes source coverage, small details and correction passes for higher fidelity. |
+| **Auto Hybrid** | Selects specialized deterministic renderers for different image structures. |
+| **Adaptive Exact colors** | Uses calibrated custom RGB controls when the normal palette is not close enough. |
+| **Manual previews** | Shows the planned result without rebuilding a heavy preview after every small setting change. |
+
+Extra Fast's synthetic comparison suite preserves source-raster coverage for tested cases; real target-app speed also depends on UI delays, Fill operations, color changes, brush changes and mouse travel. [Benchmark and limitations](docs/EXTRA-FAST-REVIEW.md)
+
+## Why this project is different from simple AutoDraw scripts
+
+Many drawing scripts replay pixels or use one brush size everywhere. Image Draw Bot instead plans around the actual target application: connected regions, safe fills, brush sizes, contours, color changes, UI delays, cursor travel and correction passes all contribute to the final plan. The goal is recognizable image quality at the lowest practical **real drawing time**, not just the lowest stroke count.
 
 ## Guides and help
 
 - [First drawing](docs/GETTING-STARTED.md)
+- [Setup and troubleshooting](README-INDEX.md)
+- [Frequently asked questions](docs/FAQ.md)
 - [Wiki: installation, target setup and troubleshooting](https://github.com/Vxiey/Image-Draw-Bot/wiki)
 - [Setting explanations and glossary](https://github.com/Vxiey/Image-Draw-Bot/wiki/Settings-and-Tooltips)
 
-Inside the app, open **Get started** for the six-section guide or click **?** beside a setting. **Setup wizard** checks the selected profile requirements.
-
-## Core features
-
-- Automatic drawing bot for Windows 10/11 x64.
-- Microsoft Paint canvas detection, Pencil/Fill setup and RGB color calibration.
-- Image-to-mouse-path rendering with contours, connected regions, fills and scanline fallback.
-- Extra Fast, Balanced, Pixel Accurate and Auto Hybrid drawing modes.
-- Adaptive detail preservation for small shapes, eyes, outlines, text-like forms and high-contrast edges.
-- Palette matching, exact custom RGB colors, color batching and preview diagnostics.
-- Optional CUDA/OpenCL acceleration with CPU fallback.
-- Per-target profiles for Paint, Gartic Phone, Skribbl.io and other calibrated canvases.
-- Manual preview, estimated draw time, stop/pause hotkeys and safety guards.
-
-### Image Draw Bot banner
-
-![Image Draw Bot promotional banner](assets/image-draw-bot-social-preview.png)
-
-### Picture custom palette for Microsoft Paint
-
-After loading an image and calibrating Paint, use **Custom color palette for picture** to analyze the current picture, prepare its important exact RGB colors through **Edit colors**, and cache that image-specific palette. The action is Paint-only, bounded and cancel-safe. Exact RGB control calibration is saved independently from canvas detection, so a clipped Paint canvas can still use manual area selection without losing custom-color support.
-
-Requires **Windows 10/11, 64-bit**. Run Image Draw Bot and the target app at the same
-privilege level, normally without administrator rights.
-
-**Published Windows downloads are unsigned.** Windows may display “Unknown publisher” or
-SmartScreen warnings, and Smart App Control can block execution. Code signing
-has not been activated. Passing build tests does not mean Windows app-control
-approval.
-
-## Quick start: Microsoft Paint
-
-1. Open Image Draw Bot and choose **Microsoft Paint**.
-2. Load, paste or drop an image.
-3. Keep one Paint window with a blank, fully visible canvas. If no Paint window
-   is visible, automatic preparation attempts to open it.
-4. Press **Prepare Paint & draw**.
-
-Before drawing, the app selects Pencil and 1 px, detects the canvas and palette,
-and opens **Edit colors / Redigera färger** to calibrate the RGB fields and OK
-button. It dismisses the dialog after calibration, then uses the fresh controls
-for custom colors during drawing.
-
-**No mandatory small test, preview or separate unlock is required for Paint.**
-Use **Prepare Paint automatically** to prepare without drawing. Manual
-calibration and diagnostic controls remain available.
-
-Automatic preparation currently matches Swedish/English modern Paint controls,
-requires RGB mode in the color dialog, and uses the recognized light ribbon
-layout. Covered controls, multiple windows, a nonblank/clipped canvas or an
-unsupported layout stop preparation rather than guessing. It does not clear,
-resize or replace your document. Live end-to-end automation still needs testing
-on the user's Paint version. [Paint setup details](docs/PAINT-AUTOMATIC-PREPARATION.md)
-
-## Quick start: drawing games and other apps
-
-1. Open the target and choose the matching Image Draw Bot profile.
-2. Load an image and use that profile's automatic setup or manual calibration.
-3. Select only the drawable canvas; keep toolbars and menus outside the area.
-4. Choose a drawing mode and time budget.
-5. Press **Unlock full drawing**, then **Start Drawing** within 12 seconds.
-
-Previews and small tests are optional diagnostics. Keep the target window,
-scaling and browser zoom unchanged after calibration.
-
-**Gartic Phone:** the supported workflow requires Google Chrome with
-**Artist Tools for Gartic Phone** installed and enabled.
-
-## Drawing modes and features
-
-| Mode or feature | Purpose |
-| --- | --- |
-| Extra Fast | Uses safe outline/fill substitutions and connected scanlines to reduce separate drags. |
-| Balanced | General-purpose speed and detail settings. |
-| Pixel Accurate | Prioritizes small details and source coverage; can take longer. |
-| Auto Hybrid | Chooses among specialized deterministic renderers for different image structures. |
-| Adaptive Exact colors | Uses calibrated custom RGB controls when the normal palette is not a close enough match. |
-| Manual previews | Inspect the planned result without rebuilding a preview after every setting change. |
-| Separate profiles | Keep per-target settings and calibration isolated; export/import profiles when needed. |
-
-Extra Fast's six synthetic comparison cases preserved source-raster coverage.
-For example, a vertical block went from 280 paths to 3. Actual drawing speed in the target application has not been measured by this benchmark.
-[Benchmark and limitations](docs/EXTRA-FAST-REVIEW.md)
+Inside the app, open **Get started** for the built-in guide or click **?** beside a setting.
 
 ## Controls
 
@@ -135,33 +117,18 @@ For example, a vertical block went from 280 paths to 3. Actual drawing speed in 
 
 ## Updates
 
-Installed Windows builds can press **Check updates / install** while the app is idle. A newer verified release is installed over the same Image Draw Bot installation and the app relaunches automatically after Setup completes.
-It finds a newer eligible GitHub Release, downloads its Windows installer,
-verifies the published SHA-256 digest and size, and opens the installer.
-Settings are saved and Image Draw Bot closes after the installer starts.
+Installed Windows builds can use **Check updates / install** while the app is idle. Eligible published releases are downloaded as complete installers, verified against the published SHA-256 digest and installed over the existing Image Draw Bot installation.
 
-Installed builds keep their installation folder. Portable/source builds use
-the normal installer destination. Updates use complete installers; they do not
-apply individual source-code patches. There are no background update checks.
-
-Use the published installer above for a packaged build. RC builds
-accept newer RC/stable releases; stable builds do not automatically switch to
-prereleases. [Update details](docs/IN-APP-UPDATES.md)
+RC builds accept newer RC/stable releases; stable builds do not automatically switch to prereleases. [Update details](docs/IN-APP-UPDATES.md)
 
 ## Troubleshooting
 
-- **Automatic Paint setup fails:** expose the whole blank canvas, close menus,
-  use RGB mode in Edit colors and check the supported layout described above.
-- **Wrong position or colors:** stop, verify the selected profile and recalibrate
-  after window, DPI or zoom changes.
+- **Automatic Paint setup fails:** expose the whole blank canvas, close menus, use RGB mode in Edit colors and verify the supported layout.
+- **Wrong position or colors:** stop, verify the selected profile and recalibrate after window, DPI or zoom changes.
 - **Too slow:** try Extra Fast, crop unnecessary backgrounds or reduce detail.
-  A lower path count does not remove target input and fill delays.
-- **No update appears:** only published Releases count, not arbitrary commits or
-  Actions artifacts. The current version must be older than the release.
-- **Download verification fails:** retry Check updates. A failed download does
-  not replace the installed app.
-- **Windows blocks the app:** published builds are unsigned; Smart App Control compatibility
-  is not established. The project does not require disabling Windows protection.
+- **No update appears:** only published GitHub Releases count, not arbitrary commits or Actions artifacts.
+- **Download verification fails:** retry the update; a failed download does not replace the installed app.
+- **Windows blocks the app:** published builds are unsigned; the project does not require disabling Windows protection.
 
 ## Run from source
 
@@ -171,17 +138,24 @@ Install Python 3.10+ on Windows, extract the complete source and run:
 Start.bat
 ```
 
-The source launcher creates a private Python environment and installs required
-packages; first setup needs internet. Packaged downloads above include Python.
-CPU operation is supported. GPU acceleration depends on compatible hardware and
-drivers. Optional source-environment installers are `Install-GPU-NVIDIA.bat`
-and `Install-GPU-Universal.bat`; normal startup does not automatically install
-optional GPU packages.
+The source launcher creates a private Python environment and installs required packages. Packaged Windows downloads include Python. CPU operation is supported; optional GPU acceleration depends on compatible hardware and drivers.
+
+## Contributing and community
+
+Contributions, reproducible bug reports and real target-app test results are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
+If you want to help the project grow:
+
+- **Star** the repository if you want to follow or revisit it.
+- Share a real drawing result or app screenshot with a link back to the repo.
+- Report target compatibility problems with logs and reproduction steps.
+- Suggest Paint, Gartic Phone or Skribbl.io workflow improvements through Issues or Discussions.
+
+A ready-to-use organic launch/share kit is available in [docs/PROMOTION.md](docs/PROMOTION.md).
 
 ## Development and release validation
 
-Built with Python, CustomTkinter/Tkinter, Pillow and NumPy; Windows packages use
-PyInstaller and Inno Setup.
+Built with Python, CustomTkinter/Tkinter, Pillow and NumPy; Windows packages use PyInstaller and Inno Setup.
 
 ```powershell
 python ReleasePackage.py --check
@@ -191,22 +165,14 @@ python ReleaseCandidateHardening.py --source-gate --soak-cycles 5000
 python build_release.py --installer
 ```
 
-You can also use `Build-Release.bat` for the local Windows build.
+Windows releases must pass tests, packaging and a silent install/self-test/uninstall round trip before publication. Real drawing speed, GPU behavior and compatibility with every target layout still require live testing.
 
-Windows releases must pass tests, packaging and a silent install/self-test/
-uninstall round trip before publication. Real drawing speed, GPU behavior and compatibility with
-every target layout require separate live testing.
-
-[Publishing](docs/PUBLISHING.md) · [Package layout](docs/RELEASE-STRUCTURE.md) ·
-[Version history](VERSION-HISTORY.md) · [GitHub SEO checklist](docs/GITHUB-SEO-CHECKLIST.md)
+[Publishing](docs/PUBLISHING.md) · [Package layout](docs/RELEASE-STRUCTURE.md) · [Version history](VERSION-HISTORY.md) · [GitHub SEO checklist](docs/GITHUB-SEO-CHECKLIST.md)
 
 ## Privacy
 
-Image analysis and rendering are local. No telemetry is included. Explicit
-features such as checking updates, loading an image URL, source dependency
-installation or optional network preview can use the network. The updater uses
-public releases from **Vxiey/Image-Draw-Bot**.
+Image analysis and rendering are local. No telemetry is included. Explicit features such as checking updates, loading an image URL, source dependency installation or optional network preview can use the network. The updater uses public releases from **Vxiey/Image-Draw-Bot**.
 
-## Search terms
+### Image Draw Bot banner
 
-Image Draw Bot is relevant to searches for automatic image drawing, image drawing bot, image to mouse strokes, Microsoft Paint automation, Paint drawing bot, contour fill renderer, pixel accurate drawing, drawing game canvas automation, local image processing, Python Windows automation, CustomTkinter desktop app, GPU image processing and safe mouse automation.
+![Image Draw Bot promotional banner for Windows automatic image drawing](assets/image-draw-bot-social-preview.png)
