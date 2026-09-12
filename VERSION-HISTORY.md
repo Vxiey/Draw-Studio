@@ -1,3 +1,11 @@
+# Image Draw Bot v1.0.145-rc6 — Region Brush Packing
+
+- Added exact multi-brush region packing for verified browser brush ladders such as Gartic 2 / 4 / 8 / 16 / 28 px.
+- Large safe interiors are packed largest-first, then smaller verified brushes repair remaining pixels.
+- Every emitted brush footprint is simulated against the exact connected component; unsafe or incomplete candidates fall back to connected runs.
+- Fixed even-sized brush erosion so planner safety matches the real 2/4/8/16/28 px execution footprint.
+- Removed the old 1 px brush requirement and stopped isolated hybrid paths from requesting a brush control that the target does not expose.
+
 # Image Draw Bot v1.0.145-rc5 — Smart Fill Engine
 
 - Added conservative Fill escape prediction and planner-proven contour sealing.
