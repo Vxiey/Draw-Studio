@@ -214,6 +214,10 @@ def diagnostics_summary() -> dict:
         "render_resume": {
             "completed_count": int((state.get('render_resume') or {}).get('completed_count',0)),
             "total_colors": int((state.get('render_resume') or {}).get('total_colors',0)),
+            "sequence_level": bool((state.get('render_resume') or {}).get('sequence_level',False)),
+            "sequence_completed_count": int((state.get('render_resume') or {}).get('sequence_completed_count',0)),
+            "sequence_total": int((state.get('render_resume') or {}).get('sequence_total',0)),
+            "sequence_coverage_percent": float((state.get('render_resume') or {}).get('sequence_coverage_percent',0.0)),
         },
         "restores_armed_state": False,
     }

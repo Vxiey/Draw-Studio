@@ -42,11 +42,13 @@ def classify_interruption(error: BaseException, profile_key: str) -> RecoveryDec
     hard_tokens=(
         'canvasguard','canvas safety','outside the selected canvas','target window moved',
         'target window geometry changed','drawing area','dpi changed','client area changed',
-        'target window no longer exists','target window is not visible','canvas moved',
-        'canvas changed','target changed','select the drawing area again','title bar/window border',
+        'canvas moved','canvas changed','target changed','select the drawing area again','title bar/window border',
     )
     if any(token in text for token in hard_tokens):
         return RecoveryDecision(False,'canvas/target safety changed',True,True)
+
+    if 'target window no longer exists' in text or 'target window is not visible' in text:
+        return RecoveryDecision(True,'target temporarily unavailable',True,True)
 
     # A bounded Stroke Delivery Verification failure means the current path was
     # deliberately *not* marked complete.  It is safe to retry that exact path

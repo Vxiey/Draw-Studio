@@ -6,11 +6,13 @@ It never stores or restores input authorization.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
+from collections import Counter, defaultdict
 
-SCHEMA = 2
-SUPPORTED_SCHEMAS = (1, 2)
+SCHEMA = 3
+SUPPORTED_SCHEMAS = (1, 2, 3)
 
 
 def _clean_rgb(value):
@@ -143,6 +145,96 @@ def checkpoint_after_path(plan, color_number, completed_path_index, path_count, 
                                   ordered_items=ordered_items,prelude_complete=prelude_complete)
 
 
+
+
+def sequence_entry_key(entry) -> str:
+    """Stable content key for one final execution-sequence operation.
+
+    Runtime replanning may reorder entries, so resume identity deliberately does
+    not depend on list position. Identical duplicate operations are interchangeable
+    and are tracked by occurrence count in the compact canonical bitset.
+    """
+    if not isinstance(entry, dict):
+        payload=entry
+    else:
+        payload={k:v for k,v in entry.items() if not str(k).startswith('_resume_')}
+    raw=json.dumps(payload,sort_keys=True,separators=(',',':'),default=str,ensure_ascii=True).encode('utf-8')
+    return hashlib.sha256(raw).hexdigest()[:20]
+
+
+def _sequence_catalog(plan):
+    keys=sorted(sequence_entry_key(row) for row in (plan.get('execution_sequence') or ()) if isinstance(row,dict))
+    digest=hashlib.sha256('|'.join(keys).encode('ascii')).hexdigest()
+    return keys,digest
+
+
+def sequence_context_fingerprint(plan):
+    """Fingerprint everything except sequence order, which Dynamic Replanner may change."""
+    clone=dict(plan)
+    clone['execution_sequence']=[]
+    return plan_fingerprint(clone)
+
+
+def _encode_bits(flags) -> str:
+    flags=list(bool(v) for v in flags);raw=bytearray((len(flags)+7)//8)
+    for index,value in enumerate(flags):
+        if value:raw[index//8] |= 1 << (index%8)
+    return base64.b64encode(bytes(raw)).decode('ascii')
+
+
+def _decode_bits(text: str, total: int):
+    try:raw=base64.b64decode(str(text or '').encode('ascii'),validate=True)
+    except Exception:return None
+    if len(raw)!=(max(0,int(total))+7)//8:return None
+    flags=[bool(raw[i//8] & (1 << (i%8))) for i in range(max(0,int(total)))]
+    # Unused tail bits must stay zero so corrupted state cannot silently validate.
+    if total%8 and raw:
+        mask=~((1 << (total%8))-1) & 0xff
+        if raw[-1] & mask:return None
+    return flags
+
+
+def _sequence_counts_from_bits(keys, bits):
+    flags=_decode_bits(bits,len(keys))
+    if flags is None:return None
+    out=Counter()
+    for key,done in zip(keys,flags):
+        if done:out[key]+=1
+    return dict(out)
+
+
+def checkpoint_sequence_progress(plan, completed_counts, *, prelude_complete=True, last_entry=None):
+    """Persist completed operations for progressive/Pixel Accurate execution.
+
+    The checkpoint stores a bitset over a sorted multiset of operation hashes.
+    This is both compact and order-independent, so a Dynamic Replanner reorder
+    cannot invalidate safe already-completed work.
+    """
+    keys,catalog_fp=_sequence_catalog(plan)
+    available=Counter(keys);requested=Counter()
+    for key,value in dict(completed_counts or {}).items():
+        if not isinstance(key,str) or len(key)!=20:continue
+        try:n=max(0,int(value or 0))
+        except (TypeError,ValueError,OverflowError):continue
+        if key in available:requested[key]=min(n,available[key])
+    seen=Counter();flags=[]
+    for key in keys:
+        seen[key]+=1;flags.append(seen[key] <= requested.get(key,0))
+    completed=sum(flags);total=len(keys)
+    out=_base(plan,0,prelude_complete=prelude_complete)
+    out.update({
+        'schema':SCHEMA,'plan_fingerprint':sequence_context_fingerprint(plan),
+        'sequence_level':True,'sequence_total':total,'sequence_completed_count':completed,
+        'sequence_catalog_fingerprint':catalog_fp,'sequence_completed_bits':_encode_bits(flags),
+        'sequence_coverage_percent':round((completed/max(1,total))*100.0,3),
+        'sequence_remaining_count':max(0,total-completed),
+        'sequence_last_phase':str((last_entry or {}).get('phase') or '')[:80],
+        'sequence_last_color_index':int((last_entry or {}).get('color_index',-1) or -1),
+        'sequence_last_brush_px':max(0,int((last_entry or {}).get('brush_px',0) or 0)),
+        'path_level':False,
+    })
+    return out
+
 def _hex(value, length):
     return isinstance(value, str) and len(value) == length and all(c in '0123456789abcdef' for c in value)
 
@@ -160,13 +252,30 @@ def validate_progress(value):
     if not isinstance(keys, list) or len(keys) != completed or not all(_hex(k, 20) for k in keys) or len(set(keys)) != len(keys):
         return None
     prelude, path_level = value.get('prelude_complete', False), value.get('path_level', False)
-    if type(prelude) is not bool or type(path_level) is not bool:
+    sequence_level = value.get('sequence_level', False) if schema >= 3 else False
+    if type(prelude) is not bool or type(path_level) is not bool or type(sequence_level) is not bool:
         return None
     out = dict(schema=schema, plan_fingerprint=fp, total_colors=total, completed_count=completed,
                completed_keys=list(keys), next_color=completed+1 if completed<total else 0,
                prelude_complete=prelude, active_color_number=0, active_color_index=None,
                active_batch_key='', next_path_index=0, active_path_count=0,
-               active_items_fingerprint='', path_level=False)
+               active_items_fingerprint='', path_level=False, sequence_level=False,
+               sequence_total=0, sequence_completed_count=0, sequence_catalog_fingerprint='',
+               sequence_completed_bits='', sequence_coverage_percent=0.0, sequence_remaining_count=0,
+               sequence_last_phase='', sequence_last_color_index=-1, sequence_last_brush_px=0)
+    if schema >= 3 and sequence_level:
+        st=value.get('sequence_total');sc=value.get('sequence_completed_count');catalog=value.get('sequence_catalog_fingerprint');bits=value.get('sequence_completed_bits')
+        if type(st) is not int or type(sc) is not int or not 0 <= sc <= st or not _hex(catalog,64):return None
+        flags=_decode_bits(bits,st)
+        if flags is None or sum(flags)!=sc:return None
+        try:last_color=int(value.get('sequence_last_color_index',-1));last_brush=max(0,int(value.get('sequence_last_brush_px',0) or 0))
+        except (TypeError,ValueError,OverflowError):return None
+        out.update(sequence_level=True,sequence_total=st,sequence_completed_count=sc,
+                   sequence_catalog_fingerprint=catalog,sequence_completed_bits=str(bits),
+                   sequence_coverage_percent=round(sc/max(1,st)*100.0,3),sequence_remaining_count=max(0,st-sc),
+                   sequence_last_phase=str(value.get('sequence_last_phase') or '')[:80],
+                   sequence_last_color_index=last_color,sequence_last_brush_px=last_brush)
+        return out
     if schema >= 2 and path_level:
         n, idx = value.get('active_color_number'), value.get('active_color_index')
         nxt, count = value.get('next_path_index'), value.get('active_path_count')
@@ -185,10 +294,36 @@ def validate_progress(value):
 
 def resolve_resume(plan,state):
     clean=validate_progress(state);order=active_color_order(plan)
-    if not clean or (not clean['completed_count'] and not clean.get('path_level')):
-        return {'compatible':False,'completed_count':0,'total_colors':len(order),'reason':'no completed color/path progress'}
+    if not clean:
+        return {'compatible':False,'completed_count':0,'total_colors':len(order),'reason':'no valid render progress'}
     if plan.get('execution_sequence'):
-        return {'compatible':False,'completed_count':0,'total_colors':len(order),'reason':'progressive passes cannot resume by deterministic color path'}
+        if not clean.get('sequence_level'):
+            return {'compatible':False,'completed_count':0,'total_colors':len(order),'reason':'progressive passes require a sequence checkpoint'}
+        keys,catalog_fp=_sequence_catalog(plan)
+        if clean.get('plan_fingerprint') != sequence_context_fingerprint(plan):
+            return {'compatible':False,'completed_count':0,'total_colors':len(order),'reason':'sequence render context changed'}
+        if clean.get('sequence_total') != len(keys) or clean.get('sequence_catalog_fingerprint') != catalog_fp:
+            return {'compatible':False,'completed_count':0,'total_colors':len(order),'reason':'execution sequence operations changed'}
+        completed_counts=_sequence_counts_from_bits(keys,clean.get('sequence_completed_bits'))
+        if completed_counts is None:
+            return {'compatible':False,'completed_count':0,'total_colors':len(order),'reason':'sequence checkpoint bitset is invalid'}
+        completed_sequence=sum(completed_counts.values())
+        if completed_sequence <= 0:
+            return {'compatible':False,'completed_count':0,'total_colors':len(order),'reason':'no completed sequence operations'}
+        return {
+            'compatible':True,'completed_count':0,'total_colors':len(order),'next_color':0,
+            'prelude_complete':bool(clean.get('prelude_complete')),'reason':'','path_level':False,
+            'sequence_level':True,'sequence_total':len(keys),'sequence_completed_count':completed_sequence,
+            'sequence_remaining_count':max(0,len(keys)-completed_sequence),
+            'sequence_coverage_percent':round(completed_sequence/max(1,len(keys))*100.0,3),
+            'sequence_completed_counts':completed_counts,'sequence_last_phase':clean.get('sequence_last_phase',''),
+            'sequence_last_color_index':clean.get('sequence_last_color_index',-1),
+            'sequence_last_brush_px':clean.get('sequence_last_brush_px',0),
+        }
+    if clean.get('sequence_level'):
+        return {'compatible':False,'completed_count':0,'total_colors':len(order),'reason':'sequence checkpoint cannot resume a color-batch plan'}
+    if not clean['completed_count'] and not clean.get('path_level'):
+        return {'compatible':False,'completed_count':0,'total_colors':len(order),'reason':'no completed color/path progress'}
     if clean['plan_fingerprint'] != plan_fingerprint(plan):
         return {'compatible':False,'completed_count':0,'total_colors':len(order),'reason':'final plan fingerprint changed'}
     if clean['total_colors'] != len(order):

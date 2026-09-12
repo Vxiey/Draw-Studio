@@ -2183,13 +2183,17 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
             log_event(f'Verified Paint color cache load skipped: {cache_error!r}')
     from AdaptiveColor import method_candidates,method_label,rgb_key,probe_item,confidence_text
     from RenderResume import (resolve_resume, checkpoint_after_batch, checkpoint_before_path,
-                              checkpoint_after_path, items_fingerprint)
+                              checkpoint_after_path, checkpoint_sequence_progress, items_fingerprint,
+                              sequence_entry_key)
     resume_info=resolve_resume(plan,(plan.get('options') or {}).get('render_resume_state'))
     resume_completed=int(resume_info.get('completed_count',0)) if resume_info.get('compatible') else 0
     resume_path_level=bool(resume_info.get('compatible') and resume_info.get('path_level'))
+    resume_sequence_level=bool(resume_info.get('compatible') and resume_info.get('sequence_level'))
     resume_skip_prelude=bool(resume_info.get('compatible') and resume_info.get('prelude_complete'))
-    if resume_info.get('compatible') and (resume_completed or resume_path_level):
-        if resume_path_level:
+    if resume_info.get('compatible') and (resume_completed or resume_path_level or resume_sequence_level):
+        if resume_sequence_level:
+            report('status',f'Render resume verified: {int(resume_info.get("sequence_completed_count",0)):,}/{int(resume_info.get("sequence_total",0)):,} final sequence operations already completed ({float(resume_info.get("sequence_coverage_percent",0.0)):.1f}% execution coverage). Normal target recalibration/preflight still runs before resuming.')
+        elif resume_path_level:
             report('status',f'Render resume verified: {resume_completed}/{resume_info.get("total_colors",0)} colors complete · color {resume_info.get("active_color_number")} resumes at path {int(resume_info.get("next_path_index",0))+1}/{resume_info.get("active_path_count",0)} after normal browser recalibration/preflight.')
         else:
             report('status',f'Render resume verified: {resume_completed}/{resume_info.get("total_colors",0)} colors already completed. Continuing from color {resume_completed+1}.')
@@ -3396,6 +3400,19 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
             return True
 
         execution_sequence=list(plan.get('execution_sequence') or [])
+        sequence_completed_counts={}
+        sequence_new_completed=0
+        sequence_last_entry=None
+        if execution_sequence and resume_sequence_level:
+            sequence_completed_counts={str(k):max(0,int(v or 0)) for k,v in dict(resume_info.get('sequence_completed_counts') or {}).items()}
+            _skip=dict(sequence_completed_counts);_remaining=[];_skipped=0
+            for _entry in execution_sequence:
+                _entry_key=sequence_entry_key(_entry)
+                if _skip.get(_entry_key,0)>0:
+                    _skip[_entry_key]-=1;_skipped+=1
+                else:_remaining.append(_entry)
+            execution_sequence=_remaining
+            report('status',f'Sequence resume: skipped {_skipped:,} verified completed operation(s); {len(execution_sequence):,} remain. Dynamic Replanner may safely reorder only the remaining work.')
         if execution_sequence:
             if plan['options'].get('visual_verification_enabled',False) and visual_mode!='Off' and not dry_run:
                 report('visual_verification',{'current':0,'total':0,'ok':True,'confidence':0.0,'summary':'skipped for progressive passes'})
@@ -3450,6 +3467,9 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                 phase_total=3
             for _execution_index, entry in enumerate(execution_sequence):
                 if stop.is_set():
+                    if checkpoint is not None and not dry_run and sequence_completed_counts:
+                        try:checkpoint(checkpoint_sequence_progress(plan,sequence_completed_counts,prelude_complete=True,last_entry=sequence_last_entry))
+                        except Exception as checkpoint_error:log_event(f'Sequence stop checkpoint skipped: {checkpoint_error!r}')
                     raise InterruptedError()
                 pause_guard()
                 if deadline_scheduler is not None:
@@ -3495,8 +3515,27 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                         note_runtime_operation('verification',clock()-_verify_started)
                 _path_started=clock()
                 _pause_before_path=paused_seconds
-                draw_path_item(index,item,smart_group=True,verify_color=(index not in verified_colors and not plan['options'].get('adaptive_color_verification',False) and plan['options'].get('strict_color_verification',True)))
+                try:
+                    draw_path_item(index,item,smart_group=True,verify_color=(index not in verified_colors and not plan['options'].get('adaptive_color_verification',False) and plan['options'].get('strict_color_verification',True)))
+                except BaseException as error:
+                    if checkpoint is not None and not dry_run:
+                        try:
+                            from SmartRecovery import classify_interruption
+                            _decision=classify_interruption(error,str(plan['options'].get('profile_key') or ''))
+                            plan['options']['smart_recovery_last_decision']=_decision.as_dict()
+                            if _decision.recoverable:
+                                _progress=checkpoint_sequence_progress(plan,sequence_completed_counts,prelude_complete=True,last_entry=sequence_last_entry)
+                                checkpoint(_progress);plan['options']['smart_recovery_checkpoint']=_progress
+                                report('status',f'Smart Recovery saved {int(_progress.get("sequence_completed_count",0)):,}/{int(_progress.get("sequence_total",0)):,} completed sequence operations. Press Start again; target recalibration + visual preflight will run before resume.')
+                        except Exception as checkpoint_error:log_event(f'Sequence Smart Recovery checkpoint skipped: {checkpoint_error!r}')
+                    raise
                 note_runtime_operation(entry.get('operation_type','stroke'),max(0.0,clock()-_path_started-(paused_seconds-_pause_before_path)))
+                _entry_key=sequence_entry_key(entry)
+                sequence_completed_counts[_entry_key]=int(sequence_completed_counts.get(_entry_key,0))+1
+                sequence_new_completed+=1;sequence_last_entry=entry
+                if checkpoint is not None and not dry_run and sequence_new_completed%25==0:
+                    try:checkpoint(checkpoint_sequence_progress(plan,sequence_completed_counts,prelude_complete=True,last_entry=entry))
+                    except Exception as checkpoint_error:log_event(f'Sequence recovery checkpoint skipped: {checkpoint_error!r}')
                 if deadline_scheduler is not None:
                     deadline_scheduler.after(entry,excluded_seconds=paused_seconds-_pause_before_entry)
                     _tail=list(execution_sequence[_execution_index+1:])
@@ -3513,6 +3552,9 @@ def execute_plan(plan, area, palette, mouse, stop, paused, report, clock=time.mo
                 report('deadline_telemetry',deadline_scheduler.telemetry())
                 if deadline_scheduler.skipped:
                     report('status',f'Deadline scheduler skipped {deadline_scheduler.skipped:,} low-value path(s); catch-up activations={deadline_scheduler.catch_up_activations}; panic activations={deadline_scheduler.panic_activations}.')
+            if checkpoint is not None and not dry_run and sequence_completed_counts:
+                try:checkpoint(checkpoint_sequence_progress(plan,sequence_completed_counts,prelude_complete=True,last_entry=sequence_last_entry))
+                except Exception as checkpoint_error:log_event(f'Final sequence checkpoint skipped: {checkpoint_error!r}')
         else:
             color_order=plan['options'].get('color_order') or list(range(len(plan['groups'])))
             execution_groups=plan.get('execution_groups')

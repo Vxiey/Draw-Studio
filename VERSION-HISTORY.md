@@ -1,3 +1,10 @@
+# Image Draw Bot v1.0.145-rc14 — Resume & Checkpoints
+
+- Progressive and Pixel Accurate execution sequences can now resume safely.
+- Dynamic Replanner order changes no longer invalidate completed-work checkpoints.
+- Sequence checkpoints store compact execution coverage and remaining-work identity without restoring armed input state.
+- Temporary browser disappearance can preserve progress for the next explicitly started, recalibrated run.
+
 # Image Draw Bot v1.0.145-rc13 — Calibration & Recovery
 
 - Calibration state now exposes component confidence and an overall safety-weighted health score.

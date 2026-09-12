@@ -11,7 +11,7 @@ from Version import APP_VERSION, FILE_VERSION
 
 class BrowserAutoCalibrationTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(APP_VERSION,'1.0.145-rc13')
+        self.assertEqual(APP_VERSION,'1.0.145-rc14')
         self.assertEqual(FILE_VERSION,'1.0.145')
 
     def test_supported_profiles(self):
