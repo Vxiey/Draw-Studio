@@ -1,3 +1,10 @@
+# Image Draw Bot v1.0.145-rc10 — Pixel Accuracy 2.0
+
+- Added per-connected-region accuracy scoring across color, coverage, edges and protected detail.
+- Pixel correction passes now report marginal accuracy gain and repaired pixels per correction path.
+- Later correction passes can stop when simulated marginal repair efficiency becomes negligible.
+- Existing coverage maps, pixel error maps, CPU/GPU simulation and correction safety remain authoritative.
+
 # Image Draw Bot v1.0.145-rc9 — Progressive Drawing 2.0
 
 - Progressive passes now seed broad forms and contours across a bounded 4x4 spatial grid before local refinement.

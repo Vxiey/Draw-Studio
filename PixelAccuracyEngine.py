@@ -317,10 +317,53 @@ def _correction_runs(pixel_map: PixelMap, result: SimulationResult, background_i
     return entries
 
 
+def region_accuracy_scores(pixel_map: PixelMap, result: SimulationResult, *, max_regions: int = 64,
+                           cancelled=lambda: False) -> dict:
+    """Measure planned execution accuracy per exact connected target region."""
+    from PixelStrokeEngine import connected_components
+    components,cmap,_meta=connected_components(pixel_map,cpu_workers=1,cancelled=cancelled)
+    desired=np.asarray(pixel_map.palette_index,dtype=np.int16)
+    simulated=np.asarray(result.simulated_index,dtype=np.int16)
+    covered=np.asarray(result.coverage_count)>0
+    edge=np.asarray(pixel_map.edge_map,dtype=np.float32)>=.5
+    protected=np.asarray(pixel_map.protected_mask,dtype=bool)
+    rows=[];weighted=0.0;weighted_area=0
+    def pct(n,d,fallback):
+        return float(fallback) if int(d)<=0 else float(n)/float(d)*100.0
+    for serial,comp in enumerate(components):
+        if serial%64==0 and cancelled():raise InterruptedError()
+        mask=cmap==int(comp.component_id);area=int(np.count_nonzero(mask))
+        if area<=0:continue
+        correct=mask & (simulated==desired)
+        coverage=mask & covered
+        color_acc=pct(np.count_nonzero(correct),area,0.0)
+        coverage_acc=pct(np.count_nonzero(coverage),area,0.0)
+        edge_mask=mask & edge;protected_mask=mask & protected
+        edge_acc=pct(np.count_nonzero(correct & edge_mask),np.count_nonzero(edge_mask),color_acc)
+        detail_acc=pct(np.count_nonzero(correct & protected_mask),np.count_nonzero(protected_mask),color_acc)
+        score=.40*color_acc+.25*coverage_acc+.20*edge_acc+.15*detail_acc
+        row={'component_id':int(comp.component_id),'color_index':int(comp.color_index),'area':area,
+             'bbox':tuple(map(int,comp.bbox)),'score':round(score,4),
+             'color_accuracy_percent':round(color_acc,4),'coverage_percent':round(coverage_acc,4),
+             'edge_accuracy_percent':round(edge_acc,4),'protected_detail_percent':round(detail_acc,4),
+             'error_pixels':int(area-np.count_nonzero(correct)),
+             'protected_pixels':int(np.count_nonzero(protected_mask))}
+        rows.append(row);weighted+=score*area;weighted_area+=area
+    rows.sort(key=lambda row:(float(row['score']),-int(row['area']),int(row['component_id'])))
+    limit=max(1,int(max_regions))
+    scores=[float(row['score']) for row in rows]
+    return {'region_count':len(rows),'weighted_score':round(weighted/max(1,weighted_area),4),
+            'mean_score':round(sum(scores)/max(1,len(scores)),4) if rows else 100.0,
+            'minimum_score':round(min(scores),4) if rows else 100.0,
+            'worst_regions':rows[:limit],
+            'score_formula':'0.40*color + 0.25*coverage + 0.20*edge + 0.15*protected_detail'}
+
+
 def refine_with_corrections(pixel_map: PixelMap, execution_sequence: Sequence[dict], palette_rgb: Sequence[Sequence[int]], *,
                             brush_px: int = 1, max_passes: int = 2, min_improvement: float = .0001,
                             correction_brush_px: int | None = None,
-                            max_total_paths: int | None = None, gpu_mode: str = "CPU",
+                            max_total_paths: int | None = None, min_repaired_pixels_per_path: float = .05,
+                            gpu_mode: str = "CPU",
                             gpu_vram: str = "Auto", gpu_performance: str = "High throughput",
                             cancelled=lambda: False) -> dict:
     """Simulate, score and append correction passes only while accuracy improves."""
@@ -357,13 +400,32 @@ def refine_with_corrections(pixel_map: PixelMap, execution_sequence: Sequence[di
             candidate=SimulationResult(sim,counts,counts>0,error,metrics)
         before=float(current.metrics['pixel_accuracy_percent']);after=float(candidate.metrics['pixel_accuracy_percent'])
         before_errors=int(current.metrics['error_pixels']);after_errors=int(candidate.metrics['error_pixels'])
+        accuracy_gain=after-before
+        errors_repaired=max(0,before_errors-after_errors)
+        path_count=max(1,len(corrections))
+        repaired_per_path=errors_repaired/path_count
+        gain_per_path=max(0.0,accuracy_gain)/path_count
         accepted=(after>before+float(min_improvement)) or (after>=before and after_errors<before_errors)
+        efficiency_floor=max(0.0,float(min_repaired_pixels_per_path))
+        inefficient=(pass_number>1 and len(corrections)>=8 and errors_repaired>0 and
+                     repaired_per_path<efficiency_floor and accuracy_gain<max(.005,float(min_improvement)*4.0))
+        if inefficient:accepted=False
         pass_meta.append({'pass':pass_number,'generated_paths':len(corrections),'accepted':bool(accepted),
                           'before_accuracy':round(before,4),'after_accuracy':round(after,4),
-                          'before_errors':before_errors,'after_errors':after_errors})
+                          'accuracy_gain':round(accuracy_gain,6),'accuracy_gain_per_path':round(gain_per_path,8),
+                          'before_errors':before_errors,'after_errors':after_errors,
+                          'errors_repaired':int(errors_repaired),'repaired_pixels_per_path':round(repaired_per_path,6),
+                          'efficiency_floor':round(efficiency_floor,6),
+                          'stop_reason':'low marginal correction gain' if inefficient else ('accepted' if accepted else 'no accuracy improvement')})
         if not accepted:break
         sequence.extend(corrections);accepted_entries.extend(corrections);current=candidate
     final=dict(current.metrics)
+    try:
+        region_meta=region_accuracy_scores(pixel_map,current,max_regions=64,cancelled=cancelled)
+    except InterruptedError:raise
+    except Exception as exc:
+        region_meta={'region_count':0,'weighted_score':None,'mean_score':None,'minimum_score':None,
+                     'worst_regions':[],'reason':f'{type(exc).__name__}: {exc}'}
     meta={
         'engine':'Pixel Accuracy Engine Block D','simulation':True,'coverage_map':True,'pixel_error_map':True,
         'score_scope':'planned strokes before CanvasGuard/runtime delivery',
@@ -375,7 +437,10 @@ def refine_with_corrections(pixel_map: PixelMap, execution_sequence: Sequence[di
         # Legacy aliases remain for internal correction logic/backwards compatibility.
         'initial_accuracy_percent':initial['pixel_accuracy_percent'],
         'final_accuracy_percent':final['pixel_accuracy_percent'],'initial_error_pixels':initial['error_pixels'],
-        'final_error_pixels':final['error_pixels'],'passes':pass_meta,**final,
+        'final_error_pixels':final['error_pixels'],'passes':pass_meta,
+        'region_accuracy':region_meta,'region_accuracy_score':region_meta.get('weighted_score'),
+        'worst_region_accuracy_score':region_meta.get('minimum_score'),
+        'correction_efficiency_floor':max(0.0,float(min_repaired_pixels_per_path)),**final,
     }
     return {'execution_sequence':sequence,'correction_entries':accepted_entries,'simulation':current,'metadata':meta}
 
