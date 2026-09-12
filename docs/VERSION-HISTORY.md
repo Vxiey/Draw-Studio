@@ -1,3 +1,12 @@
+# Image Draw Bot v1.0.145-rc25 — Extra Fast Regional Quality Fix
+
+- Extra Fast now budgets whole connected regions instead of destructively truncating individual paths after planning.
+- Gartic keeps the verified 2/4/8/16/28 px brush ladder and the regional scheduler can spend time on large safe coverage before structure/detail recovery.
+- Simulated final now follows the same adaptive regional execution sequence as the real draw, including per-path brush widths.
+- Stale Strong simplify settings no longer leak into Extra Fast.
+- Existing calibrated Fill safety and the rc24 exact H/V raster guarantees remain intact.
+- Release metadata, installer and active regression version assertions are synchronized atomically.
+
 # Image Draw Bot v1.0.145-rc24 — Regional Axis + Sketch Dense Hybrid
 
 - Extra Fast can choose exact horizontal or vertical runs per connected region using the existing execution-cost guard.
