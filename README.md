@@ -1,6 +1,6 @@
 # Image Draw Bot — automatic image drawing for Windows
 
-
+![Image Draw Bot application screenshot](assets/image-draw-bot-app-screenshot.png)
 
 [![Image Draw Bot CI](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/Vxiey/Image-Draw-Bot/actions/workflows/ci.yml)
 ![Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-informational)
