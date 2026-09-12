@@ -279,9 +279,21 @@ def _centers_touching_mask(mask:np.ndarray,brush_px:int) -> np.ndarray:
     return touch
 
 
+
+def _offset_paths(paths, origin):
+    """Translate ROI-local paths back to absolute planner/canvas coordinates."""
+    ox,oy=map(int,origin)
+    if ox==0 and oy==0:return [tuple((int(x),int(y)) for x,y in path) for path in paths]
+    return [tuple((int(x)+ox,int(y)+oy) for x,y in path) for path in paths]
+
+
 def _candidate_paths_for_brush(target:np.ndarray,residual:np.ndarray,brush_px:int,*,
-                               model,comp,phase:str,final_size:bool,cancelled=lambda:False):
-    """Choose a high-coverage safe run layout for one verified brush size."""
+                               model,comp,phase:str,final_size:bool,origin=(0,0),cancelled=lambda:False):
+    """Choose a high-coverage safe run layout inside one component ROI.
+
+    Raster work stays ROI-local, but path cost and emitted geometry use absolute
+    planner coordinates so DrawBot, ETA and cursor travel remain unchanged.
+    """
     _cancel(cancelled)
     brush=max(1,int(brush_px))
     safe=_eroded_centers(target,brush)
@@ -293,13 +305,14 @@ def _candidate_paths_for_brush(target:np.ndarray,residual:np.ndarray,brush_px:in
     for orientation in ("horizontal","vertical"):
         for offset in offsets:
             _cancel(cancelled)
-            paths=_runs_from_mask(useful,row_stride=stride,row_offset=offset,orientation=orientation)
-            if not paths:continue
+            local_paths=_runs_from_mask(useful,row_stride=stride,row_offset=offset,orientation=orientation)
+            if not local_paths:continue
             trial=np.zeros_like(target,dtype=np.bool_)
-            for path in paths:_paint_path(trial,path,brush)
+            for path in local_paths:_paint_path(trial,path,brush)
             if np.any(trial & ~target):continue
             gained=int(np.count_nonzero(trial & residual))
             if gained<=0:continue
+            paths=_offset_paths(local_paths,origin)
             seq=_entry_sequence(comp.color_index,paths,phase=phase,comp=comp,brush_px=brush,
                                 method=f"region-brush-pack-{brush}px")
             cost=max(.000001,float(model.sequence_cost(seq).total_seconds))
@@ -309,14 +322,12 @@ def _candidate_paths_for_brush(target:np.ndarray,residual:np.ndarray,brush_px:in
     return list(best[5]),best[6],float(best[7])
 
 
-def _brush_pack_candidate(comp,component_map,options,model,cancelled=lambda:False):
-    """Pack one exact region with the verified browser brush ladder.
 
-    Largest brushes are tried first, but every emitted centre is eroded against
-    the complete source component and the final union is simulated pixel-for-
-    pixel.  If the smallest verified brush cannot repair the residual exactly,
-    the candidate is rejected and the existing connected-run planner remains
-    authoritative.
+def _brush_pack_candidate(comp,component_map,options,model,cancelled=lambda:False):
+    """Pack one exact region with verified browser brushes using bbox-local masks.
+
+    Only temporary raster masks are cropped. Every emitted path is translated
+    back to absolute planner coordinates before it is costed or returned.
     """
     default=max(1,int(options.get("brush_px") or 1))
     sizes,dynamic=verified_brush_sizes(str(options.get("profile_key") or ""),
@@ -324,11 +335,19 @@ def _brush_pack_candidate(comp,component_map,options,model,cancelled=lambda:Fals
     sizes=tuple(sorted({max(1,int(v)) for v in sizes},reverse=True))
     if not dynamic or len(sizes)<2:
         return None,"no verified multi-brush controls"
-    smallest=min(sizes);largest=max(sizes)
+    smallest=min(sizes)
     if comp.area<max(48,smallest*smallest*6):
         return None,"component too small for region brush packing"
-    target=component_map==comp.component_id
+
+    h,w=component_map.shape
+    x0,y0,x1,y1=map(int,comp.bbox)
+    x0=max(0,min(w-1,x0));x1=max(0,min(w-1,x1))
+    y0=max(0,min(h-1,y0));y1=max(0,min(h-1,y1))
+    if x1<x0 or y1<y0:return None,"invalid component bbox"
+    roi_map=component_map[y0:y1+1,x0:x1+1]
+    target=roi_map==comp.component_id
     if not np.any(target):return None,"empty component"
+
     painted=np.zeros_like(target,dtype=np.bool_)
     sequence=[];flat_paths=[];used=[];per_size=[]
     base_phase=_phase(comp,int(np.count_nonzero(component_map>=0)))
@@ -339,7 +358,7 @@ def _brush_pack_candidate(comp,component_map,options,model,cancelled=lambda:Fals
         paths,trial,local_cost=_candidate_paths_for_brush(
             target,residual,brush,model=model,comp=comp,
             phase=("detail" if brush==smallest else base_phase),
-            final_size=(brush==smallest),cancelled=cancelled)
+            final_size=(brush==smallest),origin=(x0,y0),cancelled=cancelled)
         if not paths:continue
         newly=int(np.count_nonzero(trial & residual))
         if newly<=0:continue
@@ -358,9 +377,15 @@ def _brush_pack_candidate(comp,component_map,options,model,cancelled=lambda:Fals
     if len(set(used))<2:
         return None,"multi-brush packing produced no useful brush transition"
     cost=model.sequence_cost(sequence).total_seconds
+    roi_pixels=int(target.size);canvas_pixels=int(component_map.size)
+    reduction=max(0.0,1.0-(roi_pixels/max(1,canvas_pixels)))
     return {"sequence":sequence,"paths":flat_paths,"cost":cost,"brush_px":max(used),
             "method":"region-brush-pack","exact":True,"used_brush_sizes":tuple(used),
-            "packing":per_size,"covered_pixels":int(np.count_nonzero(painted))},            f"exact verified brush packing with sizes {tuple(used)}"
+            "packing":per_size,"covered_pixels":int(np.count_nonzero(painted)),
+            "packing_roi_bbox":(x0,y0,x1,y1),"packing_workspace_pixels":roi_pixels,
+            "packing_canvas_pixels":canvas_pixels,
+            "packing_workspace_reduction_percent":round(reduction*100.0,4)},\
+            f"exact verified brush packing with sizes {tuple(used)} in ROI {(x0,y0,x1,y1)}"
 
 
 def _choose_component(comp,component_map,total_drawable,model,options,cancelled=lambda:False):
@@ -398,7 +423,11 @@ def _choose_component(comp,component_map,total_drawable,model,options,cancelled=
         "verified_brush_sizes":list(map(int,verified)),"base_brush_px":int(base_brush),
         "candidates":[{"method":c[2],"estimated_seconds":round(float(c[0]),6),"paths":int(c[1])} for c in candidates]}
     if packed:diagnostics["brush_packing"]={"used_brush_sizes":list(packed.get("used_brush_sizes") or ()),
-        "packing":packed.get("packing") or (),"covered_pixels":int(packed.get("covered_pixels",0) or 0)}
+        "packing":packed.get("packing") or (),"covered_pixels":int(packed.get("covered_pixels",0) or 0),
+        "roi_bbox":packed.get("packing_roi_bbox"),
+        "workspace_pixels":int(packed.get("packing_workspace_pixels",0) or 0),
+        "canvas_pixels":int(packed.get("packing_canvas_pixels",0) or 0),
+        "workspace_reduction_percent":float(packed.get("packing_workspace_reduction_percent",0.0) or 0.0)}
     return choice,list(best[3]),diagnostics
 
 

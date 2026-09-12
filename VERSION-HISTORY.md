@@ -1,3 +1,9 @@
+# Image Draw Bot v1.0.145-rc23 — Region Brush ROI Packing
+
+- Multi-brush connected-region packing now allocates temporary masks only for each component bbox.
+- ROI paths are translated back to global coordinates before cost/execution.
+- Exact coverage, spill rejection and residual fallback remain authoritative.
+
 # Image Draw Bot v1.0.145-rc22 — Learned Cursor Travel Integrity
 
 - Learned stroke timing no longer erases real cursor distance.
