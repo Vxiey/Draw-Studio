@@ -1,12 +1,18 @@
 """Deterministic image-based presets; no AI or changes to native input safeguards."""
 import numpy as np
 from PIL import Image
+from DrawingStyleProfiles import apply_drawing_style
 
 PRESETS=('Auto','Manual','Masterpiece','Extra fast')
 
 def resolve_drawing(image,options):
-    out=dict(options);preset=out.get('render_preset','Manual')
+    out=apply_drawing_style(image,dict(options));preset=out.get('render_preset','Manual')
     if preset not in PRESETS:raise ValueError('Choose Auto, Manual, Masterpiece or Extra fast.')
+    if out.get('drawing_style')!='Auto' and preset in ('Auto','Manual'):
+        out['auto_engine_resolved']=True
+        out['auto_drawing_meta']={'preset':preset,'image_kind':out.get('drawing_style_resolved'),
+            'engine':'drawing style profile','drawing_style_profile':out.get('drawing_style_meta')}
+        return out
     if preset=='Manual' or out.get('auto_engine_resolved'):return out
     out['auto_engine_resolved']=True
     if preset=='Extra fast':

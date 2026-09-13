@@ -125,7 +125,7 @@ def main():
         '--hidden-import', 'StrokeDeliveryVerification',
         '--hidden-import', 'BrowserBrushSize',
         '--hidden-import', 'GarticOpacity',
-        '--hidden-import', 'CompletedDrawingAnalysis',
+        '--hidden-import', 'CompletedDrawingAnalysis','DrawingStyleProfiles',
         '--hidden-import', 'BackgroundRemoval',
         '--hidden-import', 'BrowserToolLayout',
         '--hidden-import', 'SkribblFastRenderer',

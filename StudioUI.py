@@ -22,6 +22,7 @@ from ShapePaths import SHAPE_MODEL_MODES
 from QuickSketchFillContour import QUICK_SKETCH_RENDER_STYLE, QUICK_SKETCH_STYLES, QUICK_SKETCH_FILL_PREFERENCES
 from HybridRenderer3 import HYBRID_RENDER_STYLE, HYBRID_MODES
 from SketchFillRenderer import SKETCH_FILL_RENDER_STYLE
+from DrawingStyleProfiles import DRAWING_STYLES
 
 BG = '#0b0f14'
 SIDEBAR = '#101722'
@@ -443,6 +444,8 @@ def build_ui(a, quality, speed):
     mode_switch.pack(fill='x', pady=(0, 7))
     preset_menu=setting_row(step4,'Drawing preset',a.render_preset,['Auto','Manual','Masterpiece','Extra fast'],'Extra fast draws closed contours, fills safe areas, then draws remaining detail. Calibrate Brush and Fill to enable buckets. Auto selects an engine; Masterpiece uses unlimited time.',width=160)
     preset_menu.configure(command=a.render_preset_changed)
+    style_profile_menu=setting_row(step4,'Drawing style profile',a.drawing_style,DRAWING_STYLES,
+        'Auto classifies the source. Pixel Art protects exact pixels; Logo prioritizes Fill + clean regions; Portrait protects faces/details; Photo/Shaded preserves tonal structure; Line Art protects thin contours; Cartoon/Illustration uses flat regions + outlines.',width=178)
     sketch_switch=control(ctk.CTkSwitch(step4,text='Black contour sketch',variable=a.outline,
         command=a.sketch_mode_changed,progress_color=ACCENT_DARK,text_color=TEXT))
     sketch_switch.pack(anchor='w',pady=(0,8))
