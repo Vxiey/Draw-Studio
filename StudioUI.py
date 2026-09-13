@@ -373,7 +373,7 @@ def build_ui(a, quality, speed):
     a.browser_one_click_label.pack(anchor='w', pady=(3,0))
     a.drop_in_button=btn(step2, '⚡  Arm Drop-In Start', a.arm_manual_drop_in, height=34)
     a.drop_in_button.pack(fill='x', pady=(7, 0))
-    tooltip(a.drop_in_button,'One-shot browser/game mode: after target canvas and palette are ready, the next dropped/selected/pasted image starts drawing automatically. Paint keeps the full safety chain.')
+    tooltip(a.drop_in_button,'One-shot browser/game mode. On Gartic Phone this also arms a temporary drop listener over the detected game canvas, so a Google/Chrome image can be released directly on Gartic and start when setup is safe. Paint keeps its normal guarded flow.')
     label(step2, var=a.drop_in_text, muted=True, wraplength=270, size=9).pack(anchor='w', pady=(4, 0))
     a.smart_drop_button=btn(step2, '🎯  Arm game canvas image drop', a.arm_smart_canvas_drop, height=34)
     a.smart_drop_button.pack(fill='x', pady=(7, 0))

@@ -130,45 +130,114 @@ def _frame_score(image, box: Box, pad: int = 7) -> float:
     return sum(1 for rgb in samples if _purple_frame(rgb)) / len(samples)
 
 
+
+def _flood_components(mask: list[bytearray], *, min_area: int, limit: int = 48) -> list[tuple[Box, int]]:
+    """Return the largest connected mask components without assuming the largest is canvas."""
+    h=len(mask);w=len(mask[0]) if h else 0
+    visited=[bytearray(w) for _ in range(h)]
+    out=[]
+    for sy in range(h):
+        for sx in range(w):
+            if not mask[sy][sx] or visited[sy][sx]:
+                continue
+            visited[sy][sx]=1;stack=[(sx,sy)]
+            left=right=sx;top=bottom=sy;area=0
+            while stack:
+                x,y=stack.pop();area+=1
+                left=min(left,x);right=max(right,x);top=min(top,y);bottom=max(bottom,y)
+                for nx,ny in ((x-1,y),(x+1,y),(x,y-1),(x,y+1)):
+                    if 0<=nx<w and 0<=ny<h and mask[ny][nx] and not visited[ny][nx]:
+                        visited[ny][nx]=1;stack.append((nx,ny))
+            if area>=min_area:
+                out.append(((left,top,right+1,bottom+1),area))
+    out.sort(key=lambda item:item[1],reverse=True)
+    return out[:max(1,int(limit))]
+
+
+def _sample_white_fraction(image, box: Box, *, step: int = 6) -> float:
+    image=image.convert('RGB');l,t,r,b=box
+    hit=total=0
+    stride=max(2,int(step))
+    for y in range(max(0,t),min(image.height,b),stride):
+        for x in range(max(0,l),min(image.width,r),stride):
+            total+=1;hit+=1 if _near_white(image.getpixel((x,y))) else 0
+    return hit/max(1,total)
+
 def detect_gartic_canvas(image, *, downsample: int = 2, min_canvas_area_ratio: float = 0.08) -> CanvasDetection:
-    """Detect the visible white Gartic canvas from a screenshot.
+    """Detect Gartic's drawable canvas without assuming the largest white area wins.
 
-    The function never returns guessed coordinates when confidence is low. It is
-    safe to use as guidance or to prefill a user confirmation step.
+    Blank canvases are ranked from all sizeable near-white components. If the
+    canvas is already partly drawn, a second read-only pass looks for a large
+    non-frame component bounded by Gartic's violet frame. Aspect, frame evidence
+    and area must agree before coordinates are returned.
     """
-    image = image.convert('RGB')
-    w, h = image.size
-    if w < 200 or h < 120:
-        return CanvasDetection(False, None, 0.0, 0.0, 0.0, 0.0, 'image too small')
-    step = max(1, int(downsample))
-    sw, sh = (w + step - 1) // step, (h + step - 1) // step
-    mask = [bytearray(sw) for _ in range(sh)]
-    for yy in range(sh):
-        y = min(h - 1, yy * step)
-        for xx in range(sw):
-            x = min(w - 1, xx * step)
-            if _near_white(image.getpixel((x, y))):
-                mask[yy][xx] = 1
-    min_area = max(32, int(sw * sh * float(min_canvas_area_ratio)))
-    small_box, white_area = _flood_largest_white(mask, min_area=min_area)
-    if small_box is None:
-        return CanvasDetection(False, None, 0.0, 0.0, 0.0, 0.0, 'no large white canvas region')
-    l, t, r, b = small_box
-    box = (l * step, t * step, min(w, r * step), min(h, b * step))
-    bw, bh = box[2] - box[0], box[3] - box[1]
-    if bw <= 0 or bh <= 0:
-        return CanvasDetection(False, None, 0.0, 0.0, 0.0, 0.0, 'invalid canvas box')
-    aspect = bw / bh
-    aspect_score = max(0.0, 1.0 - abs(aspect - REFERENCE_CANVAS_ASPECT) / 0.25)
-    white_score = min(1.0, white_area / max(1, (bw / step) * (bh / step)))
-    frame = _frame_score(image, box)
-    # Purple frame can be partly hidden by UI scaling/antialiasing, so aspect and
-    # white solidity dominate. A strong frame simply pushes confidence higher.
-    confidence = max(0.0, min(1.0, 0.52 * aspect_score + 0.33 * white_score + 0.15 * min(1.0, frame * 4)))
-    found = confidence >= 0.70 and aspect_score >= 0.55 and white_score >= 0.70
-    reason = 'gartic canvas matched' if found else 'candidate needs user confirmation'
-    return CanvasDetection(found, box if found else None, confidence, aspect, white_score, frame, reason)
+    image=image.convert('RGB');w,h=image.size
+    if w<200 or h<120:
+        return CanvasDetection(False,None,0.0,0.0,0.0,0.0,'image too small')
+    step=max(1,int(downsample));sw,sh=(w+step-1)//step,(h+step-1)//step
 
+    def make_mask(predicate):
+        mask=[bytearray(sw) for _ in range(sh)]
+        for yy in range(sh):
+            y=min(h-1,yy*step)
+            for xx in range(sw):
+                x=min(w-1,xx*step)
+                if predicate(image.getpixel((x,y))):mask[yy][xx]=1
+        return mask
+
+    def full_box(small):
+        l,t,r,b=small
+        return (l*step,t*step,min(w,r*step),min(h,b*step))
+
+    candidates=[]
+    # Do not let a larger white page/panel hide a correctly-shaped canvas.
+    white_mask=make_mask(_near_white)
+    white_min=max(24,int(sw*sh*min(.035,max(.012,float(min_canvas_area_ratio)*.45))))
+    for small,area in _flood_components(white_mask,min_area=white_min):
+        candidates.append(('white',full_box(small),area))
+
+    # A drawing can fragment the white background. Gartic's violet frame usually
+    # still isolates the entire drawable surface, so rank non-frame components too.
+    structural_mask=make_mask(lambda rgb:not _purple_frame(rgb))
+    structural_min=max(36,int(sw*sh*.035))
+    for small,area in _flood_components(structural_mask,min_area=structural_min):
+        candidates.append(('frame',full_box(small),area))
+
+    best=None
+    for source,box,component_area in candidates:
+        l,t,r,b=box;bw,bh=r-l,b-t
+        if bw<max(180,int(w*.22)) or bh<max(105,int(h*.16)):
+            continue
+        aspect=bw/max(1,bh)
+        rel=abs(aspect-REFERENCE_CANVAS_ASPECT)/REFERENCE_CANVAS_ASPECT
+        aspect_score=max(0.0,1.0-rel/.22)
+        if aspect_score<=0.0:continue
+        area_ratio=(bw*bh)/max(1.0,float(w*h))
+        size_score=max(0.0,min(1.0,area_ratio/.24))
+        frame=_frame_score(image,box,pad=max(4,int(min(w,h)*.006)))
+        white=_sample_white_fraction(image,box,step=max(4,step*3))
+        cx=((l+r)*.5)/max(1,w);cy=((t+b)*.5)/max(1,h)
+        center=max(0.0,1.0-(abs(cx-.57)/.62+abs(cy-.54)/.72)*.5)
+        if source=='white':
+            confidence=.52*aspect_score+.27*white+.13*min(1.0,frame*4.0)+.05*size_score+.03*center
+            evidence_ok=white>=.48
+        else:
+            confidence=.57*aspect_score+.24*min(1.0,frame*5.0)+.11*size_score+.08*center
+            # Structural fallback is accepted only when the Gartic frame is visible.
+            evidence_ok=frame>=.018
+        confidence=max(0.0,min(1.0,confidence))
+        rank=confidence + min(.025,frame*.08)
+        if best is None or rank>best[0]:
+            best=(rank,source,box,confidence,aspect,white,frame,aspect_score,area_ratio,evidence_ok)
+
+    if best is None:
+        return CanvasDetection(False,None,0.0,0.0,0.0,0.0,'no plausible Gartic canvas region')
+    _,source,box,confidence,aspect,white,frame,aspect_score,area_ratio,evidence_ok=best
+    found=(confidence>=.68 and aspect_score>=.58 and area_ratio>=.055 and evidence_ok)
+    if found:
+        reason='gartic canvas matched' if source=='white' else 'gartic canvas matched by structural frame fallback'
+        return CanvasDetection(True,box,confidence,aspect,white,frame,reason)
+    return CanvasDetection(False,None,confidence,aspect,white,frame,'candidate needs user confirmation')
 
 def choose_runtime_profile(seconds_left: int | None, *, canvas_size: tuple[int, int] | None = None,
                            requested_speed: str = 'Fast') -> GarticRuntimeProfile:

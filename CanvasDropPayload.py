@@ -13,10 +13,14 @@ from pathlib import Path
 import re
 from urllib.parse import parse_qs, unquote, urlparse
 
-_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp'}
+_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.jpe', '.jfif', '.webp', '.bmp', '.gif'}
 _URL_RE = re.compile(r'https?://[^\s<>"\']+', re.IGNORECASE)
 _IMG_SRC_RE = re.compile(
     r'''(?:src|data-src|data-original)\s*=\s*["'](https?://[^"']+)["']''',
+    re.IGNORECASE,
+)
+_DATA_IMAGE_RE = re.compile(
+    r'''data:image/(?:png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=_-]+''',
     re.IGNORECASE,
 )
 
@@ -25,7 +29,7 @@ _IMG_SRC_RE = re.compile(
 class CanvasDropSource:
     source: str
     label: str
-    kind: str  # 'file' or 'url'
+    kind: str  # 'file', 'url' or bounded 'data' image URI
 
 
 def _file_uri_to_path(value: str) -> str | None:
@@ -128,13 +132,25 @@ def parse_canvas_drop(raw_data: object, *, split_items=()) -> CanvasDropSource:
                 raise ValueError('Drop an image file (PNG, JPG, WEBP or BMP).')
             return CanvasDropSource(str(path), path.name, 'file')
 
-    # 2) Prefer explicit <img src=...> or lazy-load image attributes from HTML.
+    # 2) Chromium/Google Images may drag an in-memory thumbnail as a data URI.
+    # Accept only common image MIME types and keep the encoded payload bounded;
+    # load_image performs the strict decoded-size validation before Pillow sees it.
+    data_candidates=[]
+    for value in items + ([raw] if raw else []):
+        for match in _DATA_IMAGE_RE.findall(unescape(str(value))):
+            candidate=str(match).strip()
+            if len(candidate) <= 28_000_000:
+                data_candidates.append(candidate)
+    if data_candidates:
+        return CanvasDropSource(data_candidates[0], 'Dropped web image', 'data')
+
+    # 3) Prefer explicit <img src=...> or lazy-load image attributes from HTML.
     html_urls = [_clean_url(match) for match in _IMG_SRC_RE.findall(unescape(raw))]
     for url in html_urls:
         if urlparse(url).scheme.lower() in ('http', 'https'):
             return CanvasDropSource(_unwrap_image_search_url(url), 'Dropped web image', 'url')
 
-    # 3) Plain text/URI-list drops. Rank likely image URLs before generic URLs.
+    # 4) Plain text/URI-list drops. Rank likely image URLs before generic URLs.
     urls = []
     seen = set()
     for text in items + ([raw] if raw else []):

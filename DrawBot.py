@@ -278,7 +278,24 @@ def load_image(source, cancelled=lambda: False):
     if not raw_source:
         raise ValueError('Choose an image first.')
     source_obj = raw_source
-    if raw_source.lower().startswith(('http://', 'https://')):
+    if raw_source.lower().startswith('data:image/'):
+        import base64, binascii
+        try:
+            header, encoded = raw_source.split(',', 1)
+        except ValueError as error:
+            raise ValueError('The dropped browser image data is malformed.') from error
+        if ';base64' not in header.lower():
+            raise ValueError('Only base64 browser image drops are supported.')
+        if len(encoded) > MAX_DOWNLOAD_BYTES * 2:
+            raise ValueError('The dropped browser image is too large. Choose a smaller image.')
+        try:
+            data = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise ValueError('The dropped browser image could not be decoded.') from error
+        if len(data) > MAX_DOWNLOAD_BYTES:
+            raise ValueError('The dropped browser image is larger than 20 MB. Choose a smaller image.')
+        source_obj = BytesIO(data)
+    elif raw_source.lower().startswith(('http://', 'https://')):
         import requests
         data = bytearray()
         started = time.monotonic()
@@ -4102,6 +4119,11 @@ class DrawBotApp:
         try:
             self.hotkeys.append(self.keyboard.add_hotkey('esc',self.stop.set))
             self.hotkeys.append(self.keyboard.add_hotkey('f6',lambda:self.events.put(('toggle_pause',None))))
+            quick=lambda:self.events.put(('quick_start',None))
+            try:
+                self.hotkeys.append(self.keyboard.add_hotkey('f1',quick,suppress=True))
+            except TypeError:
+                self.hotkeys.append(self.keyboard.add_hotkey('f1',quick))
         except Exception as error:
             self.status.set(f'Global hotkeys are unavailable: {error}. Use the buttons in the window.')
         root.bind('<Control-v>',self.paste_shortcut)
@@ -4920,6 +4942,12 @@ class DrawBotApp:
         if self.activity or self.closing:
             return
         ready,message=DrawBotApp._start_guard_ready(self,require_image=False)
+        if self.game.get()=='Gartic Phone' and not ready:
+            callback=getattr(self,'arm_smart_canvas_drop',None)
+            if callable(callback):
+                self.status.set('Drop-In Start: detecting the Gartic canvas so you can drop a Google/Chrome image directly on it…')
+                log_event('Gartic Drop-In requested before setup was ready; starting read-only Smart Canvas discovery.')
+                return bool(callback())
         ok,explanation=can_arm_drop_in(self.game.get(),ready=ready,message=message)
         if not ok:
             DrawBotApp._disarm_manual_drop_in(self,'arm rejected')
@@ -4945,6 +4973,14 @@ class DrawBotApp:
         try:self.summary.set('Manual Drop-In Start is armed for one image import. It still uses CanvasGuard and target checks before mouse input. Paint keeps the full safety chain and is not auto-started.')
         except (tk.TclError,AttributeError):pass
         log_event('Manual Drop-In Start armed for next image import.')
+        # Gartic users expect to drag from Google Images directly onto the game.
+        # Reuse Smart Canvas Drop automatically so the temporary OS drop target
+        # sits exactly over the detected canvas while this one-shot arm is live.
+        if self.game.get()=='Gartic Phone':
+            callback=getattr(self,'arm_smart_canvas_drop',None)
+            if callable(callback):
+                try:self.root.after(25,callback)
+                except (tk.TclError,RuntimeError,AttributeError):pass
         return True
 
     def _drop_in_fingerprint(self):
@@ -8651,6 +8687,25 @@ class DrawBotApp:
             try:self.root.iconify()
             except tk.TclError:pass
 
+    def quick_start_hotkey(self):
+        """F1 Quick Start: same setup guards as the buttons, without unsafe bypasses."""
+        if self.activity or self.closing:return False
+        now=time.monotonic();last=float(getattr(self,'quick_start_last_monotonic',0.0) or 0.0)
+        if now-last<.70:return False
+        self.quick_start_last_monotonic=now
+        if self.game.get()=='Microsoft Paint':
+            log_event('F1 Quick Start requested for Paint; using Prepare Paint & draw flow.')
+            return DrawBotApp.start_full_drawing(self)
+        ready,message=DrawBotApp._start_guard_ready(self,require_image=True)
+        if not ready:
+            self.status.set('F1 Quick Start blocked: '+message.replace('Start locked: ','',1))
+            log_event('F1 Quick Start blocked: '+message)
+            return False
+        if not DrawBotApp._full_draw_unlocked(self):
+            if not DrawBotApp.unlock_full_drawing(self):return False
+        log_event('F1 Quick Start accepted after normal setup guards.')
+        return DrawBotApp.start_full_drawing(self)
+
     def toggle_pause(self):
         if self.activity!='draw':return
         if self.paused.is_set():
@@ -9381,6 +9436,8 @@ class DrawBotApp:
             self.display_screen(value)
         elif kind=='toggle_pause':
             self.toggle_pause()
+        elif kind=='quick_start':
+            self.quick_start_hotkey()
         elif kind=='picture_palette_complete':
             from PicturePalettePlanning import active_picture_palette
             if self.game.get()!='Microsoft Paint' or value.get('image_id')!=id(self.original):return
