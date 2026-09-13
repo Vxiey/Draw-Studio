@@ -182,6 +182,7 @@ def build_ui(a, quality, speed):
         widget = menu(row, var, values, width=width)
         widget.pack(side='right', padx=(8, 0))
         tooltip(widget, explanation)
+        widget._setting_row = row
         return widget
 
     def numeric_row(parent, title, var, help_text='', width=82):
@@ -445,7 +446,11 @@ def build_ui(a, quality, speed):
     timer_switch.pack(anchor='w',pady=(0,8))
     tooltip(timer_switch,'Gartic Phone only: watch the round pie timer for about 6 seconds at Start to estimate remaining time. Keep it visible. Uncertain readings stop Start; turn this off to use a manual time budget.')
     setting_row(step4, 'Quality preset', a.quality, list(quality), width=160)
-    numeric_row(step4, 'Brush width (px)', a.brush_px, 'Auto chooses a safe pixel baseline from the image/canvas; manual 1–50 px remains available.', width=84)
+    numeric_row(step4, 'Brush width', a.brush_px, 'Auto chooses from Gartic levels 1–5. Other profiles keep their normal pixel-width range.', width=84)
+    a.gartic_opacity_menu = setting_row(step4, 'Gartic opacity', a.gartic_opacity,
+        ['Auto','10%','20%','30%','40%','50%','60%','70%','80%','90%','100%'],
+        'Auto analyzes edges, color complexity and smooth shading. Low opacity is used only when it can improve tonal likeness.', width=118)
+    a.gartic_opacity_row = getattr(a.gartic_opacity_menu, '_setting_row', a.gartic_opacity_menu)
     focus_menu = setting_row(step4, 'Subject focus', a.subject_focus,
                              ['Off', 'Subject first', 'Subject only'],
                              'Pixel Accurate · 1 px pencil. No AI detection.', width=160)
@@ -1052,7 +1057,7 @@ def build_ui(a, quality, speed):
         (one_click,'browser-auto'),(a.browser_one_click_label,'browser-auto'),
         (a.browser_auto_button,'browser-auto'),(a.browser_auto_label,'browser-auto'),
         (a.app_tool_button,'nonpaint'),(a.app_tool_label,'nonpaint'),
-        (a.gartic_setup_button,'gartic'),(timer_switch,'gartic')])
+        (a.gartic_setup_button,'gartic'),(timer_switch,'gartic'),(a.gartic_opacity_row,'gartic')])
     a.refresh_ui_state = refresh_ui_state
     refresh_ui_state()
 

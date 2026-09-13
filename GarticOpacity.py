@@ -36,7 +36,8 @@ def _metrics(image: Image.Image | None) -> tuple[float, float, float]:
     sample = rgb.resize((w, h), Image.Resampling.BILINEAR)
     gray = sample.convert("L")
     edge = float(ImageStat.Stat(gray.filter(ImageFilter.FIND_EDGES)).mean[0]) / 255.0
-    palette = sample.quantize(colors=32, method=Image.Quantize.MEDIANCUT)
+    palette_source = rgb.resize((w, h), Image.Resampling.NEAREST)
+    palette = palette_source.quantize(colors=32, method=Image.Quantize.MEDIANCUT)
     used = sum(1 for value in palette.histogram() if value)
     color = min(1.0, used / 32.0)
     stat = ImageStat.Stat(gray)
@@ -98,6 +99,9 @@ def choose_opacity_percent(image: Image.Image | None, *, requested: Any = "Auto"
         else:
             selected = 70
             reason = "detailed shaded source: keep stronger structure at 70%"
+    elif color <= .18:
+        selected = 100
+        reason = "few-color/flat-shape source is more accurate with opaque ink"
     elif smooth >= .72 and edge <= .12 and color >= .45:
         selected = 30
         reason = "very smooth tonal image: lower opacity can approximate gradients"
