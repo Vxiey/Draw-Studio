@@ -1,3 +1,10 @@
+# Image Draw Bot v1.0.145-rc26 — Gartic Google Drop-In & Canvas Detection
+
+- Google/Chromium image drags can be released directly over the detected Gartic canvas and continue through the guarded Browser One-Click start path.
+- Gartic canvas discovery now ranks multiple candidates and has a conservative violet-frame fallback for partly drawn canvases.
+- F1 Quick Start uses the existing safety/setup path instead of bypassing it.
+- rc25 Extra Fast regional planning and the five-brush Gartic ladder remain intact.
+
 # Image Draw Bot v1.0.145-rc25 — Extra Fast Regional Quality Fix
 
 - Extra Fast now budgets whole connected regions instead of destructively truncating individual paths after planning.
