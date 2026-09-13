@@ -126,6 +126,7 @@ def main():
         '--hidden-import', 'BrowserBrushSize',
         '--hidden-import', 'GarticOpacity',
         '--hidden-import', 'CompletedDrawingAnalysis',
+        '--hidden-import', 'BackgroundRemoval',
         '--hidden-import', 'BrowserToolLayout',
         '--hidden-import', 'SkribblFastRenderer',
         '--hidden-import', 'GarticPhoneFastRenderer',

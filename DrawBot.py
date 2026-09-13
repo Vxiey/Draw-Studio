@@ -3885,6 +3885,8 @@ class DrawBotApp:
         self.target_client_rect = None
         self.target_dpi = None
         self.original = self.plan = None
+        self.background_removal_original = None
+        self.background_removal_meta = None
         self.color_session_cache = {}
         self.pending_render_resume = None
         self.canvas_anchor_detection = None
@@ -7108,6 +7110,58 @@ class DrawBotApp:
         if path:
             self.load_source(path,Path(path).name,action=action_for_import(armed=DrawBotApp._manual_drop_in_armed(self)))
 
+    def remove_image_background(self):
+        if self.activity:
+            self.status.set('Finish or stop the current operation before removing the background.')
+            return False
+        if self.original is None:
+            self.status.set('Load an image before removing its background.')
+            return False
+        source=self.original.copy()
+        if self.background_removal_original is None:
+            self.background_removal_original=source.copy()
+        self.status.set('Removing border-connected background…')
+        log_event(f'Background removal requested: size={source.size}.')
+        def work():
+            from BackgroundRemoval import remove_background
+            result=remove_background(source,mode='Auto',strength='Balanced',cancelled=self.stop.is_set)
+            if self.stop.is_set():raise InterruptedError()
+            self.events.put(('background_removed',result))
+        return bool(self.begin_worker('background-remove',work))
+
+    def undo_background_removal(self):
+        if self.activity:return False
+        previous=self.background_removal_original
+        if previous is None:
+            self.status.set('No background-removal change to undo.')
+            return False
+        self.original=previous.copy();self.background_removal_original=None;self.background_removal_meta=None
+        self.plan=None;DrawBotApp._clear_render_resume(self,'background removal undone')
+        self.file_label.set(image_label(self.original,'Background removal undone'))
+        self._mark_plan_stale('Background removal undone. Build preview to update ETA.')
+        self.show_previews();self._schedule_recovery_checkpoint(include_image=True,delay=40)
+        self._maybe_auto_preview(delay=500,reason='background-removal-undo')
+        log_event('Background removal undone.')
+        return True
+
+    def save_png_copy(self):
+        if self.activity:
+            self.status.set('Finish or stop the current operation before exporting PNG.')
+            return False
+        if self.original is None:
+            self.status.set('Load an image before exporting PNG.')
+            return False
+        path=filedialog.asksaveasfilename(title='Save PNG',defaultextension='.png',
+            filetypes=[('PNG image','*.png')])
+        if not path:return False
+        snapshot=self.original.copy();self.status.set('Saving PNG…')
+        def work():
+            from BackgroundRemoval import png_export_ready
+            png_export_ready(snapshot).save(path,format='PNG',optimize=True)
+            if self.stop.is_set():raise InterruptedError()
+            self.events.put(('png_saved',path))
+        return bool(self.begin_worker('png-export',work))
+
     def upscale_dialog(self):
         if self.activity or self.closing: return
         if self.original is None:
@@ -9703,8 +9757,32 @@ class DrawBotApp:
             self.status.set('Image updated. Build preview to check the result before Start.')
             self.show_previews()
             self._schedule_recovery_checkpoint(include_image=True,delay=40)
+        elif kind=='background_removed':
+            result=value
+            image=getattr(result,'image',None);meta=getattr(result,'metadata',{}) or {}
+            if image is None:
+                self.status.set('Background removal returned no image. Original preserved.')
+            else:
+                self.original=image.convert('RGBA');self.background_removal_meta=dict(meta);self.plan=None
+                DrawBotApp._clear_render_resume(self,'background removed')
+                self.file_label.set(image_label(self.original,'Background removed PNG'))
+                reduction=float(meta.get('estimated_work_reduction_percent',0) or 0)
+                removed=float(meta.get('removed_percent',0) or 0)
+                reason=meta.get('no_op_reason')
+                if reason:
+                    self.status.set(f'Background remover kept the original: {reason}.')
+                else:
+                    self.status.set(f'Background removed: {removed:.1f}% of image area transparent; drawable pixel work reduced about {reduction:.1f}%. Build preview for real ETA.')
+                log_event(f"Background removal complete: removed={removed:.2f}% work_reduction={reduction:.2f}% ref={meta.get('reference_rgb')} threshold={meta.get('threshold')} bbox={meta.get('foreground_bbox')}.")
+                self._mark_plan_stale('Background changed. Build preview to recalculate strokes and ETA.')
+                self.show_previews();self._schedule_recovery_checkpoint(include_image=True,delay=40)
+                self._maybe_auto_preview(delay=500,reason='background-removed')
+        elif kind=='png_saved':
+            self.status.set(f'PNG saved: {value}')
+            log_event(f'PNG export saved: {value!r}.')
         elif kind=='loaded':
             self._suppress_recovery=False
+            self.background_removal_original=None;self.background_removal_meta=None
             self.upscale_original=None
             self.subject_region=None
             if hasattr(self,'subject_hint'): self.subject_hint.set('Auto: simple background or transparent PNG. Mark busy photos.')
