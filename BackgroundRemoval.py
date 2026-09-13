@@ -84,12 +84,12 @@ def _connected_mask(rgb,ref,limit,mode,cancelled):
         i=y*w+x
         if seen[i]:return
         seen[i]=1
-        if _match(pix[x,y],ref,limit,mode):mask[i]=1;q.append((x,y))
+        if _match(pix[x,y],ref,limit,mode):mask[i]=1;q.append(i)
     for x in range(w):add(x,0);add(x,h-1)
     for y in range(1,h-1):add(0,y);add(w-1,y)
     count=0
     while q:
-        x,y=q.popleft();count+=1
+        i=q.popleft();y,x=divmod(i,w);count+=1
         if count%4096==0 and cancelled():raise InterruptedError()
         if x:add(x-1,y)
         if x+1<w:add(x+1,y)
@@ -127,11 +127,12 @@ def remove_background(image:Image.Image,*,mode="Auto",strength="Balanced",feathe
     result=source.copy();result.putalpha(alpha_img)
     after=sum(1 for a in alpha_img.tobytes() if a>8)
     removed=max(0,before-after);reduction=100.0*removed/max(1,before)
+    bbox=alpha_img.getbbox()
     return BackgroundRemovalResult(result,{
         "mode":mode,"strength":strength,"reference_rgb":list(ref),"threshold":round(limit,2),
         "removed_pixels":removed,"removed_percent":round(100.0*removed/total,2),
         "estimated_work_reduction_percent":round(reduction,2),"drawable_after_percent":round(100.0*after/total,2),
-        "foreground_bbox":list(alpha_img.getbbox()) if alpha_img.getbbox() else None,"no_op_reason":no_op,
+        "foreground_bbox":list(bbox) if bbox else None,"no_op_reason":no_op,
         "method":"border-connected background to transparent alpha"
     })
 
